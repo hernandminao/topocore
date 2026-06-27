@@ -1,0 +1,7 @@
+site_name: TopoCore
+
+theme:
+  name: material
+
+nav:
+  - Home: index.md

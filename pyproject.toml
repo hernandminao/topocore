@@ -11,6 +11,7 @@ authors = [
 
 dependencies = [
     "numpy>=2.3.0",
+    "laspy[lazrs]>=2.5",
     "scipy>=1.16.0",
     "shapely>=2.1.0",
     "pyproj>=3.7.0",

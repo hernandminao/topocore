@@ -15,7 +15,6 @@ from topocore.io.ply.header import (
     PLYProperty,
 )
 
-
 # =============================================================================
 # PLYProperty
 # =============================================================================
@@ -265,6 +264,21 @@ class TestPLYHeader:
 
         assert header.vertex_element is vertex
 
+    def test_vertex_element_not_found(self) -> None:
+
+        header = PLYHeader(
+            format=PLYFormat.ASCII,
+            version="1.0",
+            elements=[
+                PLYElement(
+                    "face",
+                    5,
+                )
+            ],
+        )
+
+        assert header.vertex_element is None
+
     def test_face_element(self) -> None:
 
         face = PLYElement(
@@ -279,6 +293,21 @@ class TestPLYHeader:
         )
 
         assert header.face_element is face
+
+    def test_face_element_not_found(self) -> None:
+
+        header = PLYHeader(
+            format=PLYFormat.ASCII,
+            version="1.0",
+            elements=[
+                PLYElement(
+                    "vertex",
+                    10,
+                )
+            ],
+        )
+
+        assert header.face_element is None
 
     def test_vertex_count(self) -> None:
 

@@ -4,11 +4,10 @@ import numpy as np
 import pytest
 
 from topocore.io.ply.enums import (
+    PLY_NUMPY_DTYPES,
     PLYFormat,
     PLYScalarType,
-    PLY_NUMPY_DTYPES,
 )
-
 
 # =============================================================================
 # PLYFormat

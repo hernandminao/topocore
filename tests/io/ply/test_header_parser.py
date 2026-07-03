@@ -1,21 +1,22 @@
+from __future__ import annotations
+
 import io
+
 import pytest
 
-from topocore.io.ply.header_parser import PLYHeaderParser
-from topocore.io.ply.exceptions import InvalidPLYError
+from tests.io.ply.helpers import build_header_stream
 from topocore.io.ply.enums import PLYFormat
+from topocore.io.ply.exceptions import InvalidPLYError
+from topocore.io.ply.header_parser import PLYHeaderParser
+
+# =============================================================================
+# Valid headers
+# =============================================================================
 
 
-def build_stream(text: str):
-    return io.BytesIO(text.encode("utf-8"))
-
-
-# ----------------------------
-# BASIC HEADER PARSING
-# ----------------------------
-
-def test_parse_basic_ascii_header():
-    header = """ply
+class TestPLYHeaderParserValid:
+    def test_parse_basic_ascii_header(self) -> None:
+        header = """ply
 format ascii 1.0
 element vertex 1
 property float x
@@ -23,20 +24,16 @@ property float y
 property float z
 end_header
 """
+        result = PLYHeaderParser.parse(build_header_stream(header))
 
-    stream = build_stream(header)
+        assert result.format == PLYFormat.ASCII
+        assert result.version == "1.0"
+        assert len(result.elements) == 1
+        assert result.elements[0].name == "vertex"
+        assert result.elements[0].count == 1
 
-    result = PLYHeaderParser.parse(stream)
-
-    assert result.format == PLYFormat.ASCII
-    assert result.version == "1.0"
-    assert len(result.elements) == 1
-    assert result.elements[0].name == "vertex"
-    assert result.elements[0].count == 1
-
-
-def test_parse_multiple_elements():
-    header = """ply
+    def test_parse_multiple_elements(self) -> None:
+        header = """ply
 format ascii 1.0
 element vertex 10
 property float x
@@ -44,27 +41,21 @@ element face 5
 property list uchar int vertex_indices
 end_header
 """
+        result = PLYHeaderParser.parse(build_header_stream(header))
 
-    stream = build_stream(header)
+        assert result.has_element("vertex")
+        assert result.has_element("face")
 
-    result = PLYHeaderParser.parse(stream)
+        vertex = result.get_element("vertex")
+        face = result.get_element("face")
 
-    assert result.has_element("vertex")
-    assert result.has_element("face")
+        assert vertex is not None
+        assert face is not None
+        assert vertex.count == 10
+        assert face.count == 5
 
-    vertex = result.get_element("vertex")
-    face = result.get_element("face")
-
-    assert vertex.count == 10
-    assert face.count == 5
-
-
-# ----------------------------
-# COMMENTS & OBJ INFO
-# ----------------------------
-
-def test_parse_comments_and_objinfo():
-    header = """ply
+    def test_parse_comments_and_objinfo(self) -> None:
+        header = """ply
 format ascii 1.0
 comment this is a comment
 comment second comment
@@ -73,121 +64,52 @@ element vertex 1
 property float x
 end_header
 """
+        result = PLYHeaderParser.parse(build_header_stream(header))
 
-    stream = build_stream(header)
+        assert len(result.comments) == 2
+        assert len(result.obj_info) == 1
+        assert result.comments[0] == "this is a comment"
 
-    result = PLYHeaderParser.parse(stream)
-
-    assert len(result.comments) == 2
-    assert len(result.obj_info) == 1
-    assert "this is a comment" in result.comments[0]
-
-
-# ----------------------------
-# LIST PROPERTY PARSING
-# ----------------------------
-
-def test_list_property_parsing():
-    header = """ply
+    def test_list_property_parsing(self) -> None:
+        header = """ply
 format ascii 1.0
 element face 1
 property list uchar int vertex_indices
 end_header
 """
+        result = PLYHeaderParser.parse(build_header_stream(header))
 
-    stream = build_stream(header)
+        face = result.get_element("face")
+        assert face is not None
 
-    result = PLYHeaderParser.parse(stream)
+        prop = face.properties[0]
+        assert hasattr(prop, "count_type")
+        assert hasattr(prop, "value_type")
 
-    face = result.get_element("face")
-    assert face is not None
-
-    prop = face.properties[0]
-
-    assert hasattr(prop, "count_type")
-    assert hasattr(prop, "value_type")
-
-
-# ----------------------------
-# INVALID CASES
-# ----------------------------
-
-def test_invalid_empty_header():
-    header = """ply
-end_header
-"""
-
-    stream = build_stream(header)
-
-    with pytest.raises(InvalidPLYError):
-        PLYHeaderParser.parse(stream)
-
-
-def test_invalid_no_elements():
-    header = """ply
-format ascii 1.0
-end_header
-"""
-
-    stream = build_stream(header)
-
-    with pytest.raises(InvalidPLYError):
-        PLYHeaderParser.parse(stream)
-
-
-def test_invalid_missing_end_header():
-    header = """ply
-format ascii 1.0
-element vertex 1
-property float x
-"""
-
-    stream = build_stream(header)
-
-    with pytest.raises(InvalidPLYError):
-        PLYHeaderParser.parse(stream)
-
-
-# ----------------------------
-# FORMAT VARIANTS
-# ----------------------------
-
-def test_binary_format_parsing():
-    header = """ply
+    def test_binary_little_endian_format(self) -> None:
+        header = """ply
 format binary_little_endian 1.0
 element vertex 1
 property float x
 end_header
 """
+        result = PLYHeaderParser.parse(build_header_stream(header))
 
-    stream = build_stream(header)
+        assert result.format == PLYFormat.BINARY_LITTLE_ENDIAN
 
-    result = PLYHeaderParser.parse(stream)
-
-    assert result.format == PLYFormat.BINARY_LITTLE_ENDIAN
-
-
-def test_big_endian_format_parsing():
-    header = """ply
+    def test_binary_big_endian_format(self) -> None:
+        header = """ply
 format binary_big_endian 1.0
 element vertex 1
 property float x
 end_header
 """
+        result = PLYHeaderParser.parse(build_header_stream(header))
 
-    stream = build_stream(header)
+        assert result.format == PLYFormat.BINARY_BIG_ENDIAN
 
-    result = PLYHeaderParser.parse(stream)
-
-    assert result.format == PLYFormat.BINARY_BIG_ENDIAN
-
-
-# ----------------------------
-# EDGE CASE: whitespace noise
-# ----------------------------
-
-def test_header_with_extra_whitespace():
-    header = """ply
+    def test_header_with_extra_whitespace(self) -> None:
+        header = """ply
 
 format ascii 1.0
 
@@ -196,10 +118,342 @@ property float x
 
 end_header
 """
+        result = PLYHeaderParser.parse(build_header_stream(header))
 
-    stream = build_stream(header)
+        assert result.format == PLYFormat.ASCII
+        assert result.vertex_count == 1
 
-    result = PLYHeaderParser.parse(stream)
 
-    assert result.format == PLYFormat.ASCII
-    assert result.vertex_count == 1
+# =============================================================================
+# Stream-level errors
+# =============================================================================
+
+
+class TestPLYHeaderParserStreamErrors:
+    def test_unexpected_eof_while_reading_header(self) -> None:
+        stream = io.BytesIO(b"ply\nformat ascii 1.0\n")
+
+        with pytest.raises(
+            InvalidPLYError,
+            match="Unexpected end of file",
+        ):
+            PLYHeaderParser.parse(stream)
+
+    def test_invalid_utf8_in_header(self) -> None:
+        stream = io.BytesIO(b"ply\n\xff\xfe\nend_header\n")
+
+        with pytest.raises(
+            InvalidPLYError,
+            match="not valid UTF-8",
+        ):
+            PLYHeaderParser.parse(stream)
+
+
+# =============================================================================
+# Structural validation errors
+# =============================================================================
+
+
+class TestPLYHeaderParserStructuralErrors:
+    def test_invalid_magic(self) -> None:
+        with pytest.raises(
+            InvalidPLYError,
+            match="Invalid PLY signature",
+        ):
+            PLYHeaderParser._validate_magic(["not_ply"])
+
+    def test_empty_lines_for_magic(self) -> None:
+        with pytest.raises(
+            InvalidPLYError,
+            match="Empty PLY file",
+        ):
+            PLYHeaderParser._validate_magic([])
+
+    def test_no_elements(self) -> None:
+        header = """ply
+format ascii 1.0
+end_header
+"""
+        with pytest.raises(
+            InvalidPLYError,
+            match="no elements",
+        ):
+            PLYHeaderParser.parse(build_header_stream(header))
+
+    def test_only_magic_and_end_header(self) -> None:
+        header = """ply
+end_header
+"""
+        with pytest.raises(InvalidPLYError):
+            PLYHeaderParser.parse(build_header_stream(header))
+
+    def test_missing_format_declaration(self) -> None:
+        header = """ply
+element vertex 1
+property float x
+end_header
+"""
+        with pytest.raises(
+            InvalidPLYError,
+            match="does not declare a format",
+        ):
+            PLYHeaderParser.parse(build_header_stream(header))
+
+    def test_missing_version_declaration(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        def broken_format(
+            cls,
+            tokens: list[str],
+            state: object,
+        ) -> None:
+            from topocore.io.ply.header_parser import _HeaderParseState
+
+            assert isinstance(state, _HeaderParseState)
+            state.fmt = PLYFormat.ASCII
+
+        monkeypatch.setattr(
+            PLYHeaderParser,
+            "_handle_format",
+            classmethod(broken_format),
+        )
+
+        header = """ply
+format ascii 1.0
+element vertex 1
+property float x
+end_header
+"""
+        with pytest.raises(
+            InvalidPLYError,
+            match="does not declare a version",
+        ):
+            PLYHeaderParser.parse(build_header_stream(header))
+
+    def test_unknown_keyword(self) -> None:
+        header = """ply
+format ascii 1.0
+unknown_token value
+element vertex 1
+property float x
+end_header
+"""
+        with pytest.raises(
+            InvalidPLYError,
+            match="Unknown PLY header keyword",
+        ):
+            PLYHeaderParser.parse(build_header_stream(header))
+
+
+# =============================================================================
+# Format declaration errors
+# =============================================================================
+
+
+class TestPLYHeaderParserFormatErrors:
+    def test_malformed_format_declaration(self) -> None:
+        header = """ply
+format ascii
+element vertex 1
+property float x
+end_header
+"""
+        with pytest.raises(
+            InvalidPLYError,
+            match="Malformed format declaration",
+        ):
+            PLYHeaderParser.parse(build_header_stream(header))
+
+    def test_duplicate_format_declaration(self) -> None:
+        header = """ply
+format ascii 1.0
+format ascii 1.0
+element vertex 1
+property float x
+end_header
+"""
+        with pytest.raises(
+            InvalidPLYError,
+            match="Duplicate format declaration",
+        ):
+            PLYHeaderParser.parse(build_header_stream(header))
+
+    def test_unsupported_format(self) -> None:
+        header = """ply
+format json 1.0
+element vertex 1
+property float x
+end_header
+"""
+        with pytest.raises(
+            InvalidPLYError,
+            match="Unsupported PLY format",
+        ):
+            PLYHeaderParser.parse(build_header_stream(header))
+
+    def test_unsupported_version(self) -> None:
+        header = """ply
+format ascii 2.0
+element vertex 1
+property float x
+end_header
+"""
+        with pytest.raises(
+            InvalidPLYError,
+            match="Unsupported PLY version",
+        ):
+            PLYHeaderParser.parse(build_header_stream(header))
+
+
+# =============================================================================
+# Element declaration errors
+# =============================================================================
+
+
+class TestPLYHeaderParserElementErrors:
+    def test_malformed_element_declaration(self) -> None:
+        header = """ply
+format ascii 1.0
+element vertex
+property float x
+end_header
+"""
+        with pytest.raises(
+            InvalidPLYError,
+            match="Malformed element declaration",
+        ):
+            PLYHeaderParser.parse(build_header_stream(header))
+
+    def test_invalid_element_count(self) -> None:
+        header = """ply
+format ascii 1.0
+element vertex abc
+property float x
+end_header
+"""
+        with pytest.raises(
+            InvalidPLYError,
+            match="Invalid element count",
+        ):
+            PLYHeaderParser.parse(build_header_stream(header))
+
+    def test_negative_element_count(self) -> None:
+        header = """ply
+format ascii 1.0
+element vertex -1
+property float x
+end_header
+"""
+        with pytest.raises(
+            InvalidPLYError,
+            match="cannot be negative",
+        ):
+            PLYHeaderParser.parse(build_header_stream(header))
+
+    def test_duplicated_element(self) -> None:
+        header = """ply
+format ascii 1.0
+element vertex 1
+element vertex 2
+property float x
+end_header
+"""
+        with pytest.raises(
+            InvalidPLYError,
+            match="Duplicated element",
+        ):
+            PLYHeaderParser.parse(build_header_stream(header))
+
+
+# =============================================================================
+# Property declaration errors
+# =============================================================================
+
+
+class TestPLYHeaderParserPropertyErrors:
+    def test_property_before_element(self) -> None:
+        header = """ply
+format ascii 1.0
+property float x
+element vertex 1
+end_header
+"""
+        with pytest.raises(
+            InvalidPLYError,
+            match="Property declared before an element",
+        ):
+            PLYHeaderParser.parse(build_header_stream(header))
+
+    def test_duplicated_property(self) -> None:
+        header = """ply
+format ascii 1.0
+element vertex 1
+property float x
+property float x
+end_header
+"""
+        with pytest.raises(
+            InvalidPLYError,
+            match="Duplicated property",
+        ):
+            PLYHeaderParser.parse(build_header_stream(header))
+
+    def test_malformed_property_declaration(self) -> None:
+        with pytest.raises(
+            InvalidPLYError,
+            match="Malformed property declaration",
+        ):
+            PLYHeaderParser._parse_property(["property"])
+
+    def test_malformed_scalar_property(self) -> None:
+        header = """ply
+format ascii 1.0
+element vertex 1
+property float
+end_header
+"""
+        with pytest.raises(
+            InvalidPLYError,
+            match="Malformed scalar property",
+        ):
+            PLYHeaderParser.parse(build_header_stream(header))
+
+    def test_unsupported_scalar_type(self) -> None:
+        header = """ply
+format ascii 1.0
+element vertex 1
+property imaginary x
+end_header
+"""
+        with pytest.raises(
+            InvalidPLYError,
+            match="Unsupported scalar type",
+        ):
+            PLYHeaderParser.parse(build_header_stream(header))
+
+    def test_malformed_list_property(self) -> None:
+        header = """ply
+format ascii 1.0
+element face 1
+property list uchar int
+end_header
+"""
+        with pytest.raises(
+            InvalidPLYError,
+            match="Malformed list property",
+        ):
+            PLYHeaderParser.parse(build_header_stream(header))
+
+    def test_unsupported_list_property_type(self) -> None:
+        header = """ply
+format ascii 1.0
+element face 1
+property list imaginary int vertex_indices
+end_header
+"""
+        with pytest.raises(
+            InvalidPLYError,
+            match="Unsupported list property type",
+        ):
+            PLYHeaderParser.parse(build_header_stream(header))

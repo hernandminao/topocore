@@ -181,4 +181,9 @@ class Chunk:
             f"source_id={self._source_id}, "
             f"attributes=[{attrs}]"
             f")"
-        )    
+        )
+
+
+__all__ = [
+    "Chunk",
+]

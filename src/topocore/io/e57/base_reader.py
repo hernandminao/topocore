@@ -86,29 +86,29 @@ class BaseE57Reader(PointCloudReader):
 
     def __iter__(self) -> Iterator[Chunk]:
 
-    self._open()
+        self._open()
 
-    for source_id, scan in self._iterate_scans():
+        for source_id, scan in self._iterate_scans():
 
-        size = len(next(iter(scan.values())))
+            size = len(next(iter(scan.values())))
 
-        for start in range(
-            0,
-            size,
-            self._chunk_size,
-        ):
+            for start in range(
+                0,
+                size,
+                self._chunk_size,
+            ):
 
-            end = start + self._chunk_size
+                end = start + self._chunk_size
 
-            arrays = {
-                key: value[start:end]
-                for key, value in scan.items()
-            }
+                arrays = {
+                    key: value[start:end]
+                    for key, value in scan.items()
+                }
 
-            yield self._create_chunk(
-                arrays,
-                source_id,
-            )
+                yield self._create_chunk(
+                    arrays,
+                    source_id,
+                )
 
     def close(self) -> None:
         """

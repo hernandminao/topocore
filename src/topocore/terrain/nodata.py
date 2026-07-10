@@ -23,7 +23,6 @@ import math
 import numpy as np
 from numpy.typing import NDArray
 
-
 DEFAULT_NODATA = float("nan")
 
 
@@ -127,9 +126,7 @@ def replace_nodata(
     """
     result = array.copy()
 
-    result[
-        ~np.isfinite(result)
-    ] = value
+    result[~np.isfinite(result)] = value
 
     return result
 

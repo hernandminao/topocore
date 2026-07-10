@@ -90,24 +90,19 @@ class ASCIIParser:
         """
 
         if isinstance(self._source, Path):
-
             with self._source.open(
                 "r",
                 encoding=self._format.encoding,
             ) as stream:
-
                 yield stream
 
             return
 
         if isinstance(self._source, str):
-
             with open(
                 self._source,
-                "r",
                 encoding=self._format.encoding,
             ) as stream:
-
                 yield stream
 
             return
@@ -117,7 +112,6 @@ class ASCIIParser:
         #
 
         if hasattr(self._source, "read"):
-
             yield self._source
 
             return
@@ -138,16 +132,12 @@ class ASCIIParser:
     ) -> Iterator[str]:
 
         for raw_line in stream:
-
             line = raw_line.strip()
 
             if not line:
                 continue
 
-            if any(
-                line.startswith(prefix)
-                for prefix in self._format.comment_prefixes
-            ):
+            if any(line.startswith(prefix) for prefix in self._format.comment_prefixes):
                 continue
 
             yield line
@@ -162,7 +152,6 @@ class ASCIIParser:
             ";",
             "\t",
         ):
-
             if delimiter in line:
                 return delimiter
 
@@ -170,7 +159,7 @@ class ASCIIParser:
         # Whitespace separated.
         #
 
-        return None        
+        return None
 
     @staticmethod
     def _split(
@@ -179,13 +168,9 @@ class ASCIIParser:
     ) -> list[str]:
 
         if delimiter is None:
-
             return line.split()
 
-        return [
-            value.strip()
-            for value in line.split(delimiter)
-        ] 
+        return [value.strip() for value in line.split(delimiter)]
 
     def _default_columns(
         self,
@@ -202,10 +187,7 @@ class ASCIIParser:
         first_line: str,
     ) -> ParserContext:
 
-        delimiter = (
-            self._format.delimiter
-            or self._detect_delimiter(first_line)
-        )
+        delimiter = self._format.delimiter or self._detect_delimiter(first_line)
 
         fields = self._split(
             first_line,
@@ -216,28 +198,17 @@ class ASCIIParser:
             fields,
         )
 
-        has_header = (
-            self._format.has_header is not False
-            and detection.has_header
-        )
+        has_header = self._format.has_header is not False and detection.has_header
 
-        columns = (
-            detection.columns
-            if has_header
-            else self._default_columns()
-        )
+        columns = detection.columns if has_header else self._default_columns()
 
         context = ParserContext(
             delimiter=delimiter,
             columns=columns,
-            buffers={
-                name: []
-                for name in columns
-            },
+            buffers={name: [] for name in columns},
         )
 
         if not has_header:
-
             self._append_record(
                 context,
                 fields,
@@ -261,12 +232,9 @@ class ASCIIParser:
         """
 
         if chunk_size <= 0:
-            raise ValueError(
-                "chunk_size must be greater than zero."
-            )
+            raise ValueError("chunk_size must be greater than zero.")
 
         with self._open_source() as stream:
-
             data_lines = self._iter_data_lines(stream)
 
             try:
@@ -280,7 +248,6 @@ class ASCIIParser:
             )
 
             for line in data_lines:
-
                 fields = self._split(
                     line,
                     context.delimiter,
@@ -317,27 +284,18 @@ class ASCIIParser:
         buffers = context.buffers
 
         try:
-
             for (
                 column_name,
                 column_index,
             ) in context.columns.items():
-
-                value = (
-                    fields[column_index]
-                    if column_index < len(fields)
-                    else ""
-                )
+                value = fields[column_index] if column_index < len(fields) else ""
 
                 buffers[column_name].append(
                     value,
                 )
 
         except (IndexError, ValueError) as exc:
-
-            raise InvalidASCIIRecordError(
-                f"Invalid ASCII record: {line}"
-            ) from exc
+            raise InvalidASCIIRecordError(f"Invalid ASCII record: {line}") from exc
 
     def _emit_batch(
         self,

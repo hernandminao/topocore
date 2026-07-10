@@ -29,18 +29,16 @@ LASReader, LAZReader, E57Reader and their corresponding writers.
 
 from __future__ import annotations
 
-from .base import PointCloudReader
-from .base import PointCloudWriter
-
+from .base import PointCloudReader, PointCloudWriter
 from .exceptions import (
-    TopoCoreError,
-    PointCloudIOError,
-    FileFormatError,
-    UnsupportedFormatError,
+    CoordinateSystemError,
     CorruptedFileError,
+    FileFormatError,
     InvalidHeaderError,
     MissingAttributeError,
-    CoordinateSystemError,
+    PointCloudIOError,
+    TopoCoreError,
+    UnsupportedFormatError,
     WriteError,
 )
 

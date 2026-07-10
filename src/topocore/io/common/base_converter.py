@@ -15,15 +15,13 @@ MIT
 
 from __future__ import annotations
 
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 
 import numpy as np
 
 from topocore.io.common.attribute_mapping import resolve_attribute
 from topocore.io.common.records import PointRecordBatch
-from topocore.pointcloud.attributes import ATTRIBUTE_DTYPES
-from topocore.pointcloud.attributes import PointAttribute
+from topocore.pointcloud.attributes import ATTRIBUTE_DTYPES, PointAttribute
 from topocore.pointcloud.chunk import Chunk
 
 
@@ -84,11 +82,7 @@ class BasePointConverter(ABC):
         result: list[PointAttribute] = []
 
         for name in batch:
-
-            attribute = (
-                self.attribute_mapping.get(name)
-                or resolve_attribute(name)
-            )
+            attribute = self.attribute_mapping.get(name) or resolve_attribute(name)
 
             if attribute is None:
                 continue
@@ -110,11 +104,7 @@ class BasePointConverter(ABC):
         processed: set[str] = set()
 
         for source_name in batch:
-
-            attribute = (
-                self.attribute_mapping.get(source_name)
-                or resolve_attribute(source_name)
-            )
+            attribute = self.attribute_mapping.get(source_name) or resolve_attribute(source_name)
 
             if attribute is None:
                 continue
@@ -142,6 +132,7 @@ class BasePointConverter(ABC):
             batch,
         )
 
+    @abstractmethod
     def _populate_special_attributes(
         self,
         chunk: Chunk,

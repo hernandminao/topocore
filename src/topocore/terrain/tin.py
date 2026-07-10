@@ -24,17 +24,14 @@ MIT
 from __future__ import annotations
 
 from collections.abc import Generator
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import dataclass, field
 
 import numpy as np
 from numpy.typing import NDArray
 
 from topocore.geometry.point3d import Point3D
-from topocore.terrain.algorithms import DelaunayResult
-from topocore.terrain.algorithms import DelaunayTriangulator
-from topocore.terrain.models import Edge
-from topocore.terrain.models import Triangle
+from topocore.terrain.algorithms import DelaunayResult, DelaunayTriangulator
+from topocore.terrain.models import Edge, Triangle
 
 
 @dataclass(slots=True)
@@ -47,12 +44,15 @@ class _TINCache:
 
     edges: tuple[Edge, ...] | None = None
 
-    bounds: tuple[
-        float,
-        float,
-        float,
-        float,
-    ] | None = None
+    bounds: (
+        tuple[
+            float,
+            float,
+            float,
+            float,
+        ]
+        | None
+    ) = None
 
 
 @dataclass(slots=True)
@@ -149,14 +149,12 @@ class TIN:
         XY bounding box.
         """
         if self._cache.bounds is None:
-            self._cache.bounds = (
-                DelaunayTriangulator.compute_bbox(
-                    self.vertices,
-                )
+            self._cache.bounds = DelaunayTriangulator.compute_bbox(
+                self.vertices,
             )
 
         return self._cache.bounds
-    
+
     def triangle(
         self,
         index: int,
@@ -218,7 +216,7 @@ class TIN:
 
     def triangles(
         self,
-    ) -> Generator[Triangle, None, None]:
+    ) -> Generator[Triangle]:
         """
         Iterate lazily over all triangles.
 
@@ -308,10 +306,13 @@ class TIN:
         """
         Return whether the coordinate lies inside the TIN.
         """
-        return self.find_triangle(
-            x,
-            y,
-        ) >= 0
+        return (
+            self.find_triangle(
+                x,
+                y,
+            )
+            >= 0
+        )
 
     def _build_edges(self) -> tuple[Edge, ...]:
         """
@@ -344,7 +345,7 @@ class TIN:
 
     def __iter__(
         self,
-    ) -> Generator[Triangle, None, None]:
+    ) -> Generator[Triangle]:
         """
         Iterate over all terrain triangles.
 
@@ -455,10 +456,7 @@ class TIN:
             Array of shape (n,).
         """
         return np.asarray(
-            [
-                point.z
-                for point in self.vertices
-            ],
+            [point.z for point in self.vertices],
             dtype=np.float64,
         )
 

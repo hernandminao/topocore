@@ -42,11 +42,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from topocore.features.feature_codes import FeatureCodeDefinition
-from topocore.features.feature_codes import FeatureCodeRegistry
-from topocore.features.feature_codes import FeatureGeometryType
-from topocore.survey.models import SurveyPoint
-from topocore.survey.models import SurveyPointSet
+from topocore.features.feature_codes import (
+    FeatureCodeDefinition,
+    FeatureCodeRegistry,
+    FeatureGeometryType,
+)
+from topocore.survey.models import SurveyPoint, SurveyPointSet
 
 _POINT_LIKE = (FeatureGeometryType.POINT, FeatureGeometryType.SYMBOL)
 _LINE_LIKE = (FeatureGeometryType.LINE, FeatureGeometryType.POLYGON)
@@ -168,8 +169,7 @@ def build_features(
 
         if definition.geometry_type in _POINT_LIKE:
             point_features.extend(
-                PointFeature(code=base_code, definition=definition, point=p)
-                for p in run
+                PointFeature(code=base_code, definition=definition, point=p) for p in run
             )
             continue
 

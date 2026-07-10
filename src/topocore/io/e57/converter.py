@@ -33,6 +33,7 @@ E57_ATTRIBUTE_MAPPING: Final = {
     "colorBlue": PointAttribute.BLUE,
 }
 
+
 class E57Converter:
     """
     Converts E57 scan data into TopoCore chunks.
@@ -63,11 +64,7 @@ class E57Converter:
         )
 
         for name, attribute in E57_ATTRIBUTE_MAPPING.items():
-
             if name in scan:
-
-                chunk[attribute][:] = np.asarray(
-                    scan[name]
-                )
+                chunk[attribute][:] = np.asarray(scan[name])
 
         return chunk

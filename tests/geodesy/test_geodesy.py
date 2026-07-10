@@ -17,6 +17,10 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
+from topocore.geodesy._cache import (
+    cache_info,
+    clear_cache,
+)
 from topocore.geodesy.crs import CRS
 from topocore.geodesy.exceptions import (
     CRSError,
@@ -32,10 +36,6 @@ from topocore.geodesy.validation import (
     validate_bbox,
     validate_coordinate_arrays,
     validate_epsg,
-)
-from topocore.geodesy._cache import (
-    cache_info,
-    clear_cache,
 )
 
 
@@ -76,9 +76,7 @@ class TestCRS:
             CRS.from_wkt("invalid_wkt")
 
     def test_from_proj4_valid(self) -> None:
-        crs = CRS.from_proj4(
-            "+proj=longlat +datum=WGS84 +no_defs"
-        )
+        crs = CRS.from_proj4("+proj=longlat +datum=WGS84 +no_defs")
 
         assert crs.is_geographic
 
@@ -106,7 +104,7 @@ class TestCRS:
             '"name":"WGS 84",'
             '"semi_major_axis":6378137,'
             '"inverse_flattening":298.257223563'
-            '}},'
+            "}},"
             '"coordinate_system":{'
             '"subtype":"ellipsoidal",'
             '"axis":['
@@ -182,9 +180,7 @@ class TestCRS:
         assert crs.projection.method_name is not None
 
     def test_authority_none(self) -> None:
-        crs = CRS.from_proj4(
-            "+proj=aeqd +lat_0=0 +lon_0=0"
-        )
+        crs = CRS.from_proj4("+proj=aeqd +lat_0=0 +lon_0=0")
 
         assert crs.authority is None
         assert crs.epsg is None
@@ -479,12 +475,14 @@ class TestCoordinateTransformer:
         target = CRS.from_epsg(3116)
 
         # Simulate a failure in the underlying pyproj library
-        with patch(
-            "topocore.geodesy._cache.get_transformer",
-            side_effect=Exception("Mocked pyproj error"),
+        with (
+            patch(
+                "topocore.geodesy._cache.get_transformer",
+                side_effect=Exception("Mocked pyproj error"),
+            ),
+            pytest.raises(TransformationError),
         ):
-            with pytest.raises(TransformationError):
-                CoordinateTransformer(source, target)
+            CoordinateTransformer(source, target)
 
 
 class TestGeodesicCalculator:
@@ -533,24 +531,30 @@ class TestDistance:
     def test_distance2d(self) -> None:
         from topocore.geodesy.distance import distance2d
 
-        assert distance2d(
-            0.0,
-            0.0,
-            3.0,
-            4.0,
-        ) == 5.0
+        assert (
+            distance2d(
+                0.0,
+                0.0,
+                3.0,
+                4.0,
+            )
+            == 5.0
+        )
 
     def test_distance3d(self) -> None:
         from topocore.geodesy.distance import distance3d
 
-        assert distance3d(
-            0.0,
-            0.0,
-            0.0,
-            3.0,
-            4.0,
-            12.0,
-        ) == 13.0
+        assert (
+            distance3d(
+                0.0,
+                0.0,
+                0.0,
+                3.0,
+                4.0,
+                12.0,
+            )
+            == 13.0
+        )
 
 
 class TestCache:

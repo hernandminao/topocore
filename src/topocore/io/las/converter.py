@@ -68,11 +68,7 @@ class LASConverter:
         )
 
         for las_name, attribute in mapping.items():
-
             if hasattr(points, las_name):
-
-                chunk[attribute][:] = np.asarray(
-                    getattr(points, las_name)
-                )
+                chunk[attribute][:] = np.asarray(getattr(points, las_name))
 
         return chunk

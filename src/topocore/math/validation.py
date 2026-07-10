@@ -15,8 +15,7 @@ MIT
 
 from __future__ import annotations
 
-from math import isfinite
-from math import isnan
+from math import isfinite, isnan
 
 from topocore.core.exceptions import MathError
 from topocore.math.constants import MAX_COORDINATE_MAGNITUDE
@@ -48,10 +47,7 @@ def validate_coordinate(value: float) -> None:
     validate_finite(value)
 
     if abs(value) > MAX_COORDINATE_MAGNITUDE:
-        raise MathError(
-            f"Coordinate magnitude exceeds "
-            f"{MAX_COORDINATE_MAGNITUDE}."
-        )
+        raise MathError(f"Coordinate magnitude exceeds {MAX_COORDINATE_MAGNITUDE}.")
 
 
 def validate_positive(value: float) -> None:
@@ -60,9 +56,7 @@ def validate_positive(value: float) -> None:
     """
 
     if not is_positive(value):
-        raise MathError(
-            "Value must be greater than zero."
-        )
+        raise MathError("Value must be greater than zero.")
 
 
 __all__ = [

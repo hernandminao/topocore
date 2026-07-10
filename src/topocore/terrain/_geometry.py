@@ -47,10 +47,7 @@ def oriented_normal(triangle: Triangle) -> Vector3D:
     normal = edge1.cross(edge2)
 
     if normal.is_zero:
-        raise TerrainError(
-            "Cannot compute a facet normal for a "
-            "degenerate (zero-area) triangle."
-        )
+        raise TerrainError("Cannot compute a facet normal for a degenerate (zero-area) triangle.")
 
     if normal.z < 0.0:
         normal = Vector3D(-normal.x, -normal.y, -normal.z)

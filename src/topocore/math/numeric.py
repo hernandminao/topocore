@@ -52,9 +52,7 @@ def clamp(
         If minimum is greater than maximum.
     """
     if minimum > maximum:
-        raise MathError(
-            "minimum cannot be greater than maximum."
-        )
+        raise MathError("minimum cannot be greater than maximum.")
 
     return max(minimum, min(value, maximum))
 
@@ -115,9 +113,7 @@ def safe_divide(
         If the denominator is numerically zero.
     """
     if is_zero(denominator):
-        raise MathError(
-            "Division by zero."
-        )
+        raise MathError("Division by zero.")
 
     return numerator / denominator
 
@@ -141,11 +137,10 @@ def mean(values: Sequence[float]) -> float:
         If the sequence is empty.
     """
     if not values:
-        raise MathError(
-            "Cannot compute the mean of an empty sequence."
-        )
+        raise MathError("Cannot compute the mean of an empty sequence.")
 
     return sum(values) / len(values)
+
 
 def cube(x: float) -> float:
     return x * x * x
@@ -161,6 +156,7 @@ def sign(x: float) -> float:
     if x < 0:
         return -1.0
     return 0.0
+
 
 __all__ = [
     "clamp",

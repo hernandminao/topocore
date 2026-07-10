@@ -19,8 +19,7 @@ import numpy as np
 
 from topocore.io.common.base_converter import BasePointConverter
 from topocore.io.common.records import PointRecordBatch
-from topocore.pointcloud.attributes import ATTRIBUTE_DTYPES
-from topocore.pointcloud.attributes import PointAttribute
+from topocore.pointcloud.attributes import ATTRIBUTE_DTYPES, PointAttribute
 from topocore.pointcloud.chunk import Chunk
 
 
@@ -47,19 +46,14 @@ class PLYConverter(BasePointConverter):
         """
 
         return {
-
             # RGB color
-
             "red": PointAttribute.COLOR,
             "green": PointAttribute.COLOR,
             "blue": PointAttribute.COLOR,
-
             # Surface normals
-
             "nx": PointAttribute.NORMAL,
             "ny": PointAttribute.NORMAL,
             "nz": PointAttribute.NORMAL,
-
         }
 
     def _populate_special_attributes(
@@ -112,15 +106,11 @@ class PLYConverter(BasePointConverter):
                 batch["blue"],
             )
         ).astype(
-            ATTRIBUTE_DTYPES[
-                PointAttribute.COLOR
-            ],
+            ATTRIBUTE_DTYPES[PointAttribute.COLOR],
             copy=False,
         )
 
-        chunk[
-            PointAttribute.COLOR
-        ][:] = rgb
+        chunk[PointAttribute.COLOR][:] = rgb
 
     def _populate_normals(
         self,
@@ -153,15 +143,11 @@ class PLYConverter(BasePointConverter):
                 batch["nz"],
             )
         ).astype(
-            ATTRIBUTE_DTYPES[
-                PointAttribute.NORMAL
-            ],
+            ATTRIBUTE_DTYPES[PointAttribute.NORMAL],
             copy=False,
         )
 
-        chunk[
-            PointAttribute.NORMAL
-        ][:] = normals
+        chunk[PointAttribute.NORMAL][:] = normals
 
 
 __all__ = [

@@ -21,8 +21,7 @@ MIT
 from __future__ import annotations
 
 from .constrained_delaunay import ConstrainedDelaunayTriangulator
-from .delaunay import DelaunayResult
-from .delaunay import DelaunayTriangulator
+from .delaunay import DelaunayResult, DelaunayTriangulator
 
 __all__ = [
     "DelaunayResult",

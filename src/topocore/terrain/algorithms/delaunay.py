@@ -28,8 +28,7 @@ from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.spatial import Delaunay
-from scipy.spatial import QhullError
+from scipy.spatial import Delaunay, QhullError
 
 from topocore.geometry.point3d import Point3D
 from topocore.terrain.exceptions import TriangulationError
@@ -116,9 +115,7 @@ class DelaunayTriangulator:
             )
 
         except QhullError as exc:
-            raise TriangulationError(
-                "Unable to compute Delaunay triangulation."
-            ) from exc
+            raise TriangulationError("Unable to compute Delaunay triangulation.") from exc
 
         return DelaunayResult(
             vertices=vertices,
@@ -131,7 +128,7 @@ class DelaunayTriangulator:
                 dtype=np.int32,
             ),
         )
-    
+
     @staticmethod
     def _validate(
         vertices: tuple[Point3D, ...],
@@ -151,8 +148,7 @@ class DelaunayTriangulator:
         """
         if len(vertices) < _MIN_POINTS:
             raise TriangulationError(
-                "At least three points are required "
-                "to compute a triangulation."
+                "At least three points are required to compute a triangulation."
             )
 
         DelaunayTriangulator._validate_duplicate_points(
@@ -215,8 +211,7 @@ class DelaunayTriangulator:
 
             if key in seen:
                 raise TriangulationError(
-                    "Duplicated XY coordinates were found "
-                    "in the input point set."
+                    "Duplicated XY coordinates were found in the input point set."
                 )
 
             seen.add(key)
@@ -249,9 +244,7 @@ class DelaunayTriangulator:
         rank = np.linalg.matrix_rank(centered)
 
         if rank < 2:
-            raise TriangulationError(
-                "All points are collinear."
-            )
+            raise TriangulationError("All points are collinear.")
 
     @staticmethod
     def compute_bbox(
@@ -286,7 +279,7 @@ class DelaunayTriangulator:
             max_x,
             max_y,
         )
-    
+
     @staticmethod
     def validate_result(
         result: DelaunayResult,
@@ -310,29 +303,19 @@ class DelaunayTriangulator:
         vertex_count = result.vertex_count
 
         if result.simplices.ndim != 2:
-            raise TriangulationError(
-                "Invalid simplices array."
-            )
+            raise TriangulationError("Invalid simplices array.")
 
         if result.simplices.shape[1] != 3:
-            raise TriangulationError(
-                "Each simplex must contain exactly three vertices."
-            )
+            raise TriangulationError("Each simplex must contain exactly three vertices.")
 
         if result.neighbors.shape != result.simplices.shape:
-            raise TriangulationError(
-                "Neighbors array has an invalid shape."
-            )
+            raise TriangulationError("Neighbors array has an invalid shape.")
 
         if np.any(result.simplices < 0):
-            raise TriangulationError(
-                "Triangulation contains invalid indices."
-            )
+            raise TriangulationError("Triangulation contains invalid indices.")
 
         if np.any(result.simplices >= vertex_count):
-            raise TriangulationError(
-                "Triangulation references nonexistent vertices."
-            )
+            raise TriangulationError("Triangulation references nonexistent vertices.")
 
     @staticmethod
     def triangle_vertices(

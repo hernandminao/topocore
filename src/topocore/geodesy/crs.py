@@ -15,8 +15,7 @@ MIT
 
 from __future__ import annotations
 
-from typing import Any
-from typing import final
+from typing import Any, final
 
 from pyproj import CRS as PyprojCRS
 
@@ -51,7 +50,7 @@ class CRS:
     def _create(
         cls,
         pyproj_crs: PyprojCRS,
-    ) -> "CRS":
+    ) -> CRS:
         """
         Internal constructor.
 
@@ -72,27 +71,25 @@ class CRS:
     def from_epsg(
         cls,
         epsg: int,
-    ) -> "CRS":
+    ) -> CRS:
         """
         Create a CRS from an EPSG code.
-        """        
+        """
         validate_epsg(epsg)
-        
+
         try:
             return cls._create(
                 _cache.get_crs(epsg),
             )
 
         except Exception as exc:
-            raise CRSError(
-                f"Failed to create CRS from EPSG:{epsg}."
-            ) from exc
+            raise CRSError(f"Failed to create CRS from EPSG:{epsg}.") from exc
 
     @classmethod
     def from_wkt(
         cls,
         wkt: str,
-    ) -> "CRS":
+    ) -> CRS:
         """
         Create a CRS from a WKT string.
         """
@@ -102,15 +99,13 @@ class CRS:
             )
 
         except Exception as exc:
-            raise CRSError(
-                "Failed to create CRS from WKT."
-            ) from exc
+            raise CRSError("Failed to create CRS from WKT.") from exc
 
     @classmethod
     def from_proj4(
         cls,
         proj4: str,
-    ) -> "CRS":
+    ) -> CRS:
         """
         Create a CRS from a PROJ.4 definition.
         """
@@ -120,16 +115,14 @@ class CRS:
             )
 
         except Exception as exc:
-            raise CRSError(
-                "Failed to create CRS from PROJ.4."
-            ) from exc
+            raise CRSError("Failed to create CRS from PROJ.4.") from exc
 
     @classmethod
     def from_authority(
         cls,
         auth_name: str,
         code: str | int,
-    ) -> "CRS":
+    ) -> CRS:
         """
         Create a CRS from an authority code.
         """
@@ -142,16 +135,13 @@ class CRS:
             )
 
         except Exception as exc:
-            raise CRSError(
-                f"Failed to create CRS from "
-                f"{auth_name}:{code}."
-            ) from exc
+            raise CRSError(f"Failed to create CRS from {auth_name}:{code}.") from exc
 
     @classmethod
     def from_json(
         cls,
         json_str: str,
-    ) -> "CRS":
+    ) -> CRS:
         """
         Create a CRS from a PROJ JSON definition.
         """
@@ -161,9 +151,7 @@ class CRS:
             )
 
         except Exception as exc:
-            raise CRSError(
-                "Failed to create CRS from JSON."
-            ) from exc
+            raise CRSError("Failed to create CRS from JSON.") from exc
 
     @property
     def _native(self) -> PyprojCRS:
@@ -171,7 +159,7 @@ class CRS:
         Internal wrapped pyproj CRS.
         """
         return self.__pyproj_crs
-        
+
     @property
     def authority(self) -> tuple[str, str] | None:
         """
@@ -190,8 +178,8 @@ class CRS:
         # Si es una proyección personalizada (ESRI:54032), retornar None
         # ya que no es una autoridad EPSG válida
         if authority[0] == "ESRI" and authority[1] == "54032":
-                return None
-        
+            return None
+
         return tuple(authority)
 
     @property
@@ -266,9 +254,7 @@ class CRS:
             semi_major_axis=pyproj_ellipsoid.semi_major_metre,
             semi_minor_axis=pyproj_ellipsoid.semi_minor_metre,
             inverse_flattening=pyproj_ellipsoid.inverse_flattening,
-            is_semi_minor_computed=(
-                pyproj_ellipsoid.is_semi_minor_computed
-            ),
+            is_semi_minor_computed=(pyproj_ellipsoid.is_semi_minor_computed),
         )
 
     @property
@@ -293,8 +279,8 @@ class CRS:
                 "scope",
                 None,
             ),
-        )        
-        
+        )
+
     @property
     def projection(self) -> ProjectionInfo | None:
         """Return projection information if available."""
@@ -374,11 +360,7 @@ class CRS:
         else:
             crs_type = "Other"
 
-        return (
-            f"CRS({epsg_str}, "
-            f"'{self.name}', "
-            f"{crs_type})"
-        )
+        return f"CRS({epsg_str}, '{self.name}', {crs_type})"
 
 
 __all__ = [

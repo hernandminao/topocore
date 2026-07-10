@@ -47,10 +47,7 @@ def triangle_area2(
     float
         Twice the signed area.
     """
-    return (
-        (p2.x - p1.x) * (p3.y - p1.y)
-        - (p3.x - p1.x) * (p2.y - p1.y)
-    )
+    return (p2.x - p1.x) * (p3.y - p1.y) - (p3.x - p1.x) * (p2.y - p1.y)
 
 
 def triangle_area(
@@ -75,13 +72,16 @@ def triangle_area(
     float
         Triangle area.
     """
-    return abs(
-        triangle_area2(
-            p1,
-            p2,
-            p3,
+    return (
+        abs(
+            triangle_area2(
+                p1,
+                p2,
+                p3,
+            )
         )
-    ) * 0.5
+        * 0.5
+    )
 
 
 def barycentric_weights(
@@ -127,25 +127,11 @@ def barycentric_weights(
     )
 
     if abs(denominator) < _EPSILON:
-        raise ValueError(
-            "Degenerate triangle."
-        )
+        raise ValueError("Degenerate triangle.")
 
-    w1 = (
-        (
-            (p2.y - p3.y) * (x - p3.x)
-            + (p3.x - p2.x) * (y - p3.y)
-        )
-        / denominator
-    )
+    w1 = ((p2.y - p3.y) * (x - p3.x) + (p3.x - p2.x) * (y - p3.y)) / denominator
 
-    w2 = (
-        (
-            (p3.y - p1.y) * (x - p3.x)
-            + (p1.x - p3.x) * (y - p3.y)
-        )
-        / denominator
-    )
+    w2 = ((p3.y - p1.y) * (x - p3.x) + (p1.x - p3.x) * (y - p3.y)) / denominator
 
     w3 = 1.0 - w1 - w2
 
@@ -223,11 +209,7 @@ def inside_triangle(
     """
     w1, w2, w3 = weights
 
-    return (
-        w1 >= -tolerance
-        and w2 >= -tolerance
-        and w3 >= -tolerance
-    )
+    return w1 >= -tolerance and w2 >= -tolerance and w3 >= -tolerance
 
 
 __all__ = [

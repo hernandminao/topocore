@@ -85,9 +85,7 @@ class BarycentricInterpolator:
         )
 
         if triangle_index < 0:
-            raise InterpolationError(
-                "Point lies outside the TIN."
-            )
+            raise InterpolationError("Point lies outside the TIN.")
 
         return self.interpolate_triangle(
             triangle_index,
@@ -147,17 +145,11 @@ class BarycentricInterpolator:
         )
 
         if not inside_triangle(weights):
-            raise InterpolationError(
-                "Point lies outside triangle."
-            )
+            raise InterpolationError("Point lies outside triangle.")
 
         w1, w2, w3 = weights
 
-        return (
-            w1 * p1.z
-            + w2 * p2.z
-            + w3 * p3.z
-        )
+        return w1 * p1.z + w2 * p2.z + w3 * p3.z
 
     def __call__(
         self,

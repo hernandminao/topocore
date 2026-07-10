@@ -17,7 +17,7 @@ MIT
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from topocore.geometry.point3d import Point3D
 from topocore.terrain.barycentric import BarycentricInterpolator
@@ -27,7 +27,7 @@ from topocore.terrain.nearest import NearestInterpolator
 from topocore.terrain.tin import TIN
 
 
-class InterpolationMethod(str, Enum):
+class InterpolationMethod(StrEnum):
     """
     Supported interpolation methods.
     """

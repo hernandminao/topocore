@@ -18,8 +18,7 @@ MIT
 
 from __future__ import annotations
 
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -84,7 +83,7 @@ class PointCloudReader(ABC):
         Release resources associated with the reader.
         """
 
-    def __enter__(self) -> "PointCloudReader":
+    def __enter__(self) -> PointCloudReader:
         """
         Enter the runtime context.
         """
@@ -102,6 +101,7 @@ class PointCloudReader(ABC):
         """
 
         self.close()
+
 
 class PointCloudWriter(ABC):
     """
@@ -146,7 +146,7 @@ class PointCloudWriter(ABC):
         Release writer resources.
         """
 
-    def __enter__(self) -> "PointCloudWriter":
+    def __enter__(self) -> PointCloudWriter:
         """
         Enter the runtime context.
         """

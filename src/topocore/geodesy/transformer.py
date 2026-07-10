@@ -26,6 +26,7 @@ from topocore.geodesy.validation import (
     validate_bbox,
     validate_coordinate_arrays,
 )
+
 from . import _cache
 
 
@@ -60,9 +61,7 @@ class CoordinateTransformer:
                     always_xy=True,
                 )
         except Exception as exc:
-            raise TransformationError(
-                "Failed to create coordinate transformer."
-            ) from exc
+            raise TransformationError("Failed to create coordinate transformer.") from exc
 
     @property
     def source_crs(self) -> CRS:
@@ -119,9 +118,7 @@ class CoordinateTransformer:
             )
 
         except Exception as exc:
-            raise TransformationError(
-                "Point transformation failed."
-            ) from exc
+            raise TransformationError("Point transformation failed.") from exc
 
     def transform_array(
         self,
@@ -133,13 +130,11 @@ class CoordinateTransformer:
         Transform arrays of coordinates.
         """
         try:
-
             if z is None:
-                
                 x_arr, y_arr = validate_coordinate_arrays(
-		    x,
-		    y,
-		)
+                    x,
+                    y,
+                )
 
                 x_new, y_new = self._transformer.transform(
                     x_arr,
@@ -153,9 +148,9 @@ class CoordinateTransformer:
                 )
 
             x_arr, y_arr, z_arr = validate_coordinate_arrays(
-	        x,
-	        y,
-	        z,
+                x,
+                y,
+                z,
             )
 
             x_new, y_new, z_new = self._transformer.transform(
@@ -171,9 +166,7 @@ class CoordinateTransformer:
             )
 
         except Exception as exc:
-            raise TransformationError(
-                "Array transformation failed."
-            ) from exc
+            raise TransformationError("Array transformation failed.") from exc
 
     def transform_bbox(
         self,
@@ -216,11 +209,9 @@ class CoordinateTransformer:
             )
 
         except Exception as exc:
-            raise TransformationError(
-                "BBox transformation failed."
-            ) from exc
+            raise TransformationError("BBox transformation failed.") from exc
 
 
 __all__ = [
     "CoordinateTransformer",
-] 
+]

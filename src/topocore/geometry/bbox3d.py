@@ -16,9 +16,7 @@ MIT
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Self
-from typing import final
-from typing import override
+from typing import Self, final, override
 
 from topocore.geometry.base import Geometry
 from topocore.geometry.point3d import Point3D
@@ -71,19 +69,13 @@ class BBox3D(Geometry):
         validate_coordinate(self.max_z)
 
         if self.min_x > self.max_x:
-            raise ValueError(
-                "min_x must be less than or equal to max_x."
-            )
+            raise ValueError("min_x must be less than or equal to max_x.")
 
         if self.min_y > self.max_y:
-            raise ValueError(
-                "min_y must be less than or equal to max_y."
-            )
+            raise ValueError("min_y must be less than or equal to max_y.")
 
         if self.min_z > self.max_z:
-            raise ValueError(
-                "min_z must be less than or equal to max_z."
-            )
+            raise ValueError("min_z must be less than or equal to max_z.")
 
     # ==========================================================
     # Properties
@@ -115,11 +107,7 @@ class BBox3D(Geometry):
         """
         Volume of the bounding box.
         """
-        return (
-            self.width
-            * self.height
-            * self.depth
-        )
+        return self.width * self.height * self.depth
 
     @property
     def center(self) -> Point3D:
@@ -199,9 +187,7 @@ class BBox3D(Geometry):
         Expand the bounding box by a constant margin.
         """
         if margin < 0.0:
-            raise ValueError(
-                "Margin must be non-negative."
-            )
+            raise ValueError("Margin must be non-negative.")
 
         return BBox3D(
             self.min_x - margin,

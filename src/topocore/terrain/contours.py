@@ -30,8 +30,7 @@ from __future__ import annotations
 import math
 
 from topocore.geometry.point3d import Point3D
-from topocore.terrain.constants import DEFAULT_CONTOUR_INTERVAL
-from topocore.terrain.constants import EPSILON
+from topocore.terrain.constants import DEFAULT_CONTOUR_INTERVAL, EPSILON
 from topocore.terrain.exceptions import ContourError
 from topocore.terrain.models import ContourLine
 from topocore.terrain.tin import TIN
@@ -353,9 +352,7 @@ class ContourGenerator:
         vertices = self._tin.vertices
 
         if not vertices:
-            raise ContourError(
-                "Cannot generate contours from an empty TIN."
-            )
+            raise ContourError("Cannot generate contours from an empty TIN.")
 
         elevations = [vertex.z for vertex in vertices]
 

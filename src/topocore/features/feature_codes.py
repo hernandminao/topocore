@@ -85,9 +85,7 @@ class FeatureCodeRegistry:
         self,
         definitions: dict[str, FeatureCodeDefinition] | None = None,
     ) -> None:
-        self._definitions: dict[str, FeatureCodeDefinition] = dict(
-            definitions or {}
-        )
+        self._definitions: dict[str, FeatureCodeDefinition] = dict(definitions or {})
 
     @classmethod
     def default(cls) -> FeatureCodeRegistry:
@@ -120,46 +118,77 @@ _DEFAULT_DEFINITIONS: dict[str, FeatureCodeDefinition] = {
     definition.code: definition
     for definition in (
         FeatureCodeDefinition(
-            "CERCA", "Cerca", FeatureGeometryType.LINE, "CERCAS",
+            "CERCA",
+            "Cerca",
+            FeatureGeometryType.LINE,
+            "CERCAS",
         ),
         FeatureCodeDefinition(
-            "MURO", "Muro de contención", FeatureGeometryType.LINE, "MUROS",
+            "MURO",
+            "Muro de contención",
+            FeatureGeometryType.LINE,
+            "MUROS",
         ),
         FeatureCodeDefinition(
-            "BORDE", "Borde de vía", FeatureGeometryType.LINE, "VIAS",
-        ),
-        FeatureCodeDefinition(
-            "SARDINEL", "Sardinel / bordillo", FeatureGeometryType.LINE,
+            "BORDE",
+            "Borde de vía",
+            FeatureGeometryType.LINE,
             "VIAS",
         ),
         FeatureCodeDefinition(
-            "EJE", "Eje vial", FeatureGeometryType.LINE, "EJES",
+            "SARDINEL",
+            "Sardinel / bordillo",
+            FeatureGeometryType.LINE,
+            "VIAS",
         ),
         FeatureCodeDefinition(
-            "CANAL", "Canal de drenaje", FeatureGeometryType.LINE,
+            "EJE",
+            "Eje vial",
+            FeatureGeometryType.LINE,
+            "EJES",
+        ),
+        FeatureCodeDefinition(
+            "CANAL",
+            "Canal de drenaje",
+            FeatureGeometryType.LINE,
             "DRENAJE",
         ),
         FeatureCodeDefinition(
-            "EDIF", "Edificación", FeatureGeometryType.POLYGON,
-            "EDIFICACIONES", closed=True,
+            "EDIF",
+            "Edificación",
+            FeatureGeometryType.POLYGON,
+            "EDIFICACIONES",
+            closed=True,
         ),
         FeatureCodeDefinition(
-            "LOTE", "Lindero de lote", FeatureGeometryType.POLYGON,
-            "PREDIOS", closed=True,
+            "LOTE",
+            "Lindero de lote",
+            FeatureGeometryType.POLYGON,
+            "PREDIOS",
+            closed=True,
         ),
         FeatureCodeDefinition(
-            "ARBOL", "Árbol", FeatureGeometryType.SYMBOL, "VEGETACION",
+            "ARBOL",
+            "Árbol",
+            FeatureGeometryType.SYMBOL,
+            "VEGETACION",
         ),
         FeatureCodeDefinition(
-            "POSTE", "Poste de servicios", FeatureGeometryType.SYMBOL,
+            "POSTE",
+            "Poste de servicios",
+            FeatureGeometryType.SYMBOL,
             "SERVICIOS",
         ),
         FeatureCodeDefinition(
-            "POZO", "Pozo de inspección", FeatureGeometryType.SYMBOL,
+            "POZO",
+            "Pozo de inspección",
+            FeatureGeometryType.SYMBOL,
             "DRENAJE",
         ),
         FeatureCodeDefinition(
-            "BM", "Punto de control / mojón", FeatureGeometryType.SYMBOL,
+            "BM",
+            "Punto de control / mojón",
+            FeatureGeometryType.SYMBOL,
             "CONTROL",
         ),
     )

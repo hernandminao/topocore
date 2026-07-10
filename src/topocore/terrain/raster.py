@@ -21,8 +21,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import math
-
 import numpy as np
 from numpy.typing import NDArray
 
@@ -55,9 +53,7 @@ class Raster:
         expected = self.grid.shape
 
         if self.values.shape != expected:
-            raise ValueError(
-                "Raster dimensions do not match grid."
-            )
+            raise ValueError("Raster dimensions do not match grid.")
 
     @property
     def shape(
@@ -192,11 +188,8 @@ class Raster:
         """
         Number of valid cells.
         """
-        return (
-            self.size
-            - self.nodata_count
-        )
-    
+        return self.size - self.nodata_count
+
     @property
     def extent(
         self,
@@ -291,9 +284,7 @@ class Raster:
         """
         values = self.values.copy()
 
-        values[
-            np.isnan(values)
-        ] = value
+        values[np.isnan(values)] = value
 
         return Raster(
             grid=self.grid,
@@ -311,15 +302,11 @@ class Raster:
         False cells become NoData.
         """
         if mask.shape != self.shape:
-            raise ValueError(
-                "Mask dimensions do not match raster."
-            )
+            raise ValueError("Mask dimensions do not match raster.")
 
         values = self.values.copy()
 
-        values[
-            ~mask
-        ] = np.nan
+        values[~mask] = np.nan
 
         return Raster(
             grid=self.grid,
@@ -335,7 +322,6 @@ class Raster:
         """
         for row in range(self.rows):
             for column in range(self.columns):
-
                 if self.is_nodata(
                     row,
                     column,

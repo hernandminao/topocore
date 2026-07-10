@@ -11,7 +11,6 @@ import pytest
 from topocore.geometry.point2d import Point2D
 from topocore.linalg.vector2d import Vector2D
 
-
 # ==========================================================
 # Construction
 # ==========================================================
@@ -60,10 +59,7 @@ def test_squared_distance() -> None:
         4.0,
     )
 
-    assert (
-        first.squared_distance_to(second)
-        == 25.0
-    )
+    assert first.squared_distance_to(second) == 25.0
 
 
 # ==========================================================

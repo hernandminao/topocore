@@ -33,8 +33,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from topocore.geometry.point3d import Point3D
-from topocore.terrain.exceptions import TerrainError
-from topocore.terrain.exceptions import TerrainValidationError
+from topocore.terrain.exceptions import TerrainError, TerrainValidationError
 from topocore.terrain.tin import TIN
 
 
@@ -71,23 +70,17 @@ def _neighbor_mean_z(
 
 def _validate_iterations(iterations: int) -> None:
     if iterations < 1:
-        raise TerrainValidationError(
-            f"iterations must be >= 1, got {iterations}."
-        )
+        raise TerrainValidationError(f"iterations must be >= 1, got {iterations}.")
 
 
 def _validate_factor(factor: float) -> None:
     if not 0.0 < factor <= 1.0:
-        raise TerrainValidationError(
-            f"factor must be in the range (0, 1], got {factor}."
-        )
+        raise TerrainValidationError(f"factor must be in the range (0, 1], got {factor}.")
 
 
 def _validate_threshold(threshold: float) -> None:
     if threshold <= 0.0:
-        raise TerrainValidationError(
-            f"threshold must be greater than zero, got {threshold}."
-        )
+        raise TerrainValidationError(f"threshold must be greater than zero, got {threshold}.")
 
 
 # =====================================================================
@@ -294,17 +287,10 @@ def remove_spikes(
     """
     mask = detect_spikes(tin, threshold=threshold)
 
-    kept = tuple(
-        point
-        for point, flagged in zip(tin.vertices, mask)
-        if not flagged
-    )
+    kept = tuple(point for point, flagged in zip(tin.vertices, mask, strict=False) if not flagged)
 
     if len(kept) < 3:
-        raise TerrainError(
-            "Spike removal would leave fewer than 3 vertices; "
-            "raise the threshold."
-        )
+        raise TerrainError("Spike removal would leave fewer than 3 vertices; raise the threshold.")
 
     return TIN.from_points(kept)
 

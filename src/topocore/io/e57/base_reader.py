@@ -39,9 +39,7 @@ class BaseE57Reader(PointCloudReader):
         super().__init__(path)
 
         if chunk_size <= 0:
-            raise ValueError(
-                "chunk_size must be greater than zero."
-            )
+            raise ValueError("chunk_size must be greater than zero.")
 
         self._chunk_size = chunk_size
         self._reader = None
@@ -62,9 +60,7 @@ class BaseE57Reader(PointCloudReader):
     @abstractmethod
     def _iterate_scans(
         self,
-    ) -> Iterator[
-        tuple[int, dict[str, np.ndarray]]
-    ]:
+    ) -> Iterator[tuple[int, dict[str, np.ndarray]]]:
         """
         Iterate over every scan contained in the E57 file.
 
@@ -89,7 +85,6 @@ class BaseE57Reader(PointCloudReader):
         self._open()
 
         for source_id, scan in self._iterate_scans():
-
             size = len(next(iter(scan.values())))
 
             for start in range(
@@ -97,13 +92,9 @@ class BaseE57Reader(PointCloudReader):
                 size,
                 self._chunk_size,
             ):
-
                 end = start + self._chunk_size
 
-                arrays = {
-                    key: value[start:end]
-                    for key, value in scan.items()
-                }
+                arrays = {key: value[start:end] for key, value in scan.items()}
 
                 yield self._create_chunk(
                     arrays,

@@ -15,43 +15,41 @@ MIT
 
 from __future__ import annotations
 
-from typing import TypeAlias
-
 ###############################################################################
 # Basic scalar types
 ###############################################################################
 
-Elevation: TypeAlias = float
+type Elevation = float
 
-Resolution: TypeAlias = float
+type Resolution = float
 
-Interval: TypeAlias = float
+type Interval = float
 
-CellSize: TypeAlias = float
+type CellSize = float
 
 ###############################################################################
 # Terrain analysis
 ###############################################################################
 
-Slope: TypeAlias = float
+type Slope = float
 
-Aspect: TypeAlias = float
+type Aspect = float
 
 ###############################################################################
 # Measurements
 ###############################################################################
 
-Area: TypeAlias = float
+type Area = float
 
-Volume: TypeAlias = float
+type Volume = float
 
-Distance: TypeAlias = float
+type Distance = float
 
 ###############################################################################
 # Coordinates
 ###############################################################################
 
-Coordinate: TypeAlias = float
+type Coordinate = float
 
 __all__ = [
     "Elevation",

@@ -17,11 +17,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from pathlib import Path
-from typing import TextIO, TypeAlias
+from typing import TextIO
 
-ASCIIInput: TypeAlias = (
-    str
-    | Path
-    | TextIO
-    | Iterable[str]
-)
+type ASCIIInput = str | Path | TextIO | Iterable[str]

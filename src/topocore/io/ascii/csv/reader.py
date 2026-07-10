@@ -26,7 +26,6 @@ from topocore.pointcloud.chunk import Chunk
 
 
 class CSVReader(BaseASCIIReader):
-
     def __init__(
         self,
         path: str | Path,

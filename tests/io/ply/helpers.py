@@ -91,10 +91,7 @@ def write_ascii_ply(
         "property float z\n"
         "end_header\n"
     )
-    body = "".join(
-        f"{x} {y} {z}\n"
-        for x, y, z in rows
-    )
+    body = "".join(f"{x} {y} {z}\n" for x, y, z in rows)
     path.write_text(header + body, encoding="utf-8")
 
 

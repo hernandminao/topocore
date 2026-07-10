@@ -26,7 +26,6 @@ from topocore.pointcloud.chunk import Chunk
 
 
 class PTSReader(BaseASCIIReader):
-
     def __init__(
         self,
         path: str | Path,
@@ -49,7 +48,6 @@ class PTSReader(BaseASCIIReader):
             "r",
             encoding=self.encoding,
         ) as stream:
-
             #
             # Skip point count
             #

@@ -31,13 +31,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Final
 
-from topocore.survey.exceptions import SurveyFormatError
-from topocore.survey.exceptions import SurveyRecordError
-from topocore.survey.formats import ColumnLayout
-from topocore.survey.formats import SurveyFormat
-from topocore.survey.formats import column_layout
-from topocore.survey.models import SurveyPoint
-from topocore.survey.models import SurveyPointSet
+from topocore.survey.exceptions import SurveyFormatError, SurveyRecordError
+from topocore.survey.formats import ColumnLayout, SurveyFormat, column_layout
+from topocore.survey.models import SurveyPoint, SurveyPointSet
 
 _COMMENT_PREFIXES = ("#", "//")
 _CANDIDATE_DELIMITERS = (",", ";", "\t")
@@ -50,20 +46,20 @@ _HEADER_ALIASES: Final[dict[str, tuple[str, ...]]] = {
     "y": ("y", "norte", "north", "northing"),
     "z": ("z", "cota", "elevacion", "elevation", "elev", "level", "rl"),
     "code": (
-        "code", "codigo", "descripcion", "description", "desc", "obs",
-        "observacion", "feature",
+        "code",
+        "codigo",
+        "descripcion",
+        "description",
+        "desc",
+        "obs",
+        "observacion",
+        "feature",
     ),
 }
 
 
 def _normalize(value: str) -> str:
-    return (
-        value.strip()
-        .lower()
-        .replace(" ", "")
-        .replace("_", "")
-        .replace("-", "")
-    )
+    return value.strip().lower().replace(" ", "").replace("_", "").replace("-", "")
 
 
 def _detect_header_columns(fields: list[str]) -> dict[str, int]:
@@ -140,9 +136,7 @@ def _build_point(
         y = float(row[layout.y_column])
         z = float(row[layout.z_column])
     except (IndexError, ValueError) as exc:
-        raise SurveyRecordError(
-            f"Invalid coordinate values in row {fallback_id}: {row}"
-        ) from exc
+        raise SurveyRecordError(f"Invalid coordinate values in row {fallback_id}: {row}") from exc
 
     point_id = str(fallback_id)
     if layout.id_column is not None and layout.id_column < len(row):
@@ -215,10 +209,7 @@ class SurveyTXTReader:
 
         layout, data_rows = self._resolve_layout(rows)
 
-        points = tuple(
-            _build_point(row, layout, index + 1)
-            for index, row in enumerate(data_rows)
-        )
+        points = tuple(_build_point(row, layout, index + 1) for index, row in enumerate(data_rows))
 
         return SurveyPointSet(points=points)
 

@@ -16,9 +16,7 @@ MIT
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Self
-from typing import final
-from typing import override
+from typing import Self, final, override
 
 from topocore.geometry.base import Geometry
 from topocore.geometry.point2d import Point2D
@@ -61,14 +59,10 @@ class BBox2D(Geometry):
         validate_coordinate(self.max_y)
 
         if self.min_x > self.max_x:
-            raise ValueError(
-                "min_x must be less than or equal to max_x."
-            )
+            raise ValueError("min_x must be less than or equal to max_x.")
 
         if self.min_y > self.max_y:
-            raise ValueError(
-                "min_y must be less than or equal to max_y."
-            )
+            raise ValueError("min_y must be less than or equal to max_y.")
 
     # ==========================================================
     # Properties
@@ -136,10 +130,7 @@ class BBox2D(Geometry):
         """
         Return True if the point is inside the bounding box.
         """
-        return (
-            self.min_x <= point.x <= self.max_x
-            and self.min_y <= point.y <= self.max_y
-        )
+        return self.min_x <= point.x <= self.max_x and self.min_y <= point.y <= self.max_y
 
     def intersects(
         self,
@@ -167,9 +158,7 @@ class BBox2D(Geometry):
         Expand the bounding box by a constant margin.
         """
         if margin < 0:
-            raise ValueError(
-                "Margin must be non-negative."
-            )
+            raise ValueError("Margin must be non-negative.")
 
         return BBox2D(
             self.min_x - margin,

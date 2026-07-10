@@ -17,14 +17,9 @@ MIT
 
 from __future__ import annotations
 
-from .exceptions import SurveyError
-from .exceptions import SurveyFormatError
-from .exceptions import SurveyRecordError
-from .formats import ColumnLayout
-from .formats import SurveyFormat
-from .formats import column_layout
-from .models import SurveyPoint
-from .models import SurveyPointSet
+from .exceptions import SurveyError, SurveyFormatError, SurveyRecordError
+from .formats import ColumnLayout, SurveyFormat, column_layout
+from .models import SurveyPoint, SurveyPointSet
 from .reader import SurveyTXTReader
 
 __all__ = [

@@ -94,7 +94,7 @@ class PointClassification(IntEnum):
     def from_code(
         cls,
         code: int,
-    ) -> "PointClassification":
+    ) -> PointClassification:
         """
         Creates a classification from its numeric code.
         """

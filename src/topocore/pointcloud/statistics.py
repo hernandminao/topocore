@@ -85,9 +85,7 @@ def compute_min_max(
     values = chunk[attribute]
 
     if values.size == 0:
-        raise ValueError(
-            "Cannot compute min/max for an empty attribute."
-        )
+        raise ValueError("Cannot compute min/max for an empty attribute.")
 
     data = values.astype(
         np.float64,
@@ -129,9 +127,7 @@ def compute_statistics(
     values = chunk[attribute]
 
     if values.size == 0:
-        raise ValueError(
-            "Cannot compute statistics for an empty attribute."
-        )
+        raise ValueError("Cannot compute statistics for an empty attribute.")
 
     data = values.astype(
         np.float64,

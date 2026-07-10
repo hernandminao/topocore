@@ -63,24 +63,16 @@ class MathConfig:
         """
 
         if self.absolute_tolerance <= 0.0:
-            raise MathError(
-                "absolute_tolerance must be greater than zero."
-            )
+            raise MathError("absolute_tolerance must be greater than zero.")
 
         if self.relative_tolerance <= 0.0:
-            raise MathError(
-                "relative_tolerance must be greater than zero."
-            )
+            raise MathError("relative_tolerance must be greater than zero.")
 
         if self.decimal_precision < 0:
-            raise MathError(
-                "decimal_precision cannot be negative."
-            )
+            raise MathError("decimal_precision cannot be negative.")
 
         if self.max_iterations <= 0:
-            raise MathError(
-                "max_iterations must be greater than zero."
-            )
+            raise MathError("max_iterations must be greater than zero.")
 
 
 DEFAULT_MATH_CONFIG = MathConfig()

@@ -11,7 +11,6 @@ import pytest
 from topocore.core.exceptions import MathError
 from topocore.linalg.vector3d import Vector3D
 
-
 # ==========================================================
 # Construction
 # ==========================================================
@@ -228,17 +227,14 @@ def test_almost_equals() -> None:
 
 
 def test_add() -> None:
-    result = (
-        Vector3D(
-            1.0,
-            2.0,
-            3.0,
-        )
-        + Vector3D(
-            4.0,
-            5.0,
-            6.0,
-        )
+    result = Vector3D(
+        1.0,
+        2.0,
+        3.0,
+    ) + Vector3D(
+        4.0,
+        5.0,
+        6.0,
     )
 
     assert result == Vector3D(
@@ -249,17 +245,14 @@ def test_add() -> None:
 
 
 def test_subtract() -> None:
-    result = (
-        Vector3D(
-            5.0,
-            7.0,
-            9.0,
-        )
-        - Vector3D(
-            1.0,
-            2.0,
-            3.0,
-        )
+    result = Vector3D(
+        5.0,
+        7.0,
+        9.0,
+    ) - Vector3D(
+        1.0,
+        2.0,
+        3.0,
     )
 
     assert result == Vector3D(
@@ -287,13 +280,10 @@ def test_scalar_multiplication() -> None:
 
 
 def test_right_scalar_multiplication() -> None:
-    result = (
-        2
-        * Vector3D(
-            2.0,
-            3.0,
-            4.0,
-        )
+    result = 2 * Vector3D(
+        2.0,
+        3.0,
+        4.0,
     )
 
     assert result == Vector3D(

@@ -1,17 +1,18 @@
 import io
-import pytest
-import numpy as np
-
 from unittest.mock import MagicMock, patch
 
-from topocore.io.ply.reader import PLYReader
+import numpy as np
+import pytest
+
 from topocore.io.ply.enums import PLYFormat
 from topocore.io.ply.exceptions import InvalidPLYError
 from topocore.io.ply.header import PLYElement
+from topocore.io.ply.reader import PLYReader
 
 # ----------------------------
 # Helper: fake header + vertex
 # ----------------------------
+
 
 class FakeProperty:
     def __init__(self, name, dtype=True):
@@ -42,6 +43,7 @@ class FakeHeader:
 # 1. chunk_size validation
 # ----------------------------
 
+
 def test_invalid_chunk_size():
     with pytest.raises(ValueError):
         PLYReader("dummy.ply", chunk_size=0)
@@ -51,6 +53,7 @@ def test_invalid_chunk_size():
 # 2. vertex element missing
 # ----------------------------
 
+
 def test_vertex_requires_header():
     reader = PLYReader("dummy.ply")
 
@@ -59,18 +62,18 @@ def test_vertex_requires_header():
     with pytest.raises(InvalidPLYError):
         reader._vertex_element()
 
+
 def test_missing_vertex_raises():
     header = type("FakeHeader", (), {})()
     header.format = PLYFormat.ASCII
-    header.elements = [
-        PLYElement(name="face", count=1, properties=[])
-    ]
+    header.elements = [PLYElement(name="face", count=1, properties=[])]
 
     reader = PLYReader("dummy.ply")
     reader._header = header
 
     with pytest.raises(InvalidPLYError):
         reader._vertex_element()
+
 
 def test_vertex_missing():
     reader = PLYReader("dummy.ply")
@@ -85,6 +88,7 @@ def test_vertex_missing():
 # ----------------------------
 # 3. ASCII iterator basic flow
 # ----------------------------
+
 
 @patch("topocore.io.ply.reader.PLYHeaderParser.parse")
 def test_ascii_iteration(mock_parse):
@@ -108,6 +112,7 @@ def test_ascii_iteration(mock_parse):
 # 4. UTF-8 error handling
 # ----------------------------
 
+
 def test_utf8_error():
     reader = PLYReader("dummy.ply")
 
@@ -124,6 +129,7 @@ def test_utf8_error():
 # ----------------------------
 # 5. ASCII empty lines ignored
 # ----------------------------
+
 
 def test_ascii_skips_empty_lines():
     reader = PLYReader("dummy.ply")
@@ -143,6 +149,7 @@ def test_ascii_skips_empty_lines():
 # ----------------------------
 # 6. binary iteration path (mock np.fromfile)
 # ----------------------------
+
 
 @patch("numpy.fromfile")
 def test_binary_iteration(mock_fromfile):
@@ -166,6 +173,7 @@ def test_binary_iteration(mock_fromfile):
 # ----------------------------
 # 7. __iter__ lifecycle test
 # ----------------------------
+
 
 @patch("topocore.io.ply.reader.PLYHeaderParser.parse")
 def test_iter_closes_stream(mock_parse):

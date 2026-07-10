@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class GeometryType(str, Enum):
+class GeometryType(StrEnum):
     """Supported geometry types."""
 
     POINT = "Point"

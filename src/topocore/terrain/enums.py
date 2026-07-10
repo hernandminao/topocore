@@ -15,10 +15,10 @@ MIT
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 
-class BreaklineType(str, Enum):
+class BreaklineType(StrEnum):
     """
     Defines how a breakline constrains triangulation.
     """
@@ -27,7 +27,7 @@ class BreaklineType(str, Enum):
     SOFT = "soft"
 
 
-class TriangulationMethod(str, Enum):
+class TriangulationMethod(StrEnum):
     """
     Supported triangulation algorithms.
     """
@@ -35,7 +35,7 @@ class TriangulationMethod(str, Enum):
     DELAUNAY = "delaunay"
 
 
-class InterpolationMethod(str, Enum):
+class InterpolationMethod(StrEnum):
     """
     Supported interpolation methods.
     """
@@ -49,7 +49,7 @@ class InterpolationMethod(str, Enum):
     BARYCENTRIC = "barycentric"
 
 
-class ContourSmoothing(str, Enum):
+class ContourSmoothing(StrEnum):
     """
     Contour line smoothing methods.
     """
@@ -61,7 +61,7 @@ class ContourSmoothing(str, Enum):
     BEZIER = "bezier"
 
 
-class SlopeMethod(str, Enum):
+class SlopeMethod(StrEnum):
     """
     Slope computation methods.
     """
@@ -73,7 +73,7 @@ class SlopeMethod(str, Enum):
     ZEVENBERGEN_THORNE = "zevenbergen_thorne"
 
 
-class AspectReference(str, Enum):
+class AspectReference(StrEnum):
     """
     Aspect reference direction.
     """

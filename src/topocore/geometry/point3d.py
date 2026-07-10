@@ -22,9 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import hypot
-from typing import Self
-from typing import final
-from typing import override
+from typing import Self, final, override
 
 from topocore.geometry.base import Geometry
 from topocore.linalg.vector3d import Vector3D
@@ -90,11 +88,7 @@ class Point3D(Geometry):
         dy = other.y - self.y
         dz = other.z - self.z
 
-        return (
-            dx * dx
-            + dy * dy
-            + dz * dz
-        )
+        return dx * dx + dy * dy + dz * dz
 
     def midpoint(
         self,
@@ -142,11 +136,7 @@ class Point3D(Geometry):
         """
         Compare two points using floating-point tolerance.
         """
-        return (
-            is_close(self.x, other.x)
-            and is_close(self.y, other.y)
-            and is_close(self.z, other.z)
-        )
+        return is_close(self.x, other.x) and is_close(self.y, other.y) and is_close(self.z, other.z)
 
     # ==========================================================
     # Conversion

@@ -20,7 +20,6 @@ from typing import Final
 import numpy as np
 from numpy.typing import DTypeLike, NDArray
 
-
 COLUMN_DTYPES: Final[dict[str, DTypeLike]] = {
     # Coordinates
     "x": np.float64,
@@ -31,17 +30,14 @@ COLUMN_DTYPES: Final[dict[str, DTypeLike]] = {
     "elevation": np.float64,
     "height": np.float64,
     "gps_time": np.float64,
-
     # Colors
     "red": np.uint8,
     "green": np.uint8,
     "blue": np.uint8,
-
     # LAS
     "classification": np.uint8,
     "return_number": np.uint8,
     "number_of_returns": np.uint8,
-
     "intensity": np.int32,
     "point_source_id": np.int32,
 }

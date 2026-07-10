@@ -7,8 +7,7 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from topocore.core.exceptions import MathError
-from topocore.math.config import DEFAULT_MATH_CONFIG
-from topocore.math.config import MathConfig
+from topocore.math.config import DEFAULT_MATH_CONFIG, MathConfig
 
 
 def test_default_configuration() -> None:

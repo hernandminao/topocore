@@ -9,7 +9,6 @@ import pytest
 from topocore.geometry.bbox2d import BBox2D
 from topocore.geometry.point2d import Point2D
 
-
 # ==========================================================
 # Construction
 # ==========================================================

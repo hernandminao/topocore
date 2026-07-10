@@ -27,8 +27,7 @@ import math
 import numpy as np
 from numpy.typing import NDArray
 
-from topocore.terrain._geometry import oriented_normal
-from topocore.terrain._geometry import slope_radians
+from topocore.terrain._geometry import oriented_normal, slope_radians
 from topocore.terrain.models import Triangle
 from topocore.terrain.tin import TIN
 from topocore.terrain.types import Slope

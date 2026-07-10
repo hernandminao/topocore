@@ -30,6 +30,7 @@ from topocore.terrain.raster import Raster
 
 _COORD_OUTSIDE_RASTER_MSG = "Coordinate outside raster."
 
+
 class RasterSampler:
     """
     Raster sampling utilities.
@@ -63,9 +64,7 @@ class RasterSampler:
             If the coordinate lies outside the raster.
         """
         if not raster.contains(x, y):
-            raise ValueError(
-                _COORD_OUTSIDE_RASTER_MSG
-            )
+            raise ValueError(_COORD_OUTSIDE_RASTER_MSG)
 
         row = raster.grid.row(y)
         column = raster.grid.column(x)
@@ -85,9 +84,7 @@ class RasterSampler:
         Return the nearest raster cell.
         """
         if not raster.contains(x, y):
-            raise ValueError(
-                _COORD_OUTSIDE_RASTER_MSG
-            )
+            raise ValueError(_COORD_OUTSIDE_RASTER_MSG)
 
         row = raster.grid.row(y)
         column = raster.grid.column(x)
@@ -120,9 +117,7 @@ class RasterSampler:
         tuple[int, int]
         """
         if not grid.contains(x, y):
-            raise ValueError(
-                "Coordinate outside grid."
-            )
+            raise ValueError("Coordinate outside grid.")
 
         return (
             grid.row(y),
@@ -173,17 +168,11 @@ class RasterSampler:
         grid = raster.grid
 
         if not grid.contains(x, y):
-            raise ValueError(
-                _COORD_OUTSIDE_RASTER_MSG
-            )
+            raise ValueError(_COORD_OUTSIDE_RASTER_MSG)
 
-        fx = (
-            x - grid.min_x
-        ) / grid.resolution
+        fx = (x - grid.min_x) / grid.resolution
 
-        fy = (
-            y - grid.min_y
-        ) / grid.resolution
+        fy = (y - grid.min_y) / grid.resolution
 
         c0 = int(math.floor(fx))
         r0 = int(math.floor(fy))
@@ -217,20 +206,11 @@ class RasterSampler:
         dx = fx - c0
         dy = fy - r0
 
-        z0 = (
-            z00 * (1.0 - dx)
-            + z10 * dx
-        )
+        z0 = z00 * (1.0 - dx) + z10 * dx
 
-        z1 = (
-            z01 * (1.0 - dx)
-            + z11 * dx
-        )
+        z1 = z01 * (1.0 - dx) + z11 * dx
 
-        return (
-            z0 * (1.0 - dy)
-            + z1 * dy
-        )
+        return z0 * (1.0 - dy) + z1 * dy
 
 
 __all__ = [

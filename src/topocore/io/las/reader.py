@@ -15,16 +15,17 @@ MIT
 
 from __future__ import annotations
 
-from pathlib import Path
 from collections.abc import Iterator
+from pathlib import Path
 
 import laspy
 
+from topocore.io.constants import DEFAULT_CHUNK_SIZE
+from topocore.io.exceptions import PointCloudIOError
 from topocore.pointcloud.chunk import Chunk
 
 from .base_reader import BaseLASReader
 from .converter import LASConverter
-from topocore.io.constants import DEFAULT_CHUNK_SIZE
 
 
 class LASReader(BaseLASReader):
@@ -66,14 +67,10 @@ class LASReader(BaseLASReader):
             self._reader = laspy.open(self.path)
 
         except FileNotFoundError as exc:
-            raise PointCloudIOError(
-                f"File not found: {self.path}"
-            ) from exc
+            raise PointCloudIOError(f"File not found: {self.path}") from exc
 
         except Exception as exc:
-            raise PointCloudIOError(
-                f"Unable to open LAS file '{self.path}'."
-            ) from exc
+            raise PointCloudIOError(f"Unable to open LAS file '{self.path}'.") from exc
 
     def _iterate_chunks(self) -> Iterator[Chunk]:
         """

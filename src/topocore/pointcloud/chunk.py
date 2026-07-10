@@ -19,13 +19,11 @@ MIT
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 
 import numpy as np
 
-from .attributes import ATTRIBUTE_DTYPES
-from .attributes import PointAttribute
+from .attributes import ATTRIBUTE_DTYPES, PointAttribute
 
 
 class Chunk:
@@ -62,18 +60,12 @@ class Chunk:
         """
 
         if size < 0:
-            raise ValueError(
-                "size must be non-negative."
-            )
+            raise ValueError("size must be non-negative.")
 
-        unique_attributes = tuple(
-            dict.fromkeys(attributes)
-        )
+        unique_attributes = tuple(dict.fromkeys(attributes))
 
         if len(unique_attributes) != len(attributes):
-            raise ValueError(
-                "Duplicate attributes are not allowed."
-            )
+            raise ValueError("Duplicate attributes are not allowed.")
 
         self._size = size
         self._source_id = source_id
@@ -85,7 +77,6 @@ class Chunk:
         ] = {}
 
         for attribute in unique_attributes:
-
             dtype = ATTRIBUTE_DTYPES[attribute]
 
             self._data[attribute] = np.empty(
@@ -170,10 +161,7 @@ class Chunk:
         Return a developer-friendly representation.
         """
 
-        attrs = ", ".join(
-            attribute.name
-            for attribute in self._attributes
-        )
+        attrs = ", ".join(attribute.name for attribute in self._attributes)
 
         return (
             f"{self.__class__.__name__}("

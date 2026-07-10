@@ -1,9 +1,7 @@
-from typing import TypeAlias
+type Coordinate = float
 
-Coordinate: TypeAlias = float
+type Elevation = float
 
-Elevation: TypeAlias = float
+type Distance = float
 
-Distance: TypeAlias = float
-
-Angle: TypeAlias = float
+type Angle = float

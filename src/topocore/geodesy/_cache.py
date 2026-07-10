@@ -21,7 +21,6 @@ from pyproj import CRS as PyprojCRS
 from pyproj import Geod
 from pyproj import Transformer as PyprojTransformer
 
-
 #
 # NOTE
 # ----

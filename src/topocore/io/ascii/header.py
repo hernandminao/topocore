@@ -18,7 +18,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-
 HEADER_ALIASES: Final[dict[str, tuple[str, ...]]] = {
     "x": (
         "x",
@@ -61,9 +60,7 @@ HEADER_ALIASES: Final[dict[str, tuple[str, ...]]] = {
         "classification",
         "class",
     ),
-    "intensity": (
-        "intensity",
-    ),
+    "intensity": ("intensity",),
     "red": (
         "red",
         "r",
@@ -77,6 +74,7 @@ HEADER_ALIASES: Final[dict[str, tuple[str, ...]]] = {
         "b",
     ),
 }
+
 
 @dataclass(slots=True, frozen=True)
 class HeaderDetectionResult:
@@ -97,19 +95,10 @@ class HeaderDetectionResult:
         columns: dict[str, int] = {}
 
         for index, value in enumerate(fields):
-
-            normalized = (
-                value.strip()
-                .lower()
-                .replace(" ", "")
-                .replace("_", "")
-                .replace("-", "")
-            )
+            normalized = value.strip().lower().replace(" ", "").replace("_", "").replace("-", "")
 
             for name, aliases in HEADER_ALIASES.items():
-
                 if normalized in aliases:
-
                     columns[name] = index
                     break
 

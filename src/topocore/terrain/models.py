@@ -110,10 +110,7 @@ class Breakline:
         """
         Whether the breakline is closed.
         """
-        return (
-            len(self.points) > 2
-            and self.points[0] == self.points[-1]
-        )
+        return len(self.points) > 2 and self.points[0] == self.points[-1]
 
     @property
     def vertex_count(self) -> int:
@@ -147,30 +144,14 @@ class GridDefinition:
         """
         Number of columns.
         """
-        return (
-            int(
-                round(
-                    (self.max_x - self.min_x)
-                    / self.resolution
-                )
-            )
-            + 1
-        )
+        return int(round((self.max_x - self.min_x) / self.resolution)) + 1
 
     @property
     def height(self) -> int:
         """
         Number of rows.
         """
-        return (
-            int(
-                round(
-                    (self.max_y - self.min_y)
-                    / self.resolution
-                )
-            )
-            + 1
-        )
+        return int(round((self.max_y - self.min_y) / self.resolution)) + 1
 
 
 @dataclass(frozen=True, slots=True)

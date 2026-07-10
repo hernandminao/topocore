@@ -70,7 +70,7 @@ def test_compute_statistics() -> None:
     )
 
     assert stats.standard_deviation == pytest.approx(
-        2.0 ** 0.5,
+        2.0**0.5,
     )
 
 

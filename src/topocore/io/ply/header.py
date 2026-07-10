@@ -69,9 +69,7 @@ class PLYElement:
 
     count: int
 
-    properties: list[
-        PLYPropertyDefinition
-    ] = field(default_factory=list)
+    properties: list[PLYPropertyDefinition] = field(default_factory=list)
 
     @property
     def property_names(
@@ -80,10 +78,7 @@ class PLYElement:
         """
         Return property names.
         """
-        return tuple(
-            property.name
-            for property in self.properties
-        )
+        return tuple(property.name for property in self.properties)
 
     def has_property(
         self,
@@ -92,10 +87,7 @@ class PLYElement:
         """
         Return whether the element contains the property.
         """
-        return any(
-            property.name == name
-            for property in self.properties
-        )
+        return any(property.name == name for property in self.properties)
 
     def get_property(
         self,
@@ -105,7 +97,6 @@ class PLYElement:
         Return a property by name.
         """
         for property in self.properties:
-
             if property.name == name:
                 return property
 
@@ -138,7 +129,6 @@ class PLYHeader:
         Return the vertex element.
         """
         for element in self.elements:
-
             if element.name == "vertex":
                 return element
 
@@ -152,7 +142,6 @@ class PLYHeader:
         Return the face element.
         """
         for element in self.elements:
-
             if element.name == "face":
                 return element
 
@@ -179,10 +168,7 @@ class PLYHeader:
         """
         Return whether an element exists.
         """
-        return any(
-            element.name == name
-            for element in self.elements
-        )
+        return any(element.name == name for element in self.elements)
 
     def get_element(
         self,
@@ -192,7 +178,6 @@ class PLYHeader:
         Return an element by name.
         """
         for element in self.elements:
-
             if element.name == name:
                 return element
 

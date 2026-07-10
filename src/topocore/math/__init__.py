@@ -24,10 +24,10 @@ from .numeric import (
     square,
 )
 from .tolerance import (
-    is_positive,
     is_close,
-    is_zero,
     is_negative,
+    is_positive,
+    is_zero,
 )
 from .validation import (
     validate_coordinate,

@@ -15,7 +15,6 @@ from __future__ import annotations
 import pytest
 
 from topocore.geometry.point3d import Point3D
-
 from topocore.terrain.enums import BreaklineType
 from topocore.terrain.exceptions import TerrainValidationError
 from topocore.terrain.models import (
@@ -109,9 +108,7 @@ class TestBreaklineValidation:
         breakline = Breakline(
             id="B1",
             name="Test",
-            points=(
-                Point3D(0, 0, 0),
-            ),
+            points=(Point3D(0, 0, 0),),
         )
 
         with pytest.raises(TerrainValidationError):

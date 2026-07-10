@@ -61,14 +61,9 @@ class LAZWriter(PointCloudWriter):
 
         for chunk in cloud:
             for attribute in chunk.attributes:
-                arrays.setdefault(attribute, []).append(
-                    chunk[attribute]
-                )
+                arrays.setdefault(attribute, []).append(chunk[attribute])
 
-        merged = {
-            attribute: np.concatenate(values)
-            for attribute, values in arrays.items()
-        }
+        merged = {attribute: np.concatenate(values) for attribute, values in arrays.items()}
 
         if PointAttribute.X in merged:
             las.x = merged[PointAttribute.X]
@@ -89,9 +84,7 @@ class LAZWriter(PointCloudWriter):
             las.return_number = merged[PointAttribute.RETURN_NUMBER]
 
         if PointAttribute.NUMBER_OF_RETURNS in merged:
-            las.number_of_returns = merged[
-                PointAttribute.NUMBER_OF_RETURNS
-            ]
+            las.number_of_returns = merged[PointAttribute.NUMBER_OF_RETURNS]
 
         if PointAttribute.GPS_TIME in merged:
             las.gps_time = merged[PointAttribute.GPS_TIME]

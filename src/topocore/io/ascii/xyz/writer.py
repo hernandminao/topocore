@@ -16,8 +16,8 @@ MIT
 from __future__ import annotations
 
 from topocore.io.ascii.base_writer import BaseASCIIWriter
-from topocore.pointcloud.pointcloud import PointCloud
 from topocore.pointcloud.attributes import PointAttribute
+from topocore.pointcloud.pointcloud import PointCloud
 
 
 class XYZWriter(BaseASCIIWriter):
@@ -34,9 +34,7 @@ class XYZWriter(BaseASCIIWriter):
             "w",
             encoding=self.encoding,
         ) as stream:
-
             for chunk in point_cloud:
-
                 x = chunk[PointAttribute.X]
                 y = chunk[PointAttribute.Y]
                 z = chunk[PointAttribute.Z]
@@ -47,6 +45,4 @@ class XYZWriter(BaseASCIIWriter):
                     z,
                     strict=True,
                 ):
-                    stream.write(
-                        f"{xi} {yi} {zi}\n"
-                    )
+                    stream.write(f"{xi} {yi} {zi}\n")

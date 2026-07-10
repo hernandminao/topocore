@@ -18,8 +18,8 @@ MIT
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
+from dataclasses import dataclass
 
 from topocore.geometry.point3d import Point3D
 from topocore.terrain.cell import Cell
@@ -55,14 +55,10 @@ class Grid:
         validate_resolution(self.resolution)
 
         if self.max_x <= self.min_x:
-            raise ValueError(
-                "max_x must be greater than min_x."
-            )
+            raise ValueError("max_x must be greater than min_x.")
 
         if self.max_y <= self.min_y:
-            raise ValueError(
-                "max_y must be greater than min_y."
-            )
+            raise ValueError("max_y must be greater than min_y.")
 
     @property
     def width(self) -> float:
@@ -154,10 +150,7 @@ class Grid:
         """
         Return the X coordinate of a column.
         """
-        return (
-            self.min_x
-            + column * self.resolution
-        )
+        return self.min_x + column * self.resolution
 
     def y(
         self,
@@ -166,10 +159,7 @@ class Grid:
         """
         Return the Y coordinate of a row.
         """
-        return (
-            self.min_y
-            + row * self.resolution
-        )
+        return self.min_y + row * self.resolution
 
     def coordinate(
         self,
@@ -237,10 +227,7 @@ class Grid:
         """
         Return whether a coordinate lies inside the grid.
         """
-        return (
-            self.min_x <= x <= self.max_x
-            and self.min_y <= y <= self.max_y
-        )
+        return self.min_x <= x <= self.max_x and self.min_y <= y <= self.max_y
 
     def row(
         self,
@@ -251,8 +238,7 @@ class Grid:
         """
         return int(
             round(
-                (y - self.min_y)
-                / self.resolution,
+                (y - self.min_y) / self.resolution,
             )
         )
 
@@ -265,8 +251,7 @@ class Grid:
         """
         return int(
             round(
-                (x - self.min_x)
-                / self.resolution,
+                (x - self.min_x) / self.resolution,
             )
         )
 
@@ -278,10 +263,7 @@ class Grid:
         """
         Return the flattened index.
         """
-        return (
-            row * self.columns
-            + column
-        )
+        return row * self.columns + column
 
 
 __all__ = [

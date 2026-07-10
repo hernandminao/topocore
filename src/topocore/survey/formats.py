@@ -74,25 +74,44 @@ class ColumnLayout:
 
 _LAYOUTS: dict[SurveyFormat, ColumnLayout] = {
     SurveyFormat.ID_XYZ_CODE: ColumnLayout(
-        id_column=0, x_column=1, y_column=2, z_column=3, code_column=4,
+        id_column=0,
+        x_column=1,
+        y_column=2,
+        z_column=3,
+        code_column=4,
     ),
     SurveyFormat.NEZ: ColumnLayout(
-        x_column=1, y_column=0, z_column=2,
+        x_column=1,
+        y_column=0,
+        z_column=2,
     ),
     SurveyFormat.ENZ: ColumnLayout(
-        x_column=0, y_column=1, z_column=2,
+        x_column=0,
+        y_column=1,
+        z_column=2,
     ),
     SurveyFormat.PENZ: ColumnLayout(
-        id_column=0, x_column=1, y_column=2, z_column=3,
+        id_column=0,
+        x_column=1,
+        y_column=2,
+        z_column=3,
     ),
     SurveyFormat.PENZD: ColumnLayout(
-        id_column=0, x_column=1, y_column=2, z_column=3, code_column=4,
+        id_column=0,
+        x_column=1,
+        y_column=2,
+        z_column=3,
+        code_column=4,
     ),
     SurveyFormat.XYZI: ColumnLayout(
-        x_column=0, y_column=1, z_column=2,
+        x_column=0,
+        y_column=1,
+        z_column=2,
     ),
     SurveyFormat.XYZRGB: ColumnLayout(
-        x_column=0, y_column=1, z_column=2,
+        x_column=0,
+        y_column=1,
+        z_column=2,
     ),
 }
 

@@ -21,7 +21,6 @@ from topocore.io.ply.header import (
 
 
 class TestPLYProperty:
-
     def test_constructor(self) -> None:
 
         prop = PLYProperty(
@@ -91,7 +90,6 @@ class TestPLYProperty:
 
 
 class TestPLYListProperty:
-
     def test_constructor(self) -> None:
 
         prop = PLYListProperty(
@@ -138,7 +136,6 @@ class TestPLYListProperty:
 
 
 class TestPLYElement:
-
     def test_empty_element(self) -> None:
 
         element = PLYElement(
@@ -230,16 +227,9 @@ class TestPLYElement:
             properties=[prop],
         )
 
-        assert element.has_property(
-            "vertex_indices"
-        )
+        assert element.has_property("vertex_indices")
 
-        assert (
-            element.get_property(
-                "vertex_indices"
-            )
-            == prop
-        )
+        assert element.get_property("vertex_indices") == prop
 
 
 # =============================================================================
@@ -248,7 +238,6 @@ class TestPLYElement:
 
 
 class TestPLYHeader:
-
     def test_vertex_element(self) -> None:
 
         vertex = PLYElement(
@@ -347,9 +336,7 @@ class TestPLYHeader:
             ],
         )
 
-        assert header.has_element(
-            "vertex"
-        )
+        assert header.has_element("vertex")
 
     def test_has_element_false(self) -> None:
 
@@ -359,9 +346,7 @@ class TestPLYHeader:
             elements=[],
         )
 
-        assert not header.has_element(
-            "vertex"
-        )
+        assert not header.has_element("vertex")
 
     def test_get_element_found(self) -> None:
 
@@ -376,12 +361,7 @@ class TestPLYHeader:
             elements=[vertex],
         )
 
-        assert (
-            header.get_element(
-                "vertex"
-            )
-            is vertex
-        )
+        assert header.get_element("vertex") is vertex
 
     def test_get_element_not_found(self) -> None:
 
@@ -391,12 +371,7 @@ class TestPLYHeader:
             elements=[],
         )
 
-        assert (
-            header.get_element(
-                "vertex"
-            )
-            is None
-        )
+        assert header.get_element("vertex") is None
 
     def test_comments(self) -> None:
 

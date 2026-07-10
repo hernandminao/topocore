@@ -18,12 +18,10 @@ MIT
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from dataclasses import field
+from dataclasses import dataclass, field
 from io import BufferedReader
 
-from .enums import PLYFormat
-from .enums import PLYScalarType
+from .enums import PLYFormat, PLYScalarType
 from .exceptions import InvalidPLYError
 from .header import (
     PLYElement,
@@ -87,14 +85,10 @@ class PLYHeaderParser:
         header_size = 0
 
         while True:
-
             raw = stream.readline()
 
             if raw == b"":
-
-                raise InvalidPLYError(
-                    "Unexpected end of file while reading PLY header."
-                )
+                raise InvalidPLYError("Unexpected end of file while reading PLY header.")
 
             header_size += len(raw)
 
@@ -102,9 +96,7 @@ class PLYHeaderParser:
                 line = raw.decode("utf-8").strip()
 
             except UnicodeDecodeError as exc:
-                raise InvalidPLYError(
-                    "PLY header is not valid UTF-8."
-                ) from exc
+                raise InvalidPLYError("PLY header is not valid UTF-8.") from exc
 
             lines.append(
                 line,
@@ -135,7 +127,6 @@ class PLYHeaderParser:
         state = _HeaderParseState()
 
         for line in lines[1:]:
-
             if not line:
                 continue
 
@@ -158,16 +149,10 @@ class PLYHeaderParser:
         )
 
         if state.fmt is None:
-
-            raise InvalidPLYError(
-                "PLY header does not declare a format."
-            )
+            raise InvalidPLYError("PLY header does not declare a format.")
 
         if state.version is None:
-
-            raise InvalidPLYError(
-                "PLY header does not declare a version."
-            )
+            raise InvalidPLYError("PLY header does not declare a version.")
 
         return PLYHeader(
             format=state.fmt,
@@ -191,7 +176,6 @@ class PLYHeaderParser:
         """
 
         match keyword:
-
             case "format":
                 cls._handle_format(
                     tokens=tokens,
@@ -221,9 +205,7 @@ class PLYHeaderParser:
                 )
 
             case _:
-                raise InvalidPLYError(
-                    f"Unknown PLY header keyword '{keyword}'."
-                )
+                raise InvalidPLYError(f"Unknown PLY header keyword '{keyword}'.")
 
     @classmethod
     def _handle_format(
@@ -240,29 +222,21 @@ class PLYHeaderParser:
         """
 
         if len(tokens) != 3:
-            raise InvalidPLYError(
-                "Malformed format declaration."
-            )
+            raise InvalidPLYError("Malformed format declaration.")
 
         if state.fmt is not None:
-            raise InvalidPLYError(
-                "Duplicate format declaration."
-            )
+            raise InvalidPLYError("Duplicate format declaration.")
 
         try:
             fmt = PLYFormat(tokens[1])
 
         except ValueError as exc:
-            raise InvalidPLYError(
-                f"Unsupported PLY format '{tokens[1]}'."
-            ) from exc
+            raise InvalidPLYError(f"Unsupported PLY format '{tokens[1]}'.") from exc
 
         version = tokens[2]
 
         if version not in _SUPPORTED_VERSIONS:
-            raise InvalidPLYError(
-                f"Unsupported PLY version '{version}'."
-            )
+            raise InvalidPLYError(f"Unsupported PLY version '{version}'.")
 
         state.fmt = fmt
         state.version = version
@@ -282,9 +256,7 @@ class PLYHeaderParser:
         """
 
         if len(tokens) != 3:
-            raise InvalidPLYError(
-                "Malformed element declaration."
-            )
+            raise InvalidPLYError("Malformed element declaration.")
 
         name = tokens[1]
 
@@ -292,22 +264,13 @@ class PLYHeaderParser:
             count = int(tokens[2])
 
         except ValueError as exc:
-            raise InvalidPLYError(
-                f"Invalid element count '{tokens[2]}'."
-            ) from exc
+            raise InvalidPLYError(f"Invalid element count '{tokens[2]}'.") from exc
 
         if count < 0:
-            raise InvalidPLYError(
-                "Element count cannot be negative."
-            )
+            raise InvalidPLYError("Element count cannot be negative.")
 
-        if any(
-            element.name == name
-            for element in state.elements
-        ):
-            raise InvalidPLYError(
-                f"Duplicated element '{name}'."
-            )
+        if any(element.name == name for element in state.elements):
+            raise InvalidPLYError(f"Duplicated element '{name}'.")
 
         element = PLYElement(
             name=name,
@@ -329,23 +292,15 @@ class PLYHeaderParser:
         """
 
         if state.current is None:
-            raise InvalidPLYError(
-                "Property declared before an element."
-            )
+            raise InvalidPLYError("Property declared before an element.")
 
         property_ = cls._parse_property(
             tokens,
         )
 
-        if any(
-            existing.name == property_.name
-            for existing in state.current.properties
-        ):
+        if any(existing.name == property_.name for existing in state.current.properties):
             raise InvalidPLYError(
-                f"Duplicated property "
-                f"'{property_.name}' "
-                f"in element "
-                f"'{state.current.name}'."
+                f"Duplicated property '{property_.name}' in element '{state.current.name}'."
             )
 
         state.current.properties.append(
@@ -359,9 +314,7 @@ class PLYHeaderParser:
     ) -> PLYProperty | PLYListProperty:
 
         if len(tokens) < 2:
-            raise InvalidPLYError(
-                "Malformed property declaration."
-            )
+            raise InvalidPLYError("Malformed property declaration.")
 
         if tokens[1] == "list":
             return cls._parse_list_property(
@@ -378,21 +331,15 @@ class PLYHeaderParser:
     ) -> PLYProperty:
 
         if len(tokens) != 3:
-            raise InvalidPLYError(
-                "Malformed scalar property declaration."
-            )
+            raise InvalidPLYError("Malformed scalar property declaration.")
 
         try:
-
             dtype = PLYScalarType(
                 tokens[1],
             )
 
         except ValueError as exc:
-
-            raise InvalidPLYError(
-                f"Unsupported scalar type '{tokens[1]}'."
-            ) from exc
+            raise InvalidPLYError(f"Unsupported scalar type '{tokens[1]}'.") from exc
 
         return PLYProperty(
             name=tokens[2],
@@ -405,12 +352,9 @@ class PLYHeaderParser:
     ) -> PLYListProperty:
 
         if len(tokens) != 5:
-            raise InvalidPLYError(
-                "Malformed list property declaration."
-            )
+            raise InvalidPLYError("Malformed list property declaration.")
 
         try:
-
             count_type = PLYScalarType(
                 tokens[2],
             )
@@ -420,10 +364,7 @@ class PLYHeaderParser:
             )
 
         except ValueError as exc:
-
-            raise InvalidPLYError(
-                "Unsupported list property type."
-            ) from exc
+            raise InvalidPLYError("Unsupported list property type.") from exc
 
         return PLYListProperty(
             name=tokens[4],
@@ -440,14 +381,10 @@ class PLYHeaderParser:
         """
 
         if not lines:
-            raise InvalidPLYError(
-                "Empty PLY file."
-            )
+            raise InvalidPLYError("Empty PLY file.")
 
         if lines[0].strip() != _MAGIC:
-            raise InvalidPLYError(
-                "Invalid PLY signature."
-            )
+            raise InvalidPLYError("Invalid PLY signature.")
 
     @staticmethod
     def _validate_elements(
@@ -458,6 +395,4 @@ class PLYHeaderParser:
         """
 
         if not state.elements:
-            raise InvalidPLYError(
-                "PLY header contains no elements."
-            )
+            raise InvalidPLYError("PLY header contains no elements.")

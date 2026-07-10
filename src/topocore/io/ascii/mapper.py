@@ -29,24 +29,19 @@ class ColumnMapper:
         "longitude": "x",
         "lon": "x",
         "x": "x",
-
         "northing": "y",
         "north": "y",
         "latitude": "y",
         "lat": "y",
         "y": "y",
-
         "elevation": "z",
         "height": "z",
         "rl": "z",
         "level": "z",
         "z": "z",
-
         "description": "description",
         "desc": "description",
-
         "code": "code",
-
         "pointid": "id",
         "point_id": "id",
         "id": "id",
@@ -61,16 +56,8 @@ class ColumnMapper:
         mapped = {}
 
         for name, values in batch.columns.items():
+            key = name.lower().replace(" ", "").replace("_", "").replace("-", "")
 
-            key = (
-                name.lower()
-                .replace(" ", "")
-                .replace("_", "")
-                .replace("-", "")
-            )
-
-            mapped[
-                cls.DEFAULT_MAPPING.get(key, key)
-            ] = values
+            mapped[cls.DEFAULT_MAPPING.get(key, key)] = values
 
         return ASCIIRecordBatch(mapped)

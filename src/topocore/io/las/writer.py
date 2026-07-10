@@ -70,17 +70,10 @@ class LASWriter(PointCloudWriter):
         arrays: dict[PointAttribute, list[np.ndarray]] = {}
 
         for chunk in cloud:
-
             for attribute in chunk.attributes:
+                arrays.setdefault(attribute, []).append(chunk[attribute])
 
-                arrays.setdefault(attribute, []).append(
-                    chunk[attribute]
-                )
-
-        merged = {
-            attribute: np.concatenate(values)
-            for attribute, values in arrays.items()
-        }
+        merged = {attribute: np.concatenate(values) for attribute, values in arrays.items()}
 
         if PointAttribute.X in merged:
             las.x = merged[PointAttribute.X]

@@ -19,8 +19,7 @@ MIT
 
 from __future__ import annotations
 
-from abc import ABC
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 
 
 class Geometry(ABC):
@@ -58,10 +57,7 @@ class Geometry(ABC):
             String representation including the class name and
             attribute values.
         """
-        attributes = ", ".join(
-            f"{key}={value!r}"
-            for key, value in self.to_dict().items()
-        )
+        attributes = ", ".join(f"{key}={value!r}" for key, value in self.to_dict().items())
 
         return f"{self.__class__.__name__}({attributes})"
 

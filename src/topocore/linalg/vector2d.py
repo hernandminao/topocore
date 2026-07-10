@@ -21,14 +21,11 @@ MIT
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import acos
-from math import hypot
-from typing import Self
-from typing import final
+from math import acos, hypot
+from typing import Self, final
 
 from topocore.core.exceptions import MathError
-from topocore.math.tolerance import is_close
-from topocore.math.tolerance import is_zero
+from topocore.math.tolerance import is_close, is_zero
 from topocore.math.validation import validate_coordinate
 
 
@@ -84,10 +81,7 @@ class Vector2D:
         -------
         float
         """
-        return (
-            self.x * self.x
-            + self.y * self.y
-        )
+        return self.x * self.x + self.y * self.y
 
     @property
     def is_zero(self) -> bool:
@@ -118,9 +112,7 @@ class Vector2D:
             If the vector magnitude is zero.
         """
         if self.is_zero:
-            raise MathError(
-                "Cannot normalize a zero vector."
-            )
+            raise MathError("Cannot normalize a zero vector.")
 
         return self / self.length
 
@@ -140,10 +132,7 @@ class Vector2D:
         -------
         float
         """
-        return (
-            self.x * other.x
-            + self.y * other.y
-        )
+        return self.x * other.x + self.y * other.y
 
     def cross(
         self,
@@ -161,10 +150,7 @@ class Vector2D:
         -------
         float
         """
-        return (
-            self.x * other.y
-            - self.y * other.x
-        )
+        return self.x * other.y - self.y * other.x
 
     def angle_to(
         self,
@@ -188,17 +174,12 @@ class Vector2D:
         MathError
             If either vector has zero magnitude.
         """
-        denominator = (
-            self.length
-            * other.length
-        )
+        denominator = self.length * other.length
 
         if is_zero(
             denominator,
         ):
-            raise MathError(
-                "Cannot compute the angle of a zero vector."
-            )
+            raise MathError("Cannot compute the angle of a zero vector.")
 
         cosine = self.dot(other) / denominator
 
@@ -228,15 +209,12 @@ class Vector2D:
         -------
         bool
         """
-        return (
-            is_close(
-                self.x,
-                other.x,
-            )
-            and is_close(
-                self.y,
-                other.y,
-            )
+        return is_close(
+            self.x,
+            other.x,
+        ) and is_close(
+            self.y,
+            other.y,
         )
 
     # ==========================================================
@@ -388,9 +366,7 @@ class Vector2D:
         value = float(scalar)
 
         if is_zero(value):
-            raise MathError(
-                "Division by zero."
-            )
+            raise MathError("Division by zero.")
 
         return Vector2D(
             self.x / value,
@@ -427,4 +403,4 @@ class Vector2D:
 
 __all__ = [
     "Vector2D",
-]    
+]

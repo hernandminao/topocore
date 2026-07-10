@@ -19,8 +19,9 @@ from pathlib import Path
 
 import laspy
 
-from topocore.io.las.base_reader import BaseLASReader
 from topocore.io.constants import DEFAULT_CHUNK_SIZE
+from topocore.io.exceptions import PointCloudIOError
+from topocore.io.las.base_reader import BaseLASReader
 
 
 class LAZReader(BaseLASReader):
@@ -37,9 +38,7 @@ class LAZReader(BaseLASReader):
         super().__init__(path)
 
         if chunk_size <= 0:
-            raise ValueError(
-                "chunk_size must be greater than zero."
-            )
+            raise ValueError("chunk_size must be greater than zero.")
 
         self._chunk_size = chunk_size
 
@@ -61,9 +60,7 @@ class LAZReader(BaseLASReader):
             self._reader = laspy.open(self.path)
 
         except FileNotFoundError as exc:
-            raise PointCloudIOError(
-                f"File not found: {self.path}"
-            ) from exc
+            raise PointCloudIOError(f"File not found: {self.path}") from exc
 
         except Exception as exc:
             raise PointCloudIOError(

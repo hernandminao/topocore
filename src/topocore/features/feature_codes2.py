@@ -43,6 +43,7 @@ class FeatureGeometryType(Enum):
     #: Consecutive same-code points connected into a closed polyline.
     POLYGON = "polygon"
 
+
 @dataclass(frozen=True, slots=True)
 class FeatureCodeDefinition:
     """
@@ -76,6 +77,7 @@ class FeatureCodeDefinition:
     closed: bool = False
     aliases: tuple[str, ...] = ()
 
+
 class FeatureCodeRegistry:
     """
     Registry of feature codes.
@@ -86,15 +88,11 @@ class FeatureCodeRegistry:
     or populated using one or more catalogs.
     """
 
-    __slots__ = (
-        "_definitions",
-    )
+    __slots__ = ("_definitions",)
 
     def __init__(
         self,
-        definitions: Iterable[
-            FeatureCodeDefinition
-        ] | None = None,
+        definitions: Iterable[FeatureCodeDefinition] | None = None,
     ) -> None:
 
         self._definitions: dict[
@@ -140,15 +138,11 @@ class FeatureCodeRegistry:
         self._definitions[key] = definition
 
         for alias in definition.aliases:
-            self._definitions[
-                alias.upper()
-            ] = definition
+            self._definitions[alias.upper()] = definition
 
     def register_many(
         self,
-        definitions: Iterable[
-            FeatureCodeDefinition,
-        ],
+        definitions: Iterable[FeatureCodeDefinition,],
     ) -> None:
         """
         Register multiple definitions.
@@ -163,9 +157,7 @@ class FeatureCodeRegistry:
 
     def extend(
         self,
-        definitions: Iterable[
-            FeatureCodeDefinition,
-        ],
+        definitions: Iterable[FeatureCodeDefinition,],
     ) -> FeatureCodeRegistry:
         """
         Extend the registry.
@@ -253,10 +245,7 @@ class FeatureCodeRegistry:
         """
         Primary registered codes.
         """
-        return tuple(
-            definition.code
-            for definition in self.definitions
-        )
+        return tuple(definition.code for definition in self.definitions)
 
     @property
     def layers(
@@ -265,14 +254,7 @@ class FeatureCodeRegistry:
         """
         Registered layers.
         """
-        return tuple(
-            sorted(
-                {
-                    definition.layer
-                    for definition in self.definitions
-                }
-            )
-        )
+        return tuple(sorted({definition.layer for definition in self.definitions}))
 
     @property
     def size(
@@ -298,8 +280,7 @@ class FeatureCodeRegistry:
         return tuple(
             definition
             for definition in self.definitions
-            if definition.layer.upper()
-            == layer.upper()
+            if definition.layer.upper() == layer.upper()
         )
 
     def find_by_geometry(
@@ -315,8 +296,7 @@ class FeatureCodeRegistry:
         return tuple(
             definition
             for definition in self.definitions
-            if definition.geometry_type
-            is geometry_type
+            if definition.geometry_type is geometry_type
         )
 
     def clear(
@@ -341,10 +321,7 @@ class FeatureCodeRegistry:
         self,
         code: str,
     ) -> bool:
-        return (
-            code.upper()
-            in self._definitions
-        )
+        return code.upper() in self._definitions
 
     def __len__(
         self,
@@ -356,7 +333,8 @@ class FeatureCodeRegistry:
     ):
         return iter(
             self.definitions,
-        )        
+        )
+
 
 __all__ = [
     "FeatureGeometryType",

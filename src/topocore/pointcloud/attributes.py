@@ -8,10 +8,8 @@ independent of any particular point cloud file format.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
-from enum import auto
-from typing import Any
-from typing import Final
+from enum import Enum, auto
+from typing import Any, Final
 
 import numpy as np
 
@@ -80,10 +78,7 @@ class AttributeInfo:
     description: str
 
 
-ATTRIBUTE_DEFINITIONS: Final[
-    dict[PointAttribute, AttributeInfo]
-] = {
-
+ATTRIBUTE_DEFINITIONS: Final[dict[PointAttribute, AttributeInfo]] = {
     PointAttribute.X: AttributeInfo(
         attribute=PointAttribute.X,
         dtype=np.dtype(np.float64),
@@ -91,7 +86,6 @@ ATTRIBUTE_DEFINITIONS: Final[
         requirement=AttributeRequirement.REQUIRED,
         description="X coordinate.",
     ),
-
     PointAttribute.Y: AttributeInfo(
         attribute=PointAttribute.Y,
         dtype=np.dtype(np.float64),
@@ -99,7 +93,6 @@ ATTRIBUTE_DEFINITIONS: Final[
         requirement=AttributeRequirement.REQUIRED,
         description="Y coordinate.",
     ),
-
     PointAttribute.Z: AttributeInfo(
         attribute=PointAttribute.Z,
         dtype=np.dtype(np.float64),
@@ -107,7 +100,6 @@ ATTRIBUTE_DEFINITIONS: Final[
         requirement=AttributeRequirement.REQUIRED,
         description="Z coordinate.",
     ),
-
     PointAttribute.INTENSITY: AttributeInfo(
         attribute=PointAttribute.INTENSITY,
         dtype=np.dtype(np.uint16),
@@ -115,7 +107,6 @@ ATTRIBUTE_DEFINITIONS: Final[
         requirement=AttributeRequirement.FORMAT_DEPENDENT,
         description="Pulse intensity.",
     ),
-
     PointAttribute.RETURN_NUMBER: AttributeInfo(
         attribute=PointAttribute.RETURN_NUMBER,
         dtype=np.dtype(np.uint8),
@@ -123,7 +114,6 @@ ATTRIBUTE_DEFINITIONS: Final[
         requirement=AttributeRequirement.FORMAT_DEPENDENT,
         description="Return number.",
     ),
-
     PointAttribute.NUMBER_OF_RETURNS: AttributeInfo(
         attribute=PointAttribute.NUMBER_OF_RETURNS,
         dtype=np.dtype(np.uint8),
@@ -131,7 +121,6 @@ ATTRIBUTE_DEFINITIONS: Final[
         requirement=AttributeRequirement.FORMAT_DEPENDENT,
         description="Number of returns.",
     ),
-
     PointAttribute.CLASSIFICATION: AttributeInfo(
         attribute=PointAttribute.CLASSIFICATION,
         dtype=np.dtype(np.uint8),
@@ -139,7 +128,6 @@ ATTRIBUTE_DEFINITIONS: Final[
         requirement=AttributeRequirement.FORMAT_DEPENDENT,
         description="Point classification.",
     ),
-
     PointAttribute.SCAN_ANGLE: AttributeInfo(
         attribute=PointAttribute.SCAN_ANGLE,
         dtype=np.dtype(np.int16),
@@ -147,7 +135,6 @@ ATTRIBUTE_DEFINITIONS: Final[
         requirement=AttributeRequirement.FORMAT_DEPENDENT,
         description="Scan angle.",
     ),
-
     PointAttribute.GPS_TIME: AttributeInfo(
         attribute=PointAttribute.GPS_TIME,
         dtype=np.dtype(np.float64),
@@ -155,7 +142,6 @@ ATTRIBUTE_DEFINITIONS: Final[
         requirement=AttributeRequirement.FORMAT_DEPENDENT,
         description="GPS time.",
     ),
-
     PointAttribute.COLOR: AttributeInfo(
         attribute=PointAttribute.COLOR,
         dtype=np.dtype(np.uint16),
@@ -163,7 +149,6 @@ ATTRIBUTE_DEFINITIONS: Final[
         requirement=AttributeRequirement.FORMAT_DEPENDENT,
         description="RGB color.",
     ),
-
     PointAttribute.NIR: AttributeInfo(
         attribute=PointAttribute.NIR,
         dtype=np.dtype(np.uint16),
@@ -171,7 +156,6 @@ ATTRIBUTE_DEFINITIONS: Final[
         requirement=AttributeRequirement.FORMAT_DEPENDENT,
         description="Near infrared value.",
     ),
-
     PointAttribute.NORMAL: AttributeInfo(
         attribute=PointAttribute.NORMAL,
         dtype=np.dtype(np.float32),
@@ -179,7 +163,6 @@ ATTRIBUTE_DEFINITIONS: Final[
         requirement=AttributeRequirement.OPTIONAL,
         description="Surface normal vector.",
     ),
-
     PointAttribute.USER_DATA: AttributeInfo(
         attribute=PointAttribute.USER_DATA,
         dtype=np.dtype(np.uint8),
@@ -187,7 +170,6 @@ ATTRIBUTE_DEFINITIONS: Final[
         requirement=AttributeRequirement.FORMAT_DEPENDENT,
         description="User-defined value.",
     ),
-
     PointAttribute.POINT_SOURCE_ID: AttributeInfo(
         attribute=PointAttribute.POINT_SOURCE_ID,
         dtype=np.dtype(np.uint16),
@@ -207,11 +189,8 @@ def get_attribute_info(
     return ATTRIBUTE_DEFINITIONS[attribute]
 
 
-ATTRIBUTE_DTYPES: Final[
-    dict[PointAttribute, np.dtype[Any]]
-] = {
-    attribute: info.dtype
-    for attribute, info in ATTRIBUTE_DEFINITIONS.items()
+ATTRIBUTE_DTYPES: Final[dict[PointAttribute, np.dtype[Any]]] = {
+    attribute: info.dtype for attribute, info in ATTRIBUTE_DEFINITIONS.items()
 }
 
 

@@ -11,7 +11,6 @@ import pytest
 from topocore.geometry.point3d import Point3D
 from topocore.linalg.vector3d import Vector3D
 
-
 # ==========================================================
 # Construction
 # ==========================================================
@@ -66,10 +65,7 @@ def test_squared_distance() -> None:
         6.0,
     )
 
-    assert (
-        first.squared_distance_to(second)
-        == 49.0
-    )
+    assert first.squared_distance_to(second) == 49.0
 
 
 # ==========================================================

@@ -15,7 +15,6 @@ from __future__ import annotations
 import pytest
 
 from topocore.geometry.point3d import Point3D
-
 from topocore.terrain.enums import BreaklineType
 from topocore.terrain.models import (
     Breakline,

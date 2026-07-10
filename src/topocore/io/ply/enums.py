@@ -15,13 +15,13 @@ MIT
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Final
 
 import numpy as np
 
 
-class PLYFormat(str, Enum):
+class PLYFormat(StrEnum):
     """
     Supported PLY storage formats.
     """
@@ -33,7 +33,7 @@ class PLYFormat(str, Enum):
     BINARY_BIG_ENDIAN = "binary_big_endian"
 
 
-class PLYScalarType(str, Enum):
+class PLYScalarType(StrEnum):
     """
     Scalar types defined by the PLY specification.
     """
@@ -78,28 +78,20 @@ PLY_NUMPY_DTYPES: Final[
         np.dtype,
     ]
 ] = {
-
     PLYScalarType.CHAR: np.dtype("i1"),
     PLYScalarType.INT8: np.dtype("i1"),
-
     PLYScalarType.UCHAR: np.dtype("u1"),
     PLYScalarType.UINT8: np.dtype("u1"),
-
     PLYScalarType.SHORT: np.dtype("i2"),
     PLYScalarType.INT16: np.dtype("i2"),
-
     PLYScalarType.USHORT: np.dtype("u2"),
     PLYScalarType.UINT16: np.dtype("u2"),
-
     PLYScalarType.INT: np.dtype("i4"),
     PLYScalarType.INT32: np.dtype("i4"),
-
     PLYScalarType.UINT: np.dtype("u4"),
     PLYScalarType.UINT32: np.dtype("u4"),
-
     PLYScalarType.FLOAT: np.dtype("f4"),
     PLYScalarType.FLOAT32: np.dtype("f4"),
-
     PLYScalarType.DOUBLE: np.dtype("f8"),
     PLYScalarType.FLOAT64: np.dtype("f8"),
 }

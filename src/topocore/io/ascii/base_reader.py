@@ -40,14 +40,10 @@ class BaseASCIIReader(PointCloudReader):
         super().__init__(path)
 
         if chunk_size <= 0:
-            raise ValueError(
-                "chunk_size must be greater than zero."
-            )
+            raise ValueError("chunk_size must be greater than zero.")
 
         if not encoding:
-            raise ValueError(
-                "encoding cannot be empty."
-            )
+            raise ValueError("encoding cannot be empty.")
 
         self._chunk_size = chunk_size
         self._encoding = encoding

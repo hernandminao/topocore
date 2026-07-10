@@ -24,7 +24,6 @@ from topocore.pointcloud.chunk import Chunk
 
 from .records import ASCIIRecordBatch
 
-
 #
 # Scalar attributes
 #
@@ -86,7 +85,6 @@ class ASCIIConverter:
             column_name,
             values,
         ) in batch.columns.items():
-
             attribute = ATTRIBUTE_MAPPING.get(
                 column_name,
             )
@@ -126,7 +124,6 @@ class ASCIIConverter:
             attribute,
             values,
         ) in arrays.items():
-
             chunk[attribute][:] = values
 
         return chunk
@@ -154,9 +151,7 @@ class ASCIIConverter:
 
         # Asegurar que el stack tenga el dtype correcto (uint16)
         target_dtype = ATTRIBUTE_DTYPES[PointAttribute.COLOR]
-        arrays[
-            PointAttribute.COLOR
-        ] = np.column_stack(
+        arrays[PointAttribute.COLOR] = np.column_stack(
             (
                 columns["red"],
                 columns["green"],
@@ -187,9 +182,7 @@ class ASCIIConverter:
 
         # Asegurar que el stack tenga el dtype correcto (float32)
         target_dtype = ATTRIBUTE_DTYPES[PointAttribute.NORMAL]
-        arrays[
-            PointAttribute.NORMAL
-        ] = np.column_stack(
+        arrays[PointAttribute.NORMAL] = np.column_stack(
             (
                 columns["nx"],
                 columns["ny"],

@@ -70,9 +70,7 @@ class NumpyMemory:
         """
 
         if size < 0:
-            raise ValueError(
-                "size must be greater than or equal to zero."
-            )
+            raise ValueError("size must be greater than or equal to zero.")
 
         self._size = size
 
@@ -114,10 +112,7 @@ class NumpyMemory:
         """
         Returns whether an attribute exists.
         """
-        return (
-            isinstance(attribute, PointAttribute)
-            and attribute in self._data
-        )
+        return isinstance(attribute, PointAttribute) and attribute in self._data
 
     def __getitem__(
         self,
@@ -162,27 +157,19 @@ class NumpyMemory:
         """
 
         if attribute not in self._data:
-            raise KeyError(
-                f"Attribute '{attribute.name}' has not been allocated."
-            )
+            raise KeyError(f"Attribute '{attribute.name}' has not been allocated.")
 
         info = ATTRIBUTE_DEFINITIONS[attribute]
 
         expected_shape = (self._size, *info.shape)
 
         if values.shape != expected_shape:
-            raise ValueError(
-                f"Expected shape {expected_shape}, "
-                f"received {values.shape}."
-            )
+            raise ValueError(f"Expected shape {expected_shape}, received {values.shape}.")
 
         expected_dtype = info.dtype
 
         if values.dtype != expected_dtype:
-            raise TypeError(
-                f"Expected dtype {expected_dtype}, "
-                f"received {values.dtype}."
-            )
+            raise TypeError(f"Expected dtype {expected_dtype}, received {values.dtype}.")
 
         self._data[attribute] = values
 
@@ -242,9 +229,7 @@ class NumpyMemory:
         """
 
         if size < 0:
-            raise ValueError(
-                "size must be greater than or equal to zero."
-            )
+            raise ValueError("size must be greater than or equal to zero.")
 
         if size == self._size:
             return
@@ -252,7 +237,6 @@ class NumpyMemory:
         previous_size = self._size
 
         for attribute, array in self._data.items():
-
             info = ATTRIBUTE_DEFINITIONS[attribute]
 
             new_shape = (size, *info.shape)
@@ -271,7 +255,7 @@ class NumpyMemory:
 
         self._size = size
 
-    def clone(self) -> "NumpyMemory":
+    def clone(self) -> NumpyMemory:
         """
         Create a deep copy of this storage.
         """
@@ -280,10 +264,7 @@ class NumpyMemory:
 
         cloned._size = self._size
 
-        cloned._data = {
-            attribute: values.copy()
-            for attribute, values in self._data.items()
-        }
+        cloned._data = {attribute: values.copy() for attribute, values in self._data.items()}
 
         return cloned
 
@@ -309,12 +290,7 @@ class NumpyMemory:
             )
         )
 
-        return (
-            f"{self.__class__.__name__}("
-            f"size={self._size}, "
-            f"attributes=[{attributes}]"
-            f")"
-        )
+        return f"{self.__class__.__name__}(size={self._size}, attributes=[{attributes}])"
 
 
 __all__ = [

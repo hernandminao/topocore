@@ -53,22 +53,15 @@ class E57Reader(BaseE57Reader):
             self._reader = pye57.E57(str(self.path))
 
         except Exception as exc:
-            raise PointCloudIOError(
-                f"Unable to open E57 file '{self.path}'."
-            ) from exc
+            raise PointCloudIOError(f"Unable to open E57 file '{self.path}'.") from exc
 
     def _iterate_scans(
         self,
-    ) -> Iterator[
-        tuple[int, dict[str, np.ndarray]]
-    ]:
+    ) -> Iterator[tuple[int, dict[str, np.ndarray]]]:
 
         assert self._reader is not None
 
-        for scan_index in range(
-            self._reader.scan_count
-        ):
-
+        for scan_index in range(self._reader.scan_count):
             yield (
                 scan_index,
                 self._reader.read_scan(scan_index),

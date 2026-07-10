@@ -22,9 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from math import hypot
-from typing import Self
-from typing import final
-from typing import override
+from typing import Self, final, override
 
 from topocore.geometry.base import Geometry
 from topocore.linalg.vector2d import Vector2D
@@ -182,10 +180,7 @@ class Point2D(Geometry):
         -------
         bool
         """
-        return (
-            is_close(self.x, other.x)
-            and is_close(self.y, other.y)
-        )
+        return is_close(self.x, other.x) and is_close(self.y, other.y)
 
     # ==========================================================
     # Conversion

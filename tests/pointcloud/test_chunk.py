@@ -4,7 +4,6 @@ Unit tests for topocore.pointcloud.chunk.
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
 from topocore.pointcloud.attributes import PointAttribute

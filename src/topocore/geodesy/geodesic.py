@@ -16,7 +16,6 @@ MIT
 from __future__ import annotations
 
 from topocore.geodesy import _cache
-
 from topocore.geodesy.crs import CRS
 from topocore.geodesy.exceptions import GeodesicError
 
@@ -32,21 +31,17 @@ class GeodesicCalculator:
     def __init__(self, crs: CRS) -> None:
         try:
             ellipsoid = crs.ellipsoid
-	    
+
             if ellipsoid is None:
-                raise GeodesicError(
-                    "CRS does not have an ellipsoid."
-                )
-            
+                raise GeodesicError("CRS does not have an ellipsoid.")
+
             self._geod = _cache.get_geod(
                 ellipsoid.semi_major_axis,
                 ellipsoid.inverse_flattening,
             )
 
         except Exception as exc:
-            raise GeodesicError(
-                "Failed to initialize Geodesic calculator."
-            ) from exc
+            raise GeodesicError("Failed to initialize Geodesic calculator.") from exc
 
     def distance(
         self,
@@ -68,9 +63,7 @@ class GeodesicCalculator:
             return float(distance)
 
         except Exception as exc:
-            raise GeodesicError(
-                "Geodesic distance calculation failed."
-            ) from exc
+            raise GeodesicError("Geodesic distance calculation failed.") from exc
 
     def azimuth(
         self,
@@ -93,9 +86,7 @@ class GeodesicCalculator:
             return float(azimuth)
 
         except Exception as exc:
-            raise GeodesicError(
-                "Geodesic azimuth calculation failed."
-            ) from exc
+            raise GeodesicError("Geodesic azimuth calculation failed.") from exc
 
     def inverse(
         self,
@@ -129,9 +120,7 @@ class GeodesicCalculator:
             )
 
         except Exception as exc:
-            raise GeodesicError(
-                "Geodesic inverse calculation failed."
-            ) from exc
+            raise GeodesicError("Geodesic inverse calculation failed.") from exc
 
     def forward(
         self,
@@ -165,9 +154,7 @@ class GeodesicCalculator:
             )
 
         except Exception as exc:
-            raise GeodesicError(
-                "Geodesic forward calculation failed."
-            ) from exc
+            raise GeodesicError("Geodesic forward calculation failed.") from exc
 
     def polygon_area(
         self,
@@ -191,9 +178,7 @@ class GeodesicCalculator:
             return float(abs(area))
 
         except Exception as exc:
-            raise GeodesicError(
-                "Geodesic polygon area calculation failed."
-            ) from exc
+            raise GeodesicError("Geodesic polygon area calculation failed.") from exc
 
 
 __all__ = [

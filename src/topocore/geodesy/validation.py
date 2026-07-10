@@ -17,14 +17,13 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from typing import TypeAlias
 
 import numpy as np
 from numpy.typing import NDArray
 
 from topocore.geodesy.exceptions import ValidationError
 
-ArrayLike: TypeAlias = Sequence[float] | NDArray[np.floating]
+type ArrayLike = Sequence[float] | NDArray[np.floating]
 
 
 def _validate_finite(value: float, name: str) -> None:
@@ -75,14 +74,10 @@ def validate_lat_lon(latitude: float, longitude: float) -> None:
     _validate_finite(longitude, "Longitude")
 
     if not (-90.0 <= latitude <= 90.0):
-        raise ValidationError(
-            f"Latitude {latitude} out of bounds [-90, 90]."
-        )
+        raise ValidationError(f"Latitude {latitude} out of bounds [-90, 90].")
 
     if not (-180.0 <= longitude <= 180.0):
-        raise ValidationError(
-            f"Longitude {longitude} out of bounds [-180, 180]."
-        )
+        raise ValidationError(f"Longitude {longitude} out of bounds [-180, 180].")
 
 
 def validate_epsg(epsg: int) -> None:
@@ -100,19 +95,13 @@ def validate_epsg(epsg: int) -> None:
         If the EPSG code is invalid.
     """
     if isinstance(epsg, bool):
-        raise ValidationError(
-            "EPSG code must be an integer, not bool."
-        )
+        raise ValidationError("EPSG code must be an integer, not bool.")
 
     if not isinstance(epsg, int):
-        raise ValidationError(
-            f"Invalid EPSG code: {epsg!r}."
-        )
+        raise ValidationError(f"Invalid EPSG code: {epsg!r}.")
 
     if epsg <= 0:
-        raise ValidationError(
-            f"EPSG code must be positive, got {epsg}."
-        )
+        raise ValidationError(f"EPSG code must be positive, got {epsg}.")
 
 
 def validate_bbox(
@@ -132,10 +121,7 @@ def validate_bbox(
         If the bbox is invalid.
     """
     if len(bbox) != 4:
-        raise ValidationError(
-            "BBox must contain exactly 4 values "
-            "(minx, miny, maxx, maxy)."
-        )
+        raise ValidationError("BBox must contain exactly 4 values (minx, miny, maxx, maxy).")
 
     minx, miny, maxx, maxy = bbox
 
@@ -145,14 +131,10 @@ def validate_bbox(
     _validate_finite(maxy, "maxy")
 
     if minx > maxx:
-        raise ValidationError(
-            f"BBox minx ({minx}) cannot be greater than maxx ({maxx})."
-        )
+        raise ValidationError(f"BBox minx ({minx}) cannot be greater than maxx ({maxx}).")
 
     if miny > maxy:
-        raise ValidationError(
-            f"BBox miny ({miny}) cannot be greater than maxy ({maxy})."
-        )
+        raise ValidationError(f"BBox miny ({miny}) cannot be greater than maxy ({maxy}).")
 
 
 def validate_array(
@@ -182,19 +164,13 @@ def validate_array(
     array = np.asarray(arr, dtype=np.float64)
 
     if array.ndim != 2:
-        raise ValidationError(
-            f"Expected a 2D array, got {array.ndim}D."
-        )
+        raise ValidationError(f"Expected a 2D array, got {array.ndim}D.")
 
     if array.shape[1] != dims:
-        raise ValidationError(
-            f"Expected shape (N, {dims}), got {array.shape}."
-        )
+        raise ValidationError(f"Expected shape (N, {dims}), got {array.shape}.")
 
     if not np.isfinite(array).all():
-        raise ValidationError(
-            "Coordinate array contains NaN or infinite values."
-        )
+        raise ValidationError("Coordinate array contains NaN or infinite values.")
 
     return array
 
@@ -224,10 +200,7 @@ def validate_coordinate_arrays(
     ValidationError
         If validation fails.
     """
-    normalized = tuple(
-        np.asarray(arr, dtype=np.float64)
-        for arr in arrays
-    )
+    normalized = tuple(np.asarray(arr, dtype=np.float64) for arr in arrays)
 
     if not normalized:
         raise ValidationError("No coordinate arrays provided.")
@@ -236,19 +209,13 @@ def validate_coordinate_arrays(
 
     for arr in normalized:
         if arr.ndim != 1:
-            raise ValidationError(
-                "Coordinate arrays must be one-dimensional."
-            )
+            raise ValidationError("Coordinate arrays must be one-dimensional.")
 
         if arr.shape != expected:
-            raise ValidationError(
-                "Coordinate arrays must have identical length."
-            )
+            raise ValidationError("Coordinate arrays must have identical length.")
 
         if not np.isfinite(arr).all():
-            raise ValidationError(
-                "Coordinate arrays contain NaN or infinite values."
-            )
+            raise ValidationError("Coordinate arrays contain NaN or infinite values.")
 
     return normalized
 

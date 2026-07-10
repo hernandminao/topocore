@@ -21,7 +21,6 @@ from topocore.geodesy.crs import CRS
 from topocore.geodesy.exceptions import CRSError
 from topocore.geodesy.validation import validate_lat_lon
 
-
 _UTM_LETTERS = "CDEFGHJKLMNPQRSTUVWXX"
 
 
@@ -44,7 +43,7 @@ class UTMZone:
         cls,
         latitude: float,
         longitude: float,
-    ) -> "UTMZone":
+    ) -> UTMZone:
         """
         Determine the UTM zone for a latitude/longitude pair.
         """
@@ -69,11 +68,7 @@ class UTMZone:
 
         hemisphere = "N" if latitude >= 0.0 else "S"
 
-        epsg = (
-            32600 + zone_number
-            if hemisphere == "N"
-            else 32700 + zone_number
-        )
+        epsg = 32600 + zone_number if hemisphere == "N" else 32700 + zone_number
 
         zone_letter = ""
         if -80.0 <= latitude <= 84.0:
@@ -86,18 +81,14 @@ class UTMZone:
             epsg=epsg,
             central_meridian=(zone_number * 6) - 183,
             false_easting=500000.0,
-            false_northing=(
-                0.0
-                if hemisphere == "N"
-                else 10000000.0
-            ),
+            false_northing=(0.0 if hemisphere == "N" else 10000000.0),
         )
 
     @classmethod
     def from_epsg(
         cls,
         epsg: int,
-    ) -> "UTMZone":
+    ) -> UTMZone:
         """
         Resolve UTM information from an EPSG code.
         """
@@ -125,15 +116,13 @@ class UTMZone:
                 false_northing=10000000.0,
             )
 
-        raise CRSError(
-            f"EPSG:{epsg} is not a standard UTM zone."
-        )
+        raise CRSError(f"EPSG:{epsg} is not a standard UTM zone.")
 
     @classmethod
     def from_crs(
         cls,
         crs: CRS,
-    ) -> "UTMZone | None":
+    ) -> UTMZone | None:
         """
         Attempt to obtain the UTM zone from a CRS.
         """

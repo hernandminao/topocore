@@ -46,9 +46,7 @@ class IDWInterpolator:
         epsilon: float = 1e-12,
     ) -> None:
         if power <= 0.0:
-            raise ValueError(
-                "power must be greater than zero."
-            )
+            raise ValueError("power must be greater than zero.")
 
         self._tin = tin
         self._power = float(power)
@@ -78,7 +76,6 @@ class IDWInterpolator:
         weight_sum = 0.0
 
         for point in self._tin.vertices:
-
             dx = point.x - x
             dy = point.y - y
 
@@ -90,17 +87,13 @@ class IDWInterpolator:
             if distance <= self._epsilon:
                 return point.z
 
-            weight = 1.0 / (
-                distance**self._power
-            )
+            weight = 1.0 / (distance**self._power)
 
             weighted_sum += weight * point.z
             weight_sum += weight
 
         if math.isclose(weight_sum, 0.0):
-            raise InterpolationError(
-                "Interpolation failed."
-            )
+            raise InterpolationError("Interpolation failed.")
 
         return weighted_sum / weight_sum
 

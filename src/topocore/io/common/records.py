@@ -20,7 +20,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Any
 
 import numpy as np
 
@@ -57,7 +56,6 @@ class PointRecordBatch:
     def __post_init__(self) -> None:
 
         if not self.arrays:
-
             self._size = 0
 
             self._attributes = frozenset()
@@ -71,18 +69,12 @@ class PointRecordBatch:
         size = len(first)
 
         for array in iterator:
-
             if len(array) != size:
-
-                raise ValueError(
-                    "All arrays must have identical length."
-                )
+                raise ValueError("All arrays must have identical length.")
 
         self._size = size
 
-        self._attributes = frozenset(
-            self.arrays.keys()
-        )
+        self._attributes = frozenset(self.arrays.keys())
 
     @property
     def size(
@@ -147,16 +139,11 @@ class PointRecordBatch:
 
     def items(
         self,
-    ) -> tuple[
-        tuple[str, np.ndarray],
-        ...
-    ]:
+    ) -> tuple[tuple[str, np.ndarray], ...]:
         """
         Return (name, array) pairs.
         """
-        return tuple(
-            self.arrays.items()
-        )
+        return tuple(self.arrays.items())
 
     def __contains__(
         self,
@@ -188,9 +175,7 @@ class PointRecordBatch:
         self,
     ) -> str:
 
-        attrs = ", ".join(
-            sorted(self.arrays)
-        )
+        attrs = ", ".join(sorted(self.arrays))
 
         return (
             f"{self.__class__.__name__}("

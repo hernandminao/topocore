@@ -50,16 +50,12 @@ MAX_ALTITUDE = 90.0
 
 def _validate_azimuth(azimuth: float) -> None:
     if not MIN_AZIMUTH <= azimuth <= MAX_AZIMUTH:
-        raise TerrainValidationError(
-            f"Azimuth must be in [{MIN_AZIMUTH}, {MAX_AZIMUTH}] degrees, got {azimuth}."
-        )
+        raise TerrainValidationError(f"Azimuth must be in [{MIN_AZIMUTH}, {MAX_AZIMUTH}] degrees, got {azimuth}.")
 
 
 def _validate_altitude(altitude: float) -> None:
     if not MIN_ALTITUDE <= altitude <= MAX_ALTITUDE:
-        raise TerrainValidationError(
-            f"Altitude must be in [{MIN_ALTITUDE}, {MAX_ALTITUDE}] degrees, got {altitude}."
-        )
+        raise TerrainValidationError(f"Altitude must be in [{MIN_ALTITUDE}, {MAX_ALTITUDE}] degrees, got {altitude}.")
 
 
 def triangle_hillshade(
@@ -99,9 +95,7 @@ def triangle_hillshade(
     cos_incidence = math.cos(zenith_rad) * math.cos(slope_rad)
 
     if aspect_rad is not None:
-        cos_incidence += (
-            math.sin(zenith_rad) * math.sin(slope_rad) * math.cos(azimuth_rad - aspect_rad)
-        )
+        cos_incidence += math.sin(zenith_rad) * math.sin(slope_rad) * math.cos(azimuth_rad - aspect_rad)
 
     return 255.0 * max(0.0, cos_incidence)
 

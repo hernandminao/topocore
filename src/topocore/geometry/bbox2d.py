@@ -140,10 +140,7 @@ class BBox2D(Geometry):
         Return True if two bounding boxes intersect.
         """
         return not (
-            self.max_x < other.min_x
-            or self.min_x > other.max_x
-            or self.max_y < other.min_y
-            or self.min_y > other.max_y
+            self.max_x < other.min_x or self.min_x > other.max_x or self.max_y < other.min_y or self.min_y > other.max_y
         )
 
     # ==========================================================

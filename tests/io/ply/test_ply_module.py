@@ -195,9 +195,7 @@ class TestPLYHeaderModels:
         assert prop.dtype == PLYScalarType.FLOAT
 
     def test_ply_list_property(self) -> None:
-        list_prop = PLYListProperty(
-            name="indices", count_type=PLYScalarType.UCHAR, value_type=PLYScalarType.INT
-        )
+        list_prop = PLYListProperty(name="indices", count_type=PLYScalarType.UCHAR, value_type=PLYScalarType.INT)
         assert list_prop.name == "indices"
         assert list_prop.count_type == PLYScalarType.UCHAR
 
@@ -254,16 +252,12 @@ class TestPLYHeaderParser:
         assert len(header.elements) == 1
 
     def test_parse_binary_le_valid(self) -> None:
-        header_text = (
-            "ply\nformat binary_little_endian 1.0\nelement vertex 2\nproperty float x\nend_header\n"
-        )
+        header_text = "ply\nformat binary_little_endian 1.0\nelement vertex 2\nproperty float x\nend_header\n"
         header = PLYHeaderParser.parse(build_header_stream(header_text))
         assert header.format == PLYFormat.BINARY_LITTLE_ENDIAN
 
     def test_parse_binary_be_valid(self) -> None:
-        header_text = (
-            "ply\nformat binary_big_endian 1.0\nelement vertex 2\nproperty float x\nend_header\n"
-        )
+        header_text = "ply\nformat binary_big_endian 1.0\nelement vertex 2\nproperty float x\nend_header\n"
         header = PLYHeaderParser.parse(build_header_stream(header_text))
         assert header.format == PLYFormat.BINARY_BIG_ENDIAN
 
@@ -280,9 +274,7 @@ class TestPLYHeaderParser:
         assert header.get_element("face").properties[0].name == "vertex_indices"
 
     def test_parse_with_extra_whitespace(self) -> None:
-        header_text = (
-            "ply\n\nformat ascii 1.0\n\nelement vertex 1\nproperty float x\n\nend_header\n"
-        )
+        header_text = "ply\n\nformat ascii 1.0\n\nelement vertex 1\nproperty float x\n\nend_header\n"
         header = PLYHeaderParser.parse(build_header_stream(header_text))
         assert header.format == PLYFormat.ASCII
 
@@ -439,9 +431,7 @@ class TestPLYConverter:
     def test_populate_color_without_attribute(self) -> None:
         converter = PLYConverter()
         chunk = FakeChunk({})
-        batch = PointRecordBatch(
-            arrays={"red": np.array([1]), "green": np.array([1]), "blue": np.array([1])}
-        )
+        batch = PointRecordBatch(arrays={"red": np.array([1]), "green": np.array([1]), "blue": np.array([1])})
         converter._populate_color(chunk, batch)
         assert PointAttribute.COLOR not in chunk
 
@@ -456,9 +446,7 @@ class TestPLYConverter:
             }
         )
         converter._populate_normals(chunk, batch)
-        np.testing.assert_array_equal(
-            chunk[PointAttribute.NORMAL], np.array([[1, 3, 5], [2, 4, 6]], dtype=np.float32)
-        )
+        np.testing.assert_array_equal(chunk[PointAttribute.NORMAL], np.array([[1, 3, 5], [2, 4, 6]], dtype=np.float32))
 
     def test_populate_normals_missing_component(self) -> None:
         converter = PLYConverter()
@@ -471,9 +459,7 @@ class TestPLYConverter:
     def test_populate_normals_without_attribute(self) -> None:
         converter = PLYConverter()
         chunk = FakeChunk({})
-        batch = PointRecordBatch(
-            arrays={"nx": np.array([1]), "ny": np.array([1]), "nz": np.array([1])}
-        )
+        batch = PointRecordBatch(arrays={"nx": np.array([1]), "ny": np.array([1]), "nz": np.array([1])})
         converter._populate_normals(chunk, batch)
         assert PointAttribute.NORMAL not in chunk
 
@@ -602,9 +588,7 @@ class TestPLYReader:
 
     @patch("numpy.fromfile")
     def test_binary_iteration(self, mock_fromfile, identity_converter) -> None:
-        mock_fromfile.return_value = np.array(
-            [(1.0, 2.0, 3.0)], dtype=[("x", "<f4"), ("y", "<f4"), ("z", "<f4")]
-        )
+        mock_fromfile.return_value = np.array([(1.0, 2.0, 3.0)], dtype=[("x", "<f4"), ("y", "<f4"), ("z", "<f4")])
         header = FakeHeader(PLYFormat.BINARY_LITTLE_ENDIAN, vertex_count=1)
         reader = PLYReader("dummy.ply")
         reader._header = header
@@ -624,9 +608,7 @@ class TestPLYReader:
 
     def test_iter_routes_to_binary_path(self, tmp_path, identity_converter) -> None:
         ply_path = tmp_path / "binary_le.ply"
-        write_binary_ply(
-            ply_path, [(1.0, 2.0, 3.0), (4.0, 5.0, 6.0)], fmt=PLYFormat.BINARY_LITTLE_ENDIAN
-        )
+        write_binary_ply(ply_path, [(1.0, 2.0, 3.0), (4.0, 5.0, 6.0)], fmt=PLYFormat.BINARY_LITTLE_ENDIAN)
         reader = PLYReader(ply_path, chunk_size=1)
         identity_converter(reader)
         chunks = list(reader)
@@ -666,9 +648,7 @@ class TestPLYReader:
 
     def test_iter_routes_to_binary_be(self, tmp_path, identity_converter) -> None:
         ply_path = tmp_path / "binary_be.ply"
-        write_binary_ply(
-            ply_path, [(1.0, 2.0, 3.0), (4.0, 5.0, 6.0)], fmt=PLYFormat.BINARY_BIG_ENDIAN
-        )
+        write_binary_ply(ply_path, [(1.0, 2.0, 3.0), (4.0, 5.0, 6.0)], fmt=PLYFormat.BINARY_BIG_ENDIAN)
         reader = PLYReader(ply_path, chunk_size=1)
         identity_converter(reader)
         chunks = list(reader)

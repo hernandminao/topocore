@@ -216,13 +216,9 @@ def _wedge_contains(
     side_x_vs_py = _orient(pp, yy, xx)
 
     if abs(side_q_vs_px) <= EPSILON or abs(side_q_vs_py) <= EPSILON:
-        raise BreaklineError(
-            "The breakline passes exactly through an existing vertex; not supported yet."
-        )
+        raise BreaklineError("The breakline passes exactly through an existing vertex; not supported yet.")
 
-    return (side_q_vs_px > 0.0) == (side_y_vs_px > 0.0) and (side_q_vs_py > 0.0) == (
-        side_x_vs_py > 0.0
-    )
+    return (side_q_vs_px > 0.0) == (side_y_vs_px > 0.0) and (side_q_vs_py > 0.0) == (side_x_vs_py > 0.0)
 
 
 def _find_start_edge(
@@ -272,9 +268,7 @@ def _next_crossing_edge(
     side_z = _orient(xy[p], xy[q], xy[z])
 
     if abs(side_x) <= EPSILON or abs(side_z) <= EPSILON:
-        raise BreaklineError(
-            "Degenerate (collinear) configuration while walking toward the breakline endpoint."
-        )
+        raise BreaklineError("Degenerate (collinear) configuration while walking toward the breakline endpoint.")
 
     if (side_x > 0.0) == (side_z > 0.0):
         return y, z
@@ -317,9 +311,7 @@ def _find_crossing_edges(
         candidates = [t for t in edge_map[frozenset((x, y))] if t != current_triangle]
 
         if not candidates:
-            raise BreaklineError(
-                "The breakline reached the triangulation boundary before its endpoint."
-            )
+            raise BreaklineError("The breakline reached the triangulation boundary before its endpoint.")
 
         current_triangle = candidates[0]
         z = _apex(triangles[current_triangle], x, y)
@@ -426,9 +418,7 @@ def _process_crossing_queue(
 
         steps += 1
         if steps > max_steps:
-            raise BreaklineError(
-                "Breakline insertion did not converge (the breakline may cross another breakline)."
-            )
+            raise BreaklineError("Breakline insertion did not converge (the breakline may cross another breakline).")
 
         popped = _pop_valid_edge(queue, edge_map, constrained)
         if popped is None:

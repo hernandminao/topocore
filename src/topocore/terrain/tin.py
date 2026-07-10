@@ -391,13 +391,7 @@ class TIN:
         """
         Return a string representation of the TIN.
         """
-        return (
-            "TIN("
-            f"vertices={self.vertex_count}, "
-            f"triangles={self.triangle_count}, "
-            f"edges={self.edge_count}"
-            ")"
-        )
+        return f"TIN(vertices={self.vertex_count}, triangles={self.triangle_count}, edges={self.edge_count})"
 
     def vertex_array(
         self,

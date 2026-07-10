@@ -147,9 +147,7 @@ class DelaunayTriangulator:
             If validation fails.
         """
         if len(vertices) < _MIN_POINTS:
-            raise TriangulationError(
-                "At least three points are required to compute a triangulation."
-            )
+            raise TriangulationError("At least three points are required to compute a triangulation.")
 
         DelaunayTriangulator._validate_duplicate_points(
             vertices,
@@ -210,9 +208,7 @@ class DelaunayTriangulator:
             key = (point.x, point.y)
 
             if key in seen:
-                raise TriangulationError(
-                    "Duplicated XY coordinates were found in the input point set."
-                )
+                raise TriangulationError("Duplicated XY coordinates were found in the input point set.")
 
             seen.add(key)
 

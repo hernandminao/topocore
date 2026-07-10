@@ -190,9 +190,7 @@ class PointCloud:
         Create a deep copy of the point cloud.
         """
         cloned = PointCloud()
-        cloned._chunks = list(
-            self._chunks
-        )  # Shallow copy of chunks for memory efficiency, or deep copy if needed
+        cloned._chunks = list(self._chunks)  # Shallow copy of chunks for memory efficiency, or deep copy if needed
         cloned._metadata = PointCloudMetadata(
             crs=self._metadata.crs,
             bounds=self._metadata.bounds,

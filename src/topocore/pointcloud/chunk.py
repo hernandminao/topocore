@@ -163,13 +163,7 @@ class Chunk:
 
         attrs = ", ".join(attribute.name for attribute in self._attributes)
 
-        return (
-            f"{self.__class__.__name__}("
-            f"size={self._size}, "
-            f"source_id={self._source_id}, "
-            f"attributes=[{attrs}]"
-            f")"
-        )
+        return f"{self.__class__.__name__}(size={self._size}, source_id={self._source_id}, attributes=[{attrs}])"
 
 
 __all__ = [

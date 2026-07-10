@@ -277,11 +277,7 @@ class FeatureCodeRegistry:
         """
         Return definitions belonging to a layer.
         """
-        return tuple(
-            definition
-            for definition in self.definitions
-            if definition.layer.upper() == layer.upper()
-        )
+        return tuple(definition for definition in self.definitions if definition.layer.upper() == layer.upper())
 
     def find_by_geometry(
         self,
@@ -293,11 +289,7 @@ class FeatureCodeRegistry:
         """
         Return definitions producing a geometry type.
         """
-        return tuple(
-            definition
-            for definition in self.definitions
-            if definition.geometry_type is geometry_type
-        )
+        return tuple(definition for definition in self.definitions if definition.geometry_type is geometry_type)
 
     def clear(
         self,

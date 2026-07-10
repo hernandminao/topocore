@@ -299,9 +299,7 @@ class PLYHeaderParser:
         )
 
         if any(existing.name == property_.name for existing in state.current.properties):
-            raise InvalidPLYError(
-                f"Duplicated property '{property_.name}' in element '{state.current.name}'."
-            )
+            raise InvalidPLYError(f"Duplicated property '{property_.name}' in element '{state.current.name}'.")
 
         state.current.properties.append(
             property_,

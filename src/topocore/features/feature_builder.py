@@ -168,9 +168,7 @@ def build_features(
             continue
 
         if definition.geometry_type in _POINT_LIKE:
-            point_features.extend(
-                PointFeature(code=base_code, definition=definition, point=p) for p in run
-            )
+            point_features.extend(PointFeature(code=base_code, definition=definition, point=p) for p in run)
             continue
 
         line = _build_line_or_polygon(base_code, definition, run)

@@ -53,9 +53,7 @@ def _merge_points(
     and the breakline reuses its index.
     """
     points = list(tin.vertices)
-    index_by_xy: dict[_XYKey, int] = {
-        (point.x, point.y): index for index, point in enumerate(points)
-    }
+    index_by_xy: dict[_XYKey, int] = {(point.x, point.y): index for index, point in enumerate(points)}
 
     for breakline in breaklines:
         for point in breakline.points:
@@ -70,10 +68,7 @@ def _merge_points(
 
 def _validate_breakline(breakline: Breakline) -> None:
     if breakline.vertex_count < 2:
-        raise BreaklineError(
-            f"Breakline '{breakline.id}' needs at least 2 points, "
-            f"got {breakline.vertex_count}."
-        )
+        raise BreaklineError(f"Breakline '{breakline.id}' needs at least 2 points, got {breakline.vertex_count}.")
 
 
 def _build_constraints(
@@ -97,9 +92,7 @@ def _build_constraints(
         if breakline.type != BreaklineType.HARD:
             continue
 
-        indices = [
-            index_by_xy[(point.x, point.y)] for point in breakline.points
-        ]
+        indices = [index_by_xy[(point.x, point.y)] for point in breakline.points]
 
         for a, b in zip(indices[:-1], indices[1:]):
             constraints.append((a, b))

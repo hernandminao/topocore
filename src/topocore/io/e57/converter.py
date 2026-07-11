@@ -50,11 +50,7 @@ class E57Converter:
         Convert one E57 scan slice into a Chunk.
         """
 
-        attributes = [
-            attribute
-            for name, attribute in E57_ATTRIBUTE_MAPPING.items()
-            if name in scan
-        ]
+        attributes = [attribute for name, attribute in E57_ATTRIBUTE_MAPPING.items() if name in scan]
 
         has_color = all(field in scan for field in _COLOR_FIELDS)
 

@@ -81,17 +81,13 @@ class SurveyPointSet:
         """
         Every distinct code present in the set.
         """
-        return frozenset(
-            point.code for point in self.points if point.code is not None
-        )
+        return frozenset(point.code for point in self.points if point.code is not None)
 
     def by_code(self, code: str) -> tuple[SurveyPoint, ...]:
         """
         Every point carrying exactly ``code``, in survey order.
         """
-        return tuple(
-            point for point in self.points if point.code == code
-        )
+        return tuple(point for point in self.points if point.code == code)
 
 
 __all__ = [

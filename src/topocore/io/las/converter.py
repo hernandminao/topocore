@@ -62,15 +62,9 @@ class LASConverter:
         Chunk
         """
 
-        available = [
-            attribute
-            for las_name, attribute in _SCALAR_MAPPING.items()
-            if hasattr(points, las_name)
-        ]
+        available = [attribute for las_name, attribute in _SCALAR_MAPPING.items() if hasattr(points, las_name)]
 
-        has_color = all(
-            hasattr(points, field) for field in _COLOR_FIELDS
-        )
+        has_color = all(hasattr(points, field) for field in _COLOR_FIELDS)
 
         if has_color:
             available.append(PointAttribute.COLOR)
@@ -83,16 +77,11 @@ class LASConverter:
 
         for las_name, attribute in _SCALAR_MAPPING.items():
             if hasattr(points, las_name):
-                chunk[attribute][:] = np.asarray(
-                    getattr(points, las_name)
-                )
+                chunk[attribute][:] = np.asarray(getattr(points, las_name))
 
         if has_color:
             chunk[PointAttribute.COLOR][:] = np.stack(
-                [
-                    np.asarray(getattr(points, field))
-                    for field in _COLOR_FIELDS
-                ],
+                [np.asarray(getattr(points, field)) for field in _COLOR_FIELDS],
                 axis=1,
             )
 

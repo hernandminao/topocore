@@ -62,18 +62,12 @@ class Chunk:
         """
 
         if size < 0:
-            raise ValueError(
-                "size must be non-negative."
-            )
+            raise ValueError("size must be non-negative.")
 
-        unique_attributes = tuple(
-            dict.fromkeys(attributes)
-        )
+        unique_attributes = tuple(dict.fromkeys(attributes))
 
         if len(unique_attributes) != len(attributes):
-            raise ValueError(
-                "Duplicate attributes are not allowed."
-            )
+            raise ValueError("Duplicate attributes are not allowed.")
 
         self._size = size
         self._source_id = source_id
@@ -85,7 +79,6 @@ class Chunk:
         ] = {}
 
         for attribute in unique_attributes:
-
             info = ATTRIBUTE_DEFINITIONS[attribute]
 
             # A (1,) attribute (X, INTENSITY, CLASSIFICATION, ...) is
@@ -94,11 +87,7 @@ class Chunk:
             # is stored as (size, 3) -- one row per point, not
             # squeezed into a single (size,) array that could only
             # ever hold one of its components.
-            array_shape = (
-                (size,)
-                if info.shape == (1,)
-                else (size, *info.shape)
-            )
+            array_shape = (size,) if info.shape == (1,) else (size, *info.shape)
 
             self._data[attribute] = np.empty(
                 array_shape,
@@ -182,18 +171,9 @@ class Chunk:
         Return a developer-friendly representation.
         """
 
-        attrs = ", ".join(
-            attribute.name
-            for attribute in self._attributes
-        )
+        attrs = ", ".join(attribute.name for attribute in self._attributes)
 
-        return (
-            f"{self.__class__.__name__}("
-            f"size={self._size}, "
-            f"source_id={self._source_id}, "
-            f"attributes=[{attrs}]"
-            f")"
-        )
+        return f"{self.__class__.__name__}(size={self._size}, source_id={self._source_id}, attributes=[{attrs}])"
 
 
 __all__ = [

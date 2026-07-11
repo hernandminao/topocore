@@ -37,6 +37,7 @@ class CRS:
     """
 
     __slots__ = ("__pyproj_crs",)
+    __pyproj_crs: PyprojCRS
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         raise RuntimeError(
@@ -254,7 +255,7 @@ class CRS:
             semi_major_axis=pyproj_ellipsoid.semi_major_metre,
             semi_minor_axis=pyproj_ellipsoid.semi_minor_metre,
             inverse_flattening=pyproj_ellipsoid.inverse_flattening,
-            is_semi_minor_computed=(pyproj_ellipsoid.is_semi_minor_computed),
+            is_semi_minor_computed=bool(pyproj_ellipsoid.is_semi_minor_computed),
         )
 
     @property

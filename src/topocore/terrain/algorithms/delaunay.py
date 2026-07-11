@@ -28,7 +28,12 @@ from typing import Final
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.spatial import Delaunay, QhullError
+
+# mypy: disable-error-code=import-untyped
+from scipy.spatial import (
+    Delaunay,
+    QhullError,
+)
 
 from topocore.geometry.point3d import Point3D
 from topocore.terrain.exceptions import TriangulationError

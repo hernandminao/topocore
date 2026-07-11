@@ -204,7 +204,7 @@ class Point2D(Geometry):
     @override
     def to_dict(
         self,
-    ) -> dict[str, float]:
+    ) -> dict[str, object]:
         """
         Convert to dictionary.
 

@@ -217,7 +217,7 @@ class BBox3D(Geometry):
     @override
     def to_dict(
         self,
-    ) -> dict[str, float]:
+    ) -> dict[str, object]:
         """
         Convert the bounding box to a dictionary.
         """

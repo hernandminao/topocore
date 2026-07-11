@@ -21,6 +21,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from pathlib import Path
+from types import TracebackType
 
 from topocore.pointcloud.chunk import Chunk
 from topocore.pointcloud.pointcloud import PointCloud
@@ -92,9 +93,9 @@ class PointCloudReader(ABC):
 
     def __exit__(
         self,
-        exc_type,
-        exc_value,
-        traceback,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ) -> None:
         """
         Exit the runtime context.
@@ -155,9 +156,9 @@ class PointCloudWriter(ABC):
 
     def __exit__(
         self,
-        exc_type,
-        exc_value,
-        traceback,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ) -> None:
         """
         Exit the runtime context.

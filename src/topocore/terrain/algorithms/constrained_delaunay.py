@@ -40,7 +40,8 @@ import numpy as np
 from numpy.typing import NDArray
 
 from topocore.geometry.point3d import Point3D
-from topocore.terrain.algorithms.delaunay import DelaunayResult, DelaunayTriangulator
+from topocore.terrain.algorithms.delaunay import DelaunayResult
+from topocore.terrain.algorithms.delaunay import DelaunayTriangulator
 from topocore.terrain.constants import EPSILON
 from topocore.terrain.exceptions import BreaklineError
 
@@ -107,7 +108,11 @@ def _in_circle(a: _XY, b: _XY, c: _XY, d: _XY) -> bool:
     sq_b = b1 * b1 + b2 * b2
     sq_c = c1 * c1 + c2 * c2
 
-    det = a1 * (b2 * sq_c - sq_b * c2) - a2 * (b1 * sq_c - sq_b * c1) + sq_a * (b1 * c2 - b2 * c1)
+    det = (
+        a1 * (b2 * sq_c - sq_b * c2)
+        - a2 * (b1 * sq_c - sq_b * c1)
+        + sq_a * (b1 * c2 - b2 * c1)
+    )
 
     if orientation > 0.0:
         return det > 0.0
@@ -148,8 +153,9 @@ def _apex(triangle: list[int], a: int, b: int) -> int:
         if vertex != a and vertex != b:
             return vertex
 
-    raise BreaklineError(f"Malformed triangle {triangle} does not contain edge ({a}, {b}).")
-
+    raise BreaklineError(
+        f"Malformed triangle {triangle} does not contain edge ({a}, {b})."
+    )
 
 def _flip_edge(
     triangles: list[list[int]],
@@ -169,7 +175,9 @@ def _flip_edge(
     triangle_indices = edge_map[key_ab]
 
     if len(triangle_indices) != 2:
-        raise BreaklineError(f"Cannot flip a boundary edge: ({a}, {b}).")
+        raise BreaklineError(
+            f"Cannot flip a boundary edge: ({a}, {b})."
+        )
 
     t1_idx, t2_idx = triangle_indices
     c = _apex(triangles[t1_idx], a, b)
@@ -180,8 +188,14 @@ def _flip_edge(
     key_bc = frozenset((b, c))
     key_ad = frozenset((a, d))
 
-    edge_map[key_bc] = [t2_idx if index == t1_idx else index for index in edge_map[key_bc]]
-    edge_map[key_ad] = [t1_idx if index == t2_idx else index for index in edge_map[key_ad]]
+    edge_map[key_bc] = [
+        t2_idx if index == t1_idx else index
+        for index in edge_map[key_bc]
+    ]
+    edge_map[key_ad] = [
+        t1_idx if index == t2_idx else index
+        for index in edge_map[key_ad]
+    ]
 
     triangles[t1_idx] = [a, c, d]
     triangles[t2_idx] = [b, c, d]
@@ -216,9 +230,15 @@ def _wedge_contains(
     side_x_vs_py = _orient(pp, yy, xx)
 
     if abs(side_q_vs_px) <= EPSILON or abs(side_q_vs_py) <= EPSILON:
-        raise BreaklineError("The breakline passes exactly through an existing vertex; not supported yet.")
+        raise BreaklineError(
+            "The breakline passes exactly through an existing "
+            "vertex; not supported yet."
+        )
 
-    return (side_q_vs_px > 0.0) == (side_y_vs_px > 0.0) and (side_q_vs_py > 0.0) == (side_x_vs_py > 0.0)
+    return (
+        (side_q_vs_px > 0.0) == (side_y_vs_px > 0.0)
+        and (side_q_vs_py > 0.0) == (side_x_vs_py > 0.0)
+    )
 
 
 def _find_start_edge(
@@ -268,7 +288,10 @@ def _next_crossing_edge(
     side_z = _orient(xy[p], xy[q], xy[z])
 
     if abs(side_x) <= EPSILON or abs(side_z) <= EPSILON:
-        raise BreaklineError("Degenerate (collinear) configuration while walking toward the breakline endpoint.")
+        raise BreaklineError(
+            "Degenerate (collinear) configuration while walking "
+            "toward the breakline endpoint."
+        )
 
     if (side_x > 0.0) == (side_z > 0.0):
         return y, z
@@ -298,7 +321,9 @@ def _find_crossing_edges(
     start = _find_start_edge(triangles, edge_map, xy, p, q)
 
     if start is None:
-        raise BreaklineError(f"Could not start the crossing search between {p} and {q}.")
+        raise BreaklineError(
+            f"Could not start the crossing search between {p} and {q}."
+        )
 
     (x, y), current_triangle = start
     crossing: list[_Edge] = []
@@ -308,10 +333,15 @@ def _find_crossing_edges(
     for _ in range(max_steps):
         crossing.append((x, y))
 
-        candidates = [t for t in edge_map[frozenset((x, y))] if t != current_triangle]
+        candidates = [
+            t for t in edge_map[frozenset((x, y))] if t != current_triangle
+        ]
 
         if not candidates:
-            raise BreaklineError("The breakline reached the triangulation boundary before its endpoint.")
+            raise BreaklineError(
+                "The breakline reached the triangulation boundary "
+                "before its endpoint."
+            )
 
         current_triangle = candidates[0]
         z = _apex(triangles[current_triangle], x, y)
@@ -321,7 +351,10 @@ def _find_crossing_edges(
 
         x, y = _next_crossing_edge(xy, p, q, x, z, y)
 
-    raise BreaklineError("Exceeded the iteration limit while searching for crossing edges.")
+    raise BreaklineError(
+        "Exceeded the iteration limit while searching for crossing "
+        "edges."
+    )
 
 
 # =====================================================================
@@ -345,7 +378,9 @@ def _pop_valid_edge(
         return None
 
     if key_ab in constrained:
-        raise BreaklineError("Two breaklines cross each other; not supported yet.")
+        raise BreaklineError(
+            "Two breaklines cross each other; not supported yet."
+        )
 
     return a, b
 
@@ -418,16 +453,27 @@ def _process_crossing_queue(
 
         steps += 1
         if steps > max_steps:
-            raise BreaklineError("Breakline insertion did not converge (the breakline may cross another breakline).")
+            raise BreaklineError(
+                "Breakline insertion did not converge (the breakline "
+                "may cross another breakline)."
+            )
 
         popped = _pop_valid_edge(queue, edge_map, constrained)
         if popped is None:
             continue
 
         a, b = popped
-        action, edge = _try_flip_crossing_edge(triangles, edge_map, xy, a, b, key_pq)
+        action, edge = _try_flip_crossing_edge(
+            triangles, edge_map, xy, a, b, key_pq
+        )
 
         if action == "requeue":
+            # By construction, _try_flip_crossing_edge only pairs
+            # action="requeue" with a real edge; "stop" is the only
+            # case that carries None. Asserting this narrows the type
+            # for the type checker and is a cheap runtime guard
+            # against that invariant ever breaking silently.
+            assert edge is not None
             queue.append(edge)
 
 
@@ -534,10 +580,14 @@ def _insert_constraint(
         constrained.add(key_pq)
         return
 
-    _process_crossing_queue(triangles, edge_map, xy, list(crossing), key_pq, constrained)
+    _process_crossing_queue(
+        triangles, edge_map, xy, list(crossing), key_pq, constrained
+    )
 
     if key_pq not in edge_map:
-        raise BreaklineError(f"Failed to recover constraint edge ({p}, {q}).")
+        raise BreaklineError(
+            f"Failed to recover constraint edge ({p}, {q})."
+        )
 
     constrained.add(key_pq)
 
@@ -548,10 +598,15 @@ def _validate_constraint(
     vertex_count: int,
 ) -> None:
     if not (0 <= a < vertex_count) or not (0 <= b < vertex_count):
-        raise BreaklineError(f"Constraint references an out-of-range point index: ({a}, {b}).")
+        raise BreaklineError(
+            f"Constraint references an out-of-range point index: "
+            f"({a}, {b})."
+        )
 
     if a == b:
-        raise BreaklineError("A constraint edge cannot connect a point to itself.")
+        raise BreaklineError(
+            "A constraint edge cannot connect a point to itself."
+        )
 
 
 def _compute_neighbors(
@@ -570,7 +625,9 @@ def _compute_neighbors(
         opposite_edges = ((v1, v2), (v2, v0), (v0, v1))
 
         for slot, (x, y) in enumerate(opposite_edges):
-            others = [t for t in edge_map[frozenset((x, y))] if t != index]
+            others = [
+                t for t in edge_map[frozenset((x, y))] if t != index
+            ]
             neighbors[index, slot] = others[0] if others else -1
 
     return neighbors

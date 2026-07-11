@@ -33,13 +33,21 @@ MIT
 
 from __future__ import annotations
 
-from .feature_builder import FeatureBuilder, FeatureSet, LineFeature, PointFeature, build_features
-from .feature_codes import FeatureCodeDefinition, FeatureCodeRegistry, FeatureGeometryType
+from .catalogs import ALL_CODES
+from .feature_builder import FeatureBuilder
+from .feature_builder import FeatureSet
+from .feature_builder import LineFeature
+from .feature_builder import PointFeature
+from .feature_builder import build_features
+from .feature_codes import FeatureCodeDefinition
+from .feature_codes import FeatureCodeRegistry
+from .feature_codes import FeatureGeometryType
 
 __all__ = [
     "FeatureGeometryType",
     "FeatureCodeDefinition",
     "FeatureCodeRegistry",
+    "ALL_CODES",
     "PointFeature",
     "LineFeature",
     "FeatureSet",

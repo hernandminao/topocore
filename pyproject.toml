@@ -12,7 +12,7 @@ authors = [
 dependencies = [
     "numpy>=2.3.0",
     "laspy[lazrs]>=2.5",
-    "scipy>=1.16.0",
+    "scipy>=1.15,<2.0",
     "shapely>=2.1.0",
     "pyproj>=3.7.0",
 ]
@@ -28,6 +28,9 @@ dev = [
     "pytest-benchmark>=5.2.3",
     "pytest-cov>=7.1.0",
     "ruff>=0.15.20",
+
+    # Type stubs
+    "scipy-stubs>=1.16.0",
 ]
 
 [build-system]
@@ -45,3 +48,44 @@ extend-ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["E501"]
+
+# -----------------------------------------------------------------------------
+# MyPy
+# -----------------------------------------------------------------------------
+
+[tool.mypy]
+python_version = "3.12"
+strict = false  # <-- Cambiar a false
+warn_unused_configs = true
+warn_return_any = true
+warn_unreachable = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+show_error_codes = true
+pretty = true
+
+# En lugar de strict, activar reglas individuales
+disallow_any_unimported = false
+disallow_any_expr = false
+disallow_any_decorated = false
+disallow_any_explicit = false
+disallow_any_generics = false
+disallow_subclassing_any = false
+
+[[tool.mypy.overrides]]
+module = [
+    "shapely",
+    "shapely.*",
+    "laspy",
+    "laspy.*",
+    "pyproj",
+    "pyproj.*",
+    "scipy",
+    "scipy.*",
+    "scipy.spatial",
+    "scipy.spatial.*",
+    "numpy",
+    "numpy.*",
+]
+ignore_missing_imports = true
+follow_imports = "skip"

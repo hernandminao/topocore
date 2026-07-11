@@ -20,7 +20,10 @@ MIT
 
 from __future__ import annotations
 
+import math
+
 from topocore.linalg.vector3d import Vector3D
+from topocore.math.tolerance import is_zero
 from topocore.terrain.exceptions import TerrainError
 from topocore.terrain.models import Triangle
 from topocore.terrain.validation import validate_triangle
@@ -47,7 +50,10 @@ def oriented_normal(triangle: Triangle) -> Vector3D:
     normal = edge1.cross(edge2)
 
     if normal.is_zero:
-        raise TerrainError("Cannot compute a facet normal for a degenerate (zero-area) triangle.")
+        raise TerrainError(
+            "Cannot compute a facet normal for a "
+            "degenerate (zero-area) triangle."
+        )
 
     if normal.z < 0.0:
         normal = Vector3D(-normal.x, -normal.y, -normal.z)
@@ -55,6 +61,49 @@ def oriented_normal(triangle: Triangle) -> Vector3D:
     return normal
 
 
+def slope_radians(normal: Vector3D) -> float:
+    """
+    Compute the slope angle, in radians, from an oriented normal.
+
+    Returns
+    -------
+    float
+        Angle in the range [0, pi/2], where 0 is horizontal and
+        pi/2 is vertical.
+    """
+    cosine = normal.z / normal.length
+    cosine = max(-1.0, min(1.0, cosine))
+
+    return math.acos(cosine)
+
+
+def aspect_radians(normal: Vector3D) -> float | None:
+    """
+    Compute the aspect bearing, in radians, from an oriented normal.
+
+    Returns
+    -------
+    float or None
+        Compass bearing in the range [0, 2*pi), clockwise from
+        North, or ``None`` if the facet is flat (no defined
+        downslope direction).
+
+    Notes
+    -----
+    This is the single source of truth for "is this facet flat"
+    (``is_zero(normal.x) and is_zero(normal.y)``). ``slope.py``,
+    ``aspect.py`` and ``hillshade.py`` all derive their flatness
+    handling from this same check, so the three modules can never
+    disagree at the tolerance boundary.
+    """
+    if is_zero(normal.x) and is_zero(normal.y):
+        return None
+
+    return math.atan2(normal.x, normal.y) % (2.0 * math.pi)
+
+
 __all__ = [
     "oriented_normal",
+    "slope_radians",
+    "aspect_radians",
 ]

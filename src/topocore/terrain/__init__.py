@@ -55,21 +55,11 @@ from .exceptions import (
     TerrainValidationError,
     TriangulationError,
 )
-from .filters import (
-    LaplacianSmoother,
-    SpikeDetector,
-    detect_spikes,
-    laplacian_smooth,
-    remove_spikes,
-)
+from .filters import LaplacianSmoother, SpikeDetector, detect_spikes, laplacian_smooth, remove_spikes
 from .grid import Grid
 from .hillshade import DEFAULT_ALTITUDE, DEFAULT_AZIMUTH, HillshadeCalculator, triangle_hillshade
-from .interpolation import (
-    BarycentricInterpolator,
-    IDWInterpolator,
-    LinearInterpolator,
-    NearestInterpolator,
-)
+from .interpolation import InterpolationMethod as InterpolationMethod
+from .interpolation import TerrainInterpolator as TerrainInterpolator
 from .models import (
     Breakline,
     ContourLine,
@@ -109,10 +99,8 @@ __all__ = [
     "Grid",
     "Raster",
     # Interpolation
-    "LinearInterpolator",
-    "BarycentricInterpolator",
-    "NearestInterpolator",
-    "IDWInterpolator",
+    "InterpolationMethod",
+    "TerrainInterpolator",
     # Contours
     "ContourGenerator",
     # Slope / Aspect / Hillshade

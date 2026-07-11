@@ -29,23 +29,20 @@ LASReader, LAZReader, E57Reader and their corresponding writers.
 
 from __future__ import annotations
 
-from .base import PointCloudReader, PointCloudWriter
-from .exceptions import (
-    CoordinateSystemError,
-    CorruptedFileError,
-    FileFormatError,
-    InvalidHeaderError,
-    MissingAttributeError,
-    PointCloudIOError,
-    TopoCoreError,
-    UnsupportedFormatError,
-    WriteError,
-)
+from .base import PointCloudReader as PointCloudReader
+from .base import PointCloudWriter as PointCloudWriter
+from .exceptions import CoordinateSystemError as CoordinateSystemError
+from .exceptions import CorruptedFileError as CorruptedFileError
+from .exceptions import FileFormatError as FileFormatError
+from .exceptions import InvalidHeaderError as InvalidHeaderError
+from .exceptions import MissingAttributeError as MissingAttributeError
+from .exceptions import PointCloudIOError as PointCloudIOError
+from .exceptions import UnsupportedFormatError as UnsupportedFormatError
+from .exceptions import WriteError as WriteError
 
 __all__ = [
     "PointCloudReader",
     "PointCloudWriter",
-    "TopoCoreError",
     "PointCloudIOError",
     "FileFormatError",
     "UnsupportedFormatError",

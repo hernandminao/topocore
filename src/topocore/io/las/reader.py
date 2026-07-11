@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
-import laspy
+import laspy  # type: ignore[import-untyped]
 
 from topocore.io.constants import DEFAULT_CHUNK_SIZE
 from topocore.io.exceptions import PointCloudIOError
@@ -83,3 +83,8 @@ class LASReader(BaseLASReader):
 
         for points in self._reader.chunk_iterator(self._chunk_size):
             yield LASConverter.from_las_points(points)
+
+
+__all__ = [
+    "LASReader",
+]

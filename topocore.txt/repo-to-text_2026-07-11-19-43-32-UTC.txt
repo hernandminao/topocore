@@ -1,0 +1,338 @@
+<repo-to-text>
+Directory: src
+
+Directory Structure:
+<directory_structure>
+.
+Folder PATH listing
+Volume serial number is 00000049 62F7:5D16
+D:\TOPO\TOPOCORE\SRC
+\---topocore
+    |   exceptions.py
+    |   __init__.py
+    |   
+    +---analysis
+    |       __init__.py
+    |       
+    +---cad
+    |       __init__.py
+    |       
+    +---core
+    |   |   constants.py
+    |   |   exceptions.py
+    |   |   protocols.py
+    |   |   types.py
+    |   |   version.py
+    |   |   __init__.py
+    |   |   
+    |   \---__pycache__
+    |           constants.cpython-312.pyc
+    |           exceptions.cpython-312.pyc
+    |           exceptions.cpython-313.pyc
+    |           version.cpython-312.pyc
+    |           version.cpython-313.pyc
+    |           __init__.cpython-312.pyc
+    |           __init__.cpython-313.pyc
+    |           
+    +---features
+    |   |   feature_builder.py
+    |   |   feature_codes.py
+    |   |   __init__.py
+    |   |   
+    |   +---catalogs
+    |   |       cadastre.py
+    |   |       control.py
+    |   |       default.py
+    |   |       drainage.py
+    |   |       structures.py
+    |   |       terrain.py
+    |   |       transportation.py
+    |   |       utilities.py
+    |   |       vegetation.py
+    |   |       __init__.py
+    |   |       
+    |   \---loaders
+    +---geodesy
+    |   |   crs.py
+    |   |   datum.py
+    |   |   distance.py
+    |   |   ellipsoid.py
+    |   |   exceptions.py
+    |   |   geodesic.py
+    |   |   projection.py
+    |   |   transformer.py
+    |   |   utm.py
+    |   |   validation.py
+    |   |   _cache.py
+    |   |   __init__.py
+    |   |   
+    |   \---__pycache__
+    |           crs.cpython-312.pyc
+    |           datum.cpython-312.pyc
+    |           distance.cpython-312.pyc
+    |           ellipsoid.cpython-312.pyc
+    |           exceptions.cpython-312.pyc
+    |           geodesic.cpython-312.pyc
+    |           projection.cpython-312.pyc
+    |           transformer.cpython-312.pyc
+    |           utm.cpython-312.pyc
+    |           validation.cpython-312.pyc
+    |           _cache.cpython-312.pyc
+    |           __init__.cpython-312.pyc
+    |           
+    +---geometry
+    |   |   base.py
+    |   |   bbox2d.py
+    |   |   bbox3d.py
+    |   |   enums.py
+    |   |   point2d.py
+    |   |   point3d.py
+    |   |   protocols.py
+    |   |   __init__.py
+    |   |   
+    |   \---__pycache__
+    |           base.cpython-312.pyc
+    |           base.cpython-313.pyc
+    |           bbox2d.cpython-312.pyc
+    |           bbox2d.cpython-313.pyc
+    |           bbox3d.cpython-312.pyc
+    |           point2d.cpython-312.pyc
+    |           point2d.cpython-313.pyc
+    |           point3d.cpython-312.pyc
+    |           __init__.cpython-312.pyc
+    |           __init__.cpython-313.pyc
+    |           
+    +---gis
+    |       __init__.py
+    |       
+    +---interpolation
+    |       __init__.py
+    |       
+    +---io
+    |   |   base.py
+    |   |   constants.py
+    |   |   exceptions.py
+    |   |   __init__.py
+    |   |   
+    |   +---ascii
+    |   |   |   base_reader.py
+    |   |   |   base_writer.py
+    |   |   |   converter.py
+    |   |   |   exceptions.py
+    |   |   |   format.py
+    |   |   |   header.py
+    |   |   |   mapper.py
+    |   |   |   parser.py
+    |   |   |   records.py
+    |   |   |   types.py
+    |   |   |   type_inference.py
+    |   |   |   __init__.py
+    |   |   |   
+    |   |   +---csv
+    |   |   |       reader.py
+    |   |   |       writer.py
+    |   |   |       __init__.py
+    |   |   |       
+    |   |   +---pts
+    |   |   |       reader.py
+    |   |   |       
+    |   |   \---xyz
+    |   |           reader.py
+    |   |           writer.py
+    |   |           __init__.py
+    |   |           
+    |   +---common
+    |   |   |   attribute_mapping.py
+    |   |   |   base_converter.py
+    |   |   |   records.py
+    |   |   |   __init__.py
+    |   |   |   
+    |   |   \---__pycache__
+    |   |           attribute_mapping.cpython-312.pyc
+    |   |           base_converter.cpython-312.pyc
+    |   |           records.cpython-312.pyc
+    |   |           __init__.cpython-312.pyc
+    |   |           
+    |   +---e57
+    |   |       base_reader.py
+    |   |       converter.py
+    |   |       reader.py
+    |   |       __init__.py
+    |   |       
+    |   +---las
+    |   |       base_reader.py
+    |   |       converter.py
+    |   |       reader.py
+    |   |       writer.py
+    |   |       __init__.py
+    |   |       
+    |   +---laz
+    |   |       reader.py
+    |   |       writer.py
+    |   |       __init__.py
+    |   |       
+    |   +---ply
+    |   |   |   converter.py
+    |   |   |   enums.py
+    |   |   |   exceptions.py
+    |   |   |   header.py
+    |   |   |   header_parser.py
+    |   |   |   reader.py
+    |   |   |   
+    |   |   \---__pycache__
+    |   |           converter.cpython-312.pyc
+    |   |           enums.cpython-312.pyc
+    |   |           exceptions.cpython-312.pyc
+    |   |           header.cpython-312.pyc
+    |   |           header_parser.cpython-312.pyc
+    |   |           reader.cpython-312.pyc
+    |   |           
+    |   \---__pycache__
+    |           base.cpython-312.pyc
+    |           base.cpython-313.pyc
+    |           exceptions.cpython-312.pyc
+    |           __init__.cpython-312.pyc
+    |           __init__.cpython-313.pyc
+    |           
+    +---linalg
+    |   |   vector2d.py
+    |   |   vector3d.py
+    |   |   
+    |   \---__pycache__
+    |           vector2d.cpython-312.pyc
+    |           vector2d.cpython-313.pyc
+    |           vector3d.cpython-312.pyc
+    |           
+    +---math
+    |   |   config.py
+    |   |   constants.py
+    |   |   numeric.py
+    |   |   tolerance.py
+    |   |   validation.py
+    |   |   __init__.py
+    |   |   
+    |   \---__pycache__
+    |           config.cpython-312.pyc
+    |           config.cpython-313.pyc
+    |           constants.cpython-312.pyc
+    |           constants.cpython-313.pyc
+    |           numeric.cpython-312.pyc
+    |           numeric.cpython-313.pyc
+    |           tolerance.cpython-312.pyc
+    |           tolerance.cpython-313.pyc
+    |           validation.cpython-312.pyc
+    |           __init__.cpython-312.pyc
+    |           __init__.cpython-313.pyc
+    |           
+    +---plugins
+    |       __init__.py
+    |       
+    +---pointcloud
+    |   |   attributes.py
+    |   |   chunk.py
+    |   |   classification.py
+    |   |   numpy_memory.py
+    |   |   pointcloud.py
+    |   |   statistics.py
+    |   |   
+    |   \---__pycache__
+    |           attributes.cpython-312.pyc
+    |           attributes.cpython-313.pyc
+    |           chunk.cpython-312.pyc
+    |           chunk.cpython-313.pyc
+    |           numpy_memory.cpython-312.pyc
+    |           pointcloud.cpython-312.pyc
+    |           pointcloud.cpython-313.pyc
+    |           statistics.cpython-312.pyc
+    |           
+    +---processing
+    |       __init__.py
+    |       
+    +---survey
+    |       exceptions.py
+    |       formats.py
+    |       models.py
+    |       reader.py
+    |       __init__.py
+    |       
+    +---terrain
+    |   |   aspect.py
+    |   |   barycentric.py
+    |   |   base.py
+    |   |   breaklines.py
+    |   |   cell.py
+    |   |   constants.py
+    |   |   contours.py
+    |   |   dtm.py
+    |   |   enums.py
+    |   |   exceptions.py
+    |   |   filters.py
+    |   |   grid.py
+    |   |   hillshade.py
+    |   |   idw.py
+    |   |   interpolation.py
+    |   |   linear.py
+    |   |   models.py
+    |   |   nearest.py
+    |   |   nodata.py
+    |   |   raster.py
+    |   |   sampling.py
+    |   |   slope.py
+    |   |   tin.py
+    |   |   types.py
+    |   |   validation.py
+    |   |   weights.py
+    |   |   _geometry.py
+    |   |   __init__.py
+    |   |   
+    |   +---algorithms
+    |   |   |   constrained_delaunay.py
+    |   |   |   delaunay.py
+    |   |   |   __init__.py
+    |   |   |   
+    |   |   \---__pycache__
+    |   |           constrained_delaunay.cpython-312.pyc
+    |   |           delaunay.cpython-312.pyc
+    |   |           __init__.cpython-312.pyc
+    |   |           
+    |   \---__pycache__
+    |           aspect.cpython-312.pyc
+    |           barycentric.cpython-312.pyc
+    |           base.cpython-312.pyc
+    |           breaklines.cpython-312.pyc
+    |           cell.cpython-312.pyc
+    |           constants.cpython-312.pyc
+    |           contours.cpython-312.pyc
+    |           dtm.cpython-312.pyc
+    |           enums.cpython-312.pyc
+    |           exceptions.cpython-312.pyc
+    |           filters.cpython-312.pyc
+    |           grid.cpython-312.pyc
+    |           hillshade.cpython-312.pyc
+    |           idw.cpython-312.pyc
+    |           interpolation.cpython-312.pyc
+    |           linear.cpython-312.pyc
+    |           models.cpython-312.pyc
+    |           nearest.cpython-312.pyc
+    |           raster.cpython-312.pyc
+    |           slope.cpython-312.pyc
+    |           tin.cpython-312.pyc
+    |           types.cpython-312.pyc
+    |           validation.cpython-312.pyc
+    |           weights.cpython-312.pyc
+    |           _geometry.cpython-312.pyc
+    |           __init__.cpython-312.pyc
+    |           
+    +---topology
+    |       __init__.py
+    |       
+    +---utils
+    |       __init__.py
+    |       
+    \---__pycache__
+            exceptions.cpython-312.pyc
+            __init__.cpython-312.pyc
+            __init__.cpython-313.pyc
+            
+
+</directory_structure>

@@ -24,11 +24,15 @@ MIT
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 import numpy as np
+from numpy.typing import NDArray
 
-from topocore.terrain.base import BaseDTM, BaseInterpolator
+from topocore.terrain.base import BaseDTM
+from topocore.terrain.base import BaseInterpolator
+from topocore.terrain.cell import Cell
 from topocore.terrain.grid import Grid
 from topocore.terrain.raster import Raster
 from topocore.terrain.tin import TIN
@@ -90,6 +94,7 @@ class DTM(BaseDTM):
 
         for row in range(grid.rows):
             for column in range(grid.columns):
+
                 x, y = grid.coordinate(
                     row,
                     column,
@@ -199,7 +204,7 @@ class DTM(BaseDTM):
         self,
         row: int,
         column: int,
-    ):
+    ) -> Cell:
         """
         Return a raster cell.
         """
@@ -218,7 +223,7 @@ class DTM(BaseDTM):
 
     def array(
         self,
-    ):
+    ) -> NDArray[np.float64]:
         """
         Return raster elevations.
         """
@@ -235,7 +240,7 @@ class DTM(BaseDTM):
 
     def __iter__(
         self,
-    ):
+    ) -> Iterator[Cell]:
         """
         Iterate over raster cells.
         """
@@ -255,7 +260,12 @@ class DTM(BaseDTM):
         """
         String representation.
         """
-        return f"DTM({self.rows}x{self.columns}, resolution={self.resolution})"
+        return (
+            "DTM("
+            f"{self.rows}x{self.columns}, "
+            f"resolution={self.resolution}"
+            ")"
+        )
 
 
 __all__ = [

@@ -24,6 +24,7 @@ MIT
 from __future__ import annotations
 
 from collections.abc import Iterator
+from io import BufferedReader
 from pathlib import Path
 
 import numpy as np
@@ -35,7 +36,7 @@ from topocore.pointcloud.chunk import Chunk
 from .converter import PLYConverter
 from .enums import PLYFormat
 from .exceptions import InvalidPLYError
-from .header import PLYElement
+from .header import PLYElement, PLYHeader
 from .header_parser import PLYHeaderParser
 
 
@@ -58,9 +59,9 @@ class PLYReader(PointCloudReader):
 
         self._chunk_size = chunk_size
 
-        self._stream = None
+        self._stream: BufferedReader | None = None
 
-        self._header = None
+        self._header: PLYHeader | None = None
 
         self._converter = PLYConverter()
 
@@ -74,6 +75,8 @@ class PLYReader(PointCloudReader):
         """
         self._ensure_open()
 
+        assert self._header is not None
+
         try:
             vertex = self._vertex_element()
 
@@ -86,23 +89,22 @@ class PLYReader(PointCloudReader):
         finally:
             self.close()
 
-    def close(self):
+    def close(self) -> None:
 
         if self._stream is not None:
             self._stream.close()
 
             self._stream = None
 
-    def _open(self):
+    def _open(self) -> None:
 
         if self._stream is not None and self._header is not None:
             return
 
-        self._stream = open(  # noqa: SIM115
-            self.path, "rb"
-        )
+        stream: BufferedReader = open(self.path, "rb")
 
-        self._header = PLYHeaderParser.parse(self._stream)
+        self._stream = stream
+        self._header = PLYHeaderParser.parse(stream)
 
     def _vertex_element(self) -> PLYElement:
 
@@ -118,7 +120,9 @@ class PLYReader(PointCloudReader):
     def _iter_ascii(
         self,
         vertex: PLYElement,
-    ):
+    ) -> Iterator[Chunk]:
+
+        assert self._stream is not None
 
         properties = [
             p
@@ -129,7 +133,7 @@ class PLYReader(PointCloudReader):
             )
         ]
 
-        arrays = {p.name: [] for p in properties}
+        arrays: dict[str, list[str]] = {p.name: [] for p in properties}
 
         points = 0
 
@@ -169,8 +173,8 @@ class PLYReader(PointCloudReader):
 
     def _flush_ascii(
         self,
-        arrays,
-    ):
+        arrays: dict[str, list[str]],
+    ) -> Chunk:
 
         converted = {}
 
@@ -199,7 +203,10 @@ class PLYReader(PointCloudReader):
     def _iter_binary(
         self,
         vertex: PLYElement,
-    ):
+    ) -> Iterator[Chunk]:
+
+        assert self._stream is not None
+        assert self._header is not None
 
         properties = [
             p
@@ -239,7 +246,10 @@ class PLYReader(PointCloudReader):
             if len(data) == 0:
                 break
 
-            arrays = {name: data[name] for name in data.dtype.names}
+            names = data.dtype.names
+            assert names is not None
+
+            arrays = {name: data[name] for name in names}
 
             batch = PointRecordBatch(
                 arrays=arrays,
@@ -250,3 +260,8 @@ class PLYReader(PointCloudReader):
             )
 
             remaining -= len(data)
+
+
+__all__ = [
+    "PLYReader",
+]

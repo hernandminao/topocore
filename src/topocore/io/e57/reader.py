@@ -19,7 +19,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import numpy as np
-import pye57
+import pye57  # type: ignore[import-not-found]
 
 from topocore.io.exceptions import PointCloudIOError
 from topocore.pointcloud.chunk import Chunk
@@ -77,3 +77,8 @@ class E57Reader(BaseE57Reader):
             arrays,
             source_id=source_id,
         )
+
+
+__all__ = [
+    "E57Reader",
+]

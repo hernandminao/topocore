@@ -42,12 +42,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from topocore.features.feature_codes import (
-    FeatureCodeDefinition,
-    FeatureCodeRegistry,
-    FeatureGeometryType,
-)
-from topocore.survey.models import SurveyPoint, SurveyPointSet
+from topocore.features.feature_codes import FeatureCodeDefinition
+from topocore.features.feature_codes import FeatureCodeRegistry
+from topocore.features.feature_codes import FeatureGeometryType
+from topocore.survey.models import SurveyPoint
+from topocore.survey.models import SurveyPointSet
 
 _POINT_LIKE = (FeatureGeometryType.POINT, FeatureGeometryType.SYMBOL)
 _LINE_LIKE = (FeatureGeometryType.LINE, FeatureGeometryType.POLYGON)
@@ -80,10 +79,18 @@ class LineFeature:
 class FeatureSet:
     """
     The geometries built from a ``SurveyPointSet``.
+
+    ``ground`` holds points whose code is recognized as
+    ``FeatureGeometryType.GROUND`` (bare terrain shots, e.g. "TN") --
+    deliberately not linework, and deliberately not ``unmatched``
+    either: the code is known, it simply isn't a feature. These
+    points still belong to the TIN; they just never needed to pass
+    through this builder to get there.
     """
 
     points: tuple[PointFeature, ...]
     lines: tuple[LineFeature, ...]
+    ground: tuple[SurveyPoint, ...]
     unmatched: tuple[SurveyPoint, ...]
 
 
@@ -150,10 +157,15 @@ def build_features(
 
     Points whose code is unregistered, or whose run is too short to
     form a line, end up in ``FeatureSet.unmatched`` -- never silently
-    dropped.
+    dropped. Points whose code is registered as
+    ``FeatureGeometryType.GROUND`` end up in ``FeatureSet.ground``
+    instead -- also never dropped, but not reported as a problem
+    either, since a ground shot is a fully expected, correctly
+    recognized kind of point.
     """
     point_features: list[PointFeature] = []
     line_features: list[LineFeature] = []
+    ground: list[SurveyPoint] = []
     unmatched: list[SurveyPoint] = []
 
     for base_code, run in _group_runs(points.points):
@@ -167,8 +179,15 @@ def build_features(
             unmatched.extend(run)
             continue
 
+        if definition.geometry_type is FeatureGeometryType.GROUND:
+            ground.extend(run)
+            continue
+
         if definition.geometry_type in _POINT_LIKE:
-            point_features.extend(PointFeature(code=base_code, definition=definition, point=p) for p in run)
+            point_features.extend(
+                PointFeature(code=base_code, definition=definition, point=p)
+                for p in run
+            )
             continue
 
         line = _build_line_or_polygon(base_code, definition, run)
@@ -182,6 +201,7 @@ def build_features(
     return FeatureSet(
         points=tuple(point_features),
         lines=tuple(line_features),
+        ground=tuple(ground),
         unmatched=tuple(unmatched),
     )
 

@@ -24,6 +24,7 @@ MIT
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 
@@ -70,7 +71,7 @@ class SurveyPointSet:
     def __len__(self) -> int:
         return len(self.points)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[SurveyPoint]:
         return iter(self.points)
 
     def __getitem__(self, index: int) -> SurveyPoint:
@@ -80,13 +81,17 @@ class SurveyPointSet:
         """
         Every distinct code present in the set.
         """
-        return frozenset(point.code for point in self.points if point.code is not None)
+        return frozenset(
+            point.code for point in self.points if point.code is not None
+        )
 
     def by_code(self, code: str) -> tuple[SurveyPoint, ...]:
         """
         Every point carrying exactly ``code``, in survey order.
         """
-        return tuple(point for point in self.points if point.code == code)
+        return tuple(
+            point for point in self.points if point.code == code
+        )
 
 
 __all__ = [

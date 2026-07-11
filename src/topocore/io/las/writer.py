@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import laspy
+import laspy  # type: ignore[import-untyped]
 import numpy as np
 
 from topocore.io.base import PointCloudWriter
@@ -99,14 +99,14 @@ class LASWriter(PointCloudWriter):
         if PointAttribute.GPS_TIME in merged:
             las.gps_time = merged[PointAttribute.GPS_TIME]
 
-        if PointAttribute.RED in merged:
-            las.red = merged[PointAttribute.RED]
-
-        if PointAttribute.GREEN in merged:
-            las.green = merged[PointAttribute.GREEN]
-
-        if PointAttribute.BLUE in merged:
-            las.blue = merged[PointAttribute.BLUE]
+        # PointAttribute.COLOR is stored combined, shape (n, 3); LAS
+        # itself keeps red/green/blue as three separate channels, so
+        # it's split back out here on the way out.
+        if PointAttribute.COLOR in merged:
+            color = merged[PointAttribute.COLOR]
+            las.red = color[:, 0]
+            las.green = color[:, 1]
+            las.blue = color[:, 2]
 
         las.write(self.path)
 
@@ -117,3 +117,8 @@ class LASWriter(PointCloudWriter):
         No persistent resources are kept by LASWriter.
         """
         pass
+
+
+__all__ = [
+    "LASWriter",
+]

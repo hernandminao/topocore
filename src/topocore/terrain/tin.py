@@ -34,6 +34,45 @@ from topocore.terrain.algorithms import DelaunayResult, DelaunayTriangulator
 from topocore.terrain.models import Edge, Triangle
 
 
+def _orientation(
+    ax: float,
+    ay: float,
+    bx: float,
+    by: float,
+    cx: float,
+    cy: float,
+) -> float:
+    """
+    Twice the signed area of triangle (a, b, c).
+    """
+    return (ax - cx) * (by - cy) - (bx - cx) * (ay - cy)
+
+
+def _point_in_triangle(
+    x: float,
+    y: float,
+    p1: Point3D,
+    p2: Point3D,
+    p3: Point3D,
+) -> bool:
+    """
+    True if (x, y) lies inside or on the boundary of triangle
+    (p1, p2, p3).
+
+    Standard barycentric sign test: the point is inside exactly when
+    it is not strictly on both sides (positive and negative) of the
+    three edges at once.
+    """
+    d1 = _orientation(x, y, p1.x, p1.y, p2.x, p2.y)
+    d2 = _orientation(x, y, p2.x, p2.y, p3.x, p3.y)
+    d3 = _orientation(x, y, p3.x, p3.y, p1.x, p1.y)
+
+    has_negative = (d1 < 0.0) or (d2 < 0.0) or (d3 < 0.0)
+    has_positive = (d1 > 0.0) or (d2 > 0.0) or (d3 > 0.0)
+
+    return not (has_negative and has_positive)
+
+
 @dataclass(slots=True)
 class _TINCache:
     """
@@ -279,12 +318,26 @@ class TIN:
     ) -> int:
         """
         Find the triangle containing a coordinate.
+
+        Implemented here as a brute-force scan (O(triangle_count))
+        rather than delegated to the Delaunay backend, which has no
+        point-location routine. A spatial-index-accelerated version
+        belongs to PR20 (Optimization), not here; this is the
+        correct, if not fastest, answer.
+
+        Returns
+        -------
+        int
+            Triangle index, or -1 if (x, y) lies outside the
+            triangulation's convex hull.
         """
-        return DelaunayTriangulator.find_triangle(
-            self._result,
-            x,
-            y,
-        )
+        for index in range(self.triangle_count):
+            p1, p2, p3 = self.triangle_vertices(index)
+
+            if _point_in_triangle(x, y, p1, p2, p3):
+                return index
+
+        return -1
 
     def locate(
         self,
@@ -329,9 +382,9 @@ class TIN:
             i1 = int(simplex[1])
             i2 = int(simplex[2])
 
-            edge_indices.add(tuple(sorted((i0, i1))))
-            edge_indices.add(tuple(sorted((i1, i2))))
-            edge_indices.add(tuple(sorted((i2, i0))))
+            edge_indices.add((min(i0, i1), max(i0, i1)))
+            edge_indices.add((min(i1, i2), max(i1, i2)))
+            edge_indices.add((min(i2, i0), max(i2, i0)))
 
         vertices = self.vertices
 

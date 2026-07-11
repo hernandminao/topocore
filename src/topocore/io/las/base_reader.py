@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
 
 from topocore.io.base import PointCloudReader
 from topocore.pointcloud.chunk import Chunk
@@ -33,12 +35,15 @@ class BaseLASReader(PointCloudReader):
 
     def __init__(
         self,
-        path: str,
+        path: str | Path,
     ) -> None:
         super().__init__(path)
 
-        self._reader = None
-        self._header = None
+        # laspy ships no type stubs / py.typed marker: ``Any`` is the
+        # accurate type for its reader and header objects here, not
+        # a placeholder for "didn't bother typing this."
+        self._reader: Any = None
+        self._header: Any = None
 
     @abstractmethod
     def _open(self) -> None:
@@ -49,7 +54,7 @@ class BaseLASReader(PointCloudReader):
         """
 
     @property
-    def header(self):
+    def header(self) -> Any:
         """
         Return the LAS header.
         """
@@ -79,3 +84,8 @@ class BaseLASReader(PointCloudReader):
         if self._reader is not None:
             self._reader.close()
             self._reader = None
+
+
+__all__ = [
+    "BaseLASReader",
+]

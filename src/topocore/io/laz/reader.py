@@ -15,13 +15,15 @@ MIT
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
-import laspy
+import laspy  # type: ignore[import-untyped]
 
 from topocore.io.constants import DEFAULT_CHUNK_SIZE
 from topocore.io.exceptions import PointCloudIOError
 from topocore.io.las.base_reader import BaseLASReader
+from topocore.pointcloud.chunk import Chunk
 
 
 class LAZReader(BaseLASReader):
@@ -69,7 +71,7 @@ class LAZReader(BaseLASReader):
                 "(lazrs) is correctly installed."
             ) from exc
 
-    def _iterate_chunks(self):
+    def _iterate_chunks(self) -> Iterator[Chunk]:
         """
         Iterate over LAZ chunks.
         """
@@ -82,3 +84,8 @@ class LAZReader(BaseLASReader):
 
         for points in self._reader.chunk_iterator(self._chunk_size):
             yield LASConverter.from_las_points(points)
+
+
+__all__ = [
+    "LAZReader",
+]

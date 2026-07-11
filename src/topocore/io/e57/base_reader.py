@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -32,7 +34,7 @@ class BaseE57Reader(PointCloudReader):
 
     def __init__(
         self,
-        path: str,
+        path: str | Path,
         *,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
     ) -> None:
@@ -42,7 +44,9 @@ class BaseE57Reader(PointCloudReader):
             raise ValueError("chunk_size must be greater than zero.")
 
         self._chunk_size = chunk_size
-        self._reader = None
+
+        # pye57 has no type stubs; Any is the accurate type here.
+        self._reader: Any = None
 
     @property
     def chunk_size(self) -> int:
@@ -106,3 +110,8 @@ class BaseE57Reader(PointCloudReader):
         Release resources.
         """
         self._reader = None
+
+
+__all__ = [
+    "BaseE57Reader",
+]

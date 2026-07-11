@@ -21,6 +21,7 @@ MIT
 from __future__ import annotations
 
 import math
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 
@@ -163,7 +164,7 @@ class Cell:
 
     def __iter__(
         self,
-    ):
+    ) -> Iterator[int | float]:
         """
         Iterate over the cell values.
 

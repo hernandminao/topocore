@@ -53,7 +53,7 @@ class TypeInferer:
         cls,
         column_name: str,
         values: list[str],
-    ) -> NDArray:
+    ) -> NDArray[np.generic]:
 
         dtype = COLUMN_DTYPES.get(column_name.lower())
 

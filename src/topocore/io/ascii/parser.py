@@ -27,11 +27,11 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TextIO
+from typing import TextIO, cast
 
 from .exceptions import InvalidASCIIRecordError
 from .format import ASCIIFormat
-from .header import HeaderDetector
+from .header import HeaderDetectionResult
 from .records import ASCIIRecordBatch
 from .type_inference import TypeInferer
 from .types import ASCIIInput
@@ -112,8 +112,8 @@ class ASCIIParser:
         #
 
         if hasattr(self._source, "read"):
-            yield self._source
-
+            stream = cast(TextIO, self._source)  # type: ignore[assignment]
+            yield stream
             return
 
         #
@@ -122,9 +122,8 @@ class ASCIIParser:
 
         from io import StringIO
 
-        yield StringIO(
-            "".join(self._source),
-        )
+        stream = StringIO("".join(self._source))  # type: ignore[assignment]
+        yield stream
 
     def _iter_data_lines(
         self,
@@ -194,7 +193,7 @@ class ASCIIParser:
             delimiter,
         )
 
-        detection = HeaderDetector.detect(
+        detection = HeaderDetectionResult.detect(
             fields,
         )
 

@@ -22,16 +22,17 @@ import numpy as np
 from topocore.pointcloud.attributes import PointAttribute
 from topocore.pointcloud.chunk import Chunk
 
-#: Mapping between E57 field names and TopoCore point attributes.
+#: E57 fields mapped 1:1 onto a single-valued TopoCore attribute.
 E57_ATTRIBUTE_MAPPING: Final = {
     "cartesianX": PointAttribute.X,
     "cartesianY": PointAttribute.Y,
     "cartesianZ": PointAttribute.Z,
     "intensity": PointAttribute.INTENSITY,
-    "colorRed": PointAttribute.RED,
-    "colorGreen": PointAttribute.GREEN,
-    "colorBlue": PointAttribute.BLUE,
 }
+
+#: E57 stores red/green/blue as three separate fields; TopoCore
+#: stores them combined as one PointAttribute.COLOR of shape (3,).
+_COLOR_FIELDS = ("colorRed", "colorGreen", "colorBlue")
 
 
 class E57Converter:
@@ -49,11 +50,16 @@ class E57Converter:
         Convert one E57 scan slice into a Chunk.
         """
 
-        attributes: list[PointAttribute] = []
+        attributes = [
+            attribute
+            for name, attribute in E57_ATTRIBUTE_MAPPING.items()
+            if name in scan
+        ]
 
-        for name, attribute in E57_ATTRIBUTE_MAPPING.items():
-            if name in scan:
-                attributes.append(attribute)
+        has_color = all(field in scan for field in _COLOR_FIELDS)
+
+        if has_color:
+            attributes.append(PointAttribute.COLOR)
 
         size = len(next(iter(scan.values())))
 
@@ -67,4 +73,16 @@ class E57Converter:
             if name in scan:
                 chunk[attribute][:] = np.asarray(scan[name])
 
+        if has_color:
+            chunk[PointAttribute.COLOR][:] = np.stack(
+                [np.asarray(scan[field]) for field in _COLOR_FIELDS],
+                axis=1,
+            )
+
         return chunk
+
+
+__all__ = [
+    "E57Converter",
+    "E57_ATTRIBUTE_MAPPING",
+]

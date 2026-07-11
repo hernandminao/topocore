@@ -182,7 +182,7 @@ def inverse_distance_weight(
     if distance <= _EPSILON:
         return math.inf
 
-    return 1.0 / (distance**power)
+    return float(1.0 / (distance ** power))
 
 
 def inside_triangle(

@@ -20,6 +20,7 @@ MIT
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Iterator
 
 import numpy as np
 from numpy.typing import NDArray
@@ -316,7 +317,7 @@ class Raster:
 
     def valid_cells(
         self,
-    ):
+    ) -> Iterator[Cell]:
         """
         Iterate over valid cells.
         """
@@ -490,7 +491,7 @@ class Raster:
 
     def __iter__(
         self,
-    ):
+    ) -> Iterator[Cell]:
         """
         Iterate over raster cells.
         """

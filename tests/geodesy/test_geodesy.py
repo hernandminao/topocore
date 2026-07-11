@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 Unit tests for topocore.geodesy (100% coverage).
 

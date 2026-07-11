@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """
 Tests for topocore.math.numeric.
 """

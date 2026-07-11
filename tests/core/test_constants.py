@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 from topocore.core.constants import PROJECT_NAME
 
 

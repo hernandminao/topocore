@@ -339,6 +339,60 @@ class TIN:
 
         return -1
 
+    def interpolate(
+        self,
+        x: float,
+        y: float,
+    ) -> float:
+        """
+        Interpolate terrain elevation at XY coordinate.
+
+        Uses barycentric interpolation inside the containing
+        triangle.
+
+        Parameters
+        ----------
+        x
+            X coordinate.
+        y
+            Y coordinate.
+
+        Returns
+        -------
+        float
+            Interpolated elevation.
+
+        Raises
+        ------
+        ValueError
+            If the point is outside the TIN.
+        """
+
+        triangle_index = self.find_triangle(
+            x,
+            y,
+        )
+
+        if triangle_index < 0:
+            raise ValueError(f"Point ({x}, {y}) is outside TIN.")
+
+        p1, p2, p3 = self.triangle_vertices(
+            triangle_index,
+        )
+
+        denominator = (p2.y - p3.y) * (p1.x - p3.x) + (p3.x - p2.x) * (p1.y - p3.y)
+
+        if abs(denominator) < 1e-15:
+            return float((p1.z + p2.z + p3.z) / 3.0)
+
+        w1 = ((p2.y - p3.y) * (x - p3.x) + (p3.x - p2.x) * (y - p3.y)) / denominator
+
+        w2 = ((p3.y - p1.y) * (x - p3.x) + (p1.x - p3.x) * (y - p3.y)) / denominator
+
+        w3 = 1.0 - w1 - w2
+
+        return float(w1 * p1.z + w2 * p2.z + w3 * p3.z)
+
     def locate(
         self,
         point: Point3D,

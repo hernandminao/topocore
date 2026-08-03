@@ -1,3 +1,6 @@
+# SciPy is mandatory because topocore.processing.ground.pmf imports
+# scipy.ndimage eagerly.
+
 [project]
 name = "topocore"
 version = "0.1.0"
@@ -12,9 +15,37 @@ authors = [
 dependencies = [
     "numpy>=2.3.0",
     "laspy[lazrs]>=2.5",
-    "scipy>=1.15,<2.0",
+    "scipy>=1.10,<2.0",
     "shapely>=2.1.0",
     "pyproj>=3.7.0",
+]
+
+# CSF remains optional and is imported only when method="csf" is used.
+[project.optional-dependencies]
+
+terrain = [
+    "cloth-simulation-filter>=1.1.7",
+]
+
+ml = [
+    "scikit-learn>=1.7.0",
+    "joblib>=1.4.0",
+]
+
+lightgbm = [
+    "lightgbm>=4.0",
+]
+
+xgboost = [
+    "xgboost>=2.0",
+]
+
+full = [
+    "cloth-simulation-filter>=1.1.7",
+    "scikit-learn>=1.7.0",
+    "joblib>=1.4.0",
+    "lightgbm>=4.0",
+    "xgboost>=2.0",
 ]
 
 [dependency-groups]
@@ -74,6 +105,17 @@ disallow_subclassing_any = false
 
 [[tool.mypy.overrides]]
 module = [
+    "sklearn",
+    "sklearn.*",
+    "joblib",
+    "joblib.*",
+]
+
+follow_untyped_imports = true
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = [
     "shapely",
     "shapely.*",
     "laspy",
@@ -89,3 +131,13 @@ module = [
 ]
 ignore_missing_imports = true
 follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = [
+    "lightgbm",
+    "lightgbm.*",
+    "xgboost",
+    "xgboost.*",
+]
+ignore_missing_imports = true
+

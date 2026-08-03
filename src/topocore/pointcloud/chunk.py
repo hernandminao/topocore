@@ -19,13 +19,13 @@ MIT
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 
 import numpy as np
 
-from .attributes import ATTRIBUTE_DEFINITIONS
-from .attributes import PointAttribute
+from topocore.core.types import PointAttributeArray
+
+from .attributes import ATTRIBUTE_DEFINITIONS, PointAttribute
 
 
 class Chunk:
@@ -75,8 +75,8 @@ class Chunk:
 
         self._data: dict[
             PointAttribute,
-            np.ndarray,
-        ] = {}
+            PointAttributeArray,
+        ]
 
         for attribute in unique_attributes:
             info = ATTRIBUTE_DEFINITIONS[attribute]

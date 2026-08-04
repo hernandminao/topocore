@@ -392,7 +392,7 @@ class ClassificationManager:
             contain a trained ML classifier.
         """
         try:
-            import joblib  # type: ignore[import-untyped]
+            import joblib  # type: ignore
         except ImportError as exc:
             raise ClassificationError(
                 "joblib is not installed. Install it with `pip install topocore[ml]` "

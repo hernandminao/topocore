@@ -38,7 +38,7 @@ from topocore.processing.exceptions import ClassificationError
 from .ml import MachineLearningClassifier
 
 try:
-    from sklearn.ensemble import RandomForestClassifier as _SklearnRandomForest  # type: ignore[import-untyped]
+    from sklearn.ensemble import RandomForestClassifier as _SklearnRandomForest  # type: ignore
 
     _SKLEARN_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised only without scikit-learn installed

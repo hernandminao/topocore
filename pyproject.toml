@@ -109,13 +109,10 @@ module = [
     "sklearn.*",
     "joblib",
     "joblib.*",
-]
-
-follow_untyped_imports = true
-follow_imports = "skip"
-
-[[tool.mypy.overrides]]
-module = [
+    "lightgbm",
+    "lightgbm.*",
+    "xgboost",
+    "xgboost.*",
     "shapely",
     "shapely.*",
     "laspy",
@@ -126,18 +123,7 @@ module = [
     "scipy.*",
     "scipy.spatial",
     "scipy.spatial.*",
-    "numpy",
-    "numpy.*",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"
-
-[[tool.mypy.overrides]]
-module = [
-    "lightgbm",
-    "lightgbm.*",
-    "xgboost",
-    "xgboost.*",
-]
-ignore_missing_imports = true
-
+disable_error_code = "import-untyped" 

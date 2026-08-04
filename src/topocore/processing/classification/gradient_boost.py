@@ -36,7 +36,7 @@ from topocore.processing.exceptions import ClassificationError
 from .ml import MachineLearningClassifier
 
 try:
-    from sklearn.ensemble import (  # type: ignore[import-untyped]
+    from sklearn.ensemble import (  # type: ignore
         HistGradientBoostingClassifier as _SklearnHistGB,
     )
 

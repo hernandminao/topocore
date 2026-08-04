@@ -62,8 +62,7 @@ class ClassificationResult:
 
         if self.labels.shape[0] != self.cloud.point_count:
             raise ValueError(
-                f"Label count ({self.labels.shape[0]}) does not match "
-                f"cloud point count ({self.cloud.point_count})."
+                f"Label count ({self.labels.shape[0]}) does not match cloud point count ({self.cloud.point_count})."
             )
 
         if not np.issubdtype(self.labels.dtype, np.integer):
@@ -206,12 +205,12 @@ class Classifier(ABC):
     ) -> ClassificationResult:
         """
         Callable interface for classification.
-        
+
         Parameters
         ----------
         cloud
             Input point cloud.
-            
+
         Returns
         -------
         ClassificationResult

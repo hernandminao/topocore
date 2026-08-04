@@ -244,9 +244,7 @@ def _build_ground_cloud_from_mask_streaming(
         result.add_chunk(target)
 
     if offset != mask.size:
-        raise GroundError(
-            f"Ground mask length {mask.size} does not match point count {offset}."
-        )
+        raise GroundError(f"Ground mask length {mask.size} does not match point count {offset}.")
 
     result.update_bounds()
     return result
@@ -309,34 +307,19 @@ class PMFGroundClassifier(GroundClassifier):
         _validate_positive("window_base", window_base)
 
         if initial_distance > max_distance:
-            raise GroundError(
-                "initial_distance must be <= max_distance, "
-                f"got {initial_distance} > {max_distance}."
-            )
+            raise GroundError(f"initial_distance must be <= max_distance, got {initial_distance} > {max_distance}.")
         if (
             isinstance(max_window_size, bool)
             or not isinstance(max_window_size, (int, np.integer))
             or max_window_size < 3
         ):
-            raise GroundError(
-                f"max_window_size must be an integer >= 3, got {max_window_size}."
-            )
+            raise GroundError(f"max_window_size must be an integer >= 3, got {max_window_size}.")
         if not isinstance(exponential, bool):
-            raise GroundError(
-                f"exponential must be a bool, got {type(exponential).__name__}."
-            )
+            raise GroundError(f"exponential must be a bool, got {type(exponential).__name__}.")
         if window_base <= 1.0 and exponential:
-            raise GroundError(
-                f"window_base must be > 1 when exponential=True, got {window_base}."
-            )
-        if (
-            isinstance(max_grid_cells, bool)
-            or not isinstance(max_grid_cells, (int, np.integer))
-            or max_grid_cells < 1
-        ):
-            raise GroundError(
-                f"max_grid_cells must be an integer >= 1, got {max_grid_cells}."
-            )
+            raise GroundError(f"window_base must be > 1 when exponential=True, got {window_base}.")
+        if isinstance(max_grid_cells, bool) or not isinstance(max_grid_cells, (int, np.integer)) or max_grid_cells < 1:
+            raise GroundError(f"max_grid_cells must be an integer >= 1, got {max_grid_cells}.")
 
         self._cell_size = float(cell_size)
         self._initial_distance = float(initial_distance)
@@ -353,9 +336,7 @@ class PMFGroundClassifier(GroundClassifier):
         layout = _scan_grid_layout(cloud, self._cell_size)
         if layout.cell_count > self._max_grid_cells:
             minimum_cell_size = sqrt(
-                (layout.rows * self._cell_size)
-                * (layout.columns * self._cell_size)
-                / self._max_grid_cells
+                (layout.rows * self._cell_size) * (layout.columns * self._cell_size) / self._max_grid_cells
             )
             suggested = max(self._cell_size, minimum_cell_size)
             raise GroundError(
@@ -396,10 +377,7 @@ class PMFGroundClassifier(GroundClassifier):
             rows, columns = _cell_indices(x, y, layout, self._cell_size)
             count = int(x.size)
             residual = z - terrain[rows, columns]
-            mask[offset : offset + count] = (
-                ground_cells[rows, columns]
-                & (residual <= self._max_distance)
-            )
+            mask[offset : offset + count] = ground_cells[rows, columns] & (residual <= self._max_distance)
             offset += count
 
         return mask

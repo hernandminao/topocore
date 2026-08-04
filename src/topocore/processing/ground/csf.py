@@ -69,11 +69,7 @@ def _point_count(cloud: PointCloud) -> int:
         z = np.asarray(chunk[PointAttribute.Z])
         if x.size != y.size or x.size != z.size:
             raise GroundError("Point cloud coordinate attributes must have equal lengths.")
-        if x.size and not (
-            np.isfinite(x).all()
-            and np.isfinite(y).all()
-            and np.isfinite(z).all()
-        ):
+        if x.size and not (np.isfinite(x).all() and np.isfinite(y).all() and np.isfinite(z).all()):
             raise GroundError("Point cloud coordinates must contain only finite values.")
         count += int(x.size)
 
@@ -156,22 +152,12 @@ class CSFGroundClassifier(GroundClassifier):
         _validate_positive("time_step", time_step)
         _validate_non_negative("class_threshold", class_threshold)
 
-        if (
-            isinstance(rigidness, bool)
-            or not isinstance(rigidness, (int, np.integer))
-            or rigidness not in (1, 2, 3)
-        ):
+        if isinstance(rigidness, bool) or not isinstance(rigidness, (int, np.integer)) or rigidness not in (1, 2, 3):
             raise GroundError(f"rigidness must be one of 1, 2 or 3, got {rigidness}.")
-        if (
-            isinstance(iterations, bool)
-            or not isinstance(iterations, (int, np.integer))
-            or iterations < 1
-        ):
+        if isinstance(iterations, bool) or not isinstance(iterations, (int, np.integer)) or iterations < 1:
             raise GroundError(f"iterations must be an integer >= 1, got {iterations}.")
         if not isinstance(slope_smooth, bool):
-            raise GroundError(
-                f"slope_smooth must be a bool, got {type(slope_smooth).__name__}."
-            )
+            raise GroundError(f"slope_smooth must be a bool, got {type(slope_smooth).__name__}.")
 
         self._cloth_resolution = float(cloth_resolution)
         self._rigidness = int(rigidness)
@@ -208,10 +194,7 @@ class CSFGroundClassifier(GroundClassifier):
             dtype=np.intp,
             count=len(ground),
         )
-        if ground_indices.size and (
-            int(ground_indices.min()) < 0
-            or int(ground_indices.max()) >= xyz.shape[0]
-        ):
+        if ground_indices.size and (int(ground_indices.min()) < 0 or int(ground_indices.max()) >= xyz.shape[0]):
             raise GroundError("CSF returned an out-of-range ground point index.")
 
         mask = np.zeros(xyz.shape[0], dtype=np.bool_)

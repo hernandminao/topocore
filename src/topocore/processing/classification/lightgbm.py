@@ -21,6 +21,7 @@ MIT
 
 from __future__ import annotations
 
+import importlib
 from typing import Any, override
 
 from topocore.pointcloud.classification import PointClassification
@@ -28,14 +29,13 @@ from topocore.processing.exceptions import ClassificationError
 
 from .ml import MachineLearningClassifier
 
-_lgb: Any
+# Se declara como Any para permitir asignarle None sin error [assignment]
+_lgb: Any = None
 
 try:
-    import lightgbm as _lgb
-
+    _lgb = importlib.import_module("lightgbm")
     _LIGHTGBM_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised only without lightgbm installed
-    _lgb = None
     _LIGHTGBM_AVAILABLE = False
 
 _NOT_INSTALLED_ERROR = (

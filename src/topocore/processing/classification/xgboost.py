@@ -28,6 +28,7 @@ MIT
 
 from __future__ import annotations
 
+import importlib
 from typing import Any, override
 
 from topocore.pointcloud.classification import PointClassification
@@ -35,14 +36,13 @@ from topocore.processing.exceptions import ClassificationError
 
 from .ml import MachineLearningClassifier
 
-_xgb: Any
+# Se declara como Any para permitir asignarle None sin error [assignment]
+_xgb: Any = None
 
 try:
-    import xgboost as _xgb
-
+    _xgb = importlib.import_module("xgboost")
     _XGBOOST_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised only without xgboost installed
-    _xgb = None
     _XGBOOST_AVAILABLE = False
 
 _NOT_INSTALLED_ERROR = (

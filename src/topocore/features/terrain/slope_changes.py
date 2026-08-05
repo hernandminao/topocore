@@ -1,27 +1,12 @@
 """
-topocore.features.terrain.breaklines
-======================================
+topocore.features.terrain.slope_changes
+=========================================
 
-Breakline detection from a TIN.
-
-Breakline detection from a TIN via dihedral-angle edge analysis.
-See `features/terrain/_mesh_utils.py` for the shared adjacency/
-chaining primitives this builds on.
-
-A breakline is a linear terrain feature marking an abrupt change in
-slope (ridges, valleys, edges) — critical for accurate TIN/DTM
-generation and for CAD/GIS deliverables. This detector finds them by
-computing the dihedral angle between every pair of triangles sharing
-an interior edge: an edge whose two triangles fold sharply relative
-to each other is a break edge. Connected break edges are then
-chained into polylines.
-
-The edge->triangle adjacency is built directly from the TIN's own
-`vertex_array()` / `simplices`, rather than relying on
-`TIN.neighbors`/`neighbors_of()`. That keeps this detector
-independent of whichever Delaunay backend produced the TIN, works
-for any triangular mesh (not just Delaunay ones), and keeps it
-testable against small synthetic meshes.
+Slope-change detection from a TIN: edges between adjacent triangles
+whose slope magnitude (not full 3D dihedral angle) differs by more
+than a threshold. Complements `breaklines.py`, which reacts to any
+sharp fold regardless of whether it's a slope increase or a twist in
+aspect; this reacts specifically to slope magnitude discontinuities.
 
 Author
 ------
@@ -58,18 +43,19 @@ from topocore.features.terrain._mesh_utils import (
     chain_edges,
     interior_edges,
     triangle_normals,
+    triangle_slope_deg,
 )
 
 
-class BreaklineDetector(BaseFeatureDetector):
+class SlopeChangeDetector(BaseFeatureDetector):
     """
-    Detects breaklines (ridges/valleys/edges) from a TIN.
+    Detects slope-magnitude discontinuities from a TIN.
 
     Parameters
     ----------
-    angle_threshold_deg
-        Minimum dihedral angle (degrees) between two adjacent
-        triangles' normals for their shared edge to be a break edge.
+    slope_delta_threshold_deg
+        Minimum difference in slope angle (degrees) between two
+        adjacent triangles for their shared edge to be flagged.
     min_length
         Minimum total chained-polyline length (meters) to report.
     """
@@ -78,19 +64,19 @@ class BreaklineDetector(BaseFeatureDetector):
     version = "1.0"
     required_inputs = frozenset({ContextField.TIN})
 
-    __slots__ = ("_angle_threshold_deg", "_min_length")
+    __slots__ = ("_slope_delta_threshold_deg", "_min_length")
 
-    def __init__(self, angle_threshold_deg: float = 25.0, min_length: float = 1.0) -> None:
-        if not 0.0 < angle_threshold_deg < 180.0:
-            raise DetectionError(f"angle_threshold_deg must be in (0, 180); got {angle_threshold_deg}.")
+    def __init__(self, slope_delta_threshold_deg: float = 10.0, min_length: float = 1.0) -> None:
+        if not 0.0 < slope_delta_threshold_deg < 90.0:
+            raise DetectionError(f"slope_delta_threshold_deg must be in (0, 90); got {slope_delta_threshold_deg}.")
         if min_length < 0.0:
             raise DetectionError(f"min_length must be non-negative; got {min_length}.")
-        self._angle_threshold_deg = float(angle_threshold_deg)
+        self._slope_delta_threshold_deg = float(slope_delta_threshold_deg)
         self._min_length = float(min_length)
 
     @override
     def name(self) -> str:
-        return "breaklines"
+        return "slope_changes"
 
     @override
     def _detect(self, context: DetectionContext) -> FeatureCollection:
@@ -98,7 +84,7 @@ class BreaklineDetector(BaseFeatureDetector):
         assert tin is not None
 
         if not isinstance(tin, TINMesh):
-            raise DetectionError("BreaklineDetector requires a TIN exposing `vertex_array()` and `.simplices`.")
+            raise DetectionError("SlopeChangeDetector requires a TIN exposing `vertex_array()` and `.simplices`.")
 
         vertices = np.asarray(tin.vertex_array(), dtype=np.float64)
         triangles = np.asarray(tin.simplices, dtype=np.int64)
@@ -106,8 +92,8 @@ class BreaklineDetector(BaseFeatureDetector):
         if triangles.shape[0] == 0:
             return FeatureCollection()
 
-        break_edges = self._detect_break_edges(vertices, triangles)
-        chains = chain_edges(break_edges)
+        change_edges = self._detect_change_edges(vertices, triangles)
+        chains = chain_edges(change_edges)
 
         result = FeatureCollection()
         for local_id, chain in enumerate(chains, start=1):
@@ -120,7 +106,7 @@ class BreaklineDetector(BaseFeatureDetector):
                 Feature(
                     feature_id=local_id,
                     category=self.category,
-                    feature_type=FeatureType.BREAKLINE,
+                    feature_type=FeatureType.SLOPE_CHANGE,
                     geometry=FeatureGeometry(
                         geometry_type=GeometryType.POLYLINE,
                         vertices=chain_vertices,
@@ -129,21 +115,21 @@ class BreaklineDetector(BaseFeatureDetector):
                     confidence=1.0,
                     metadata=self._metadata(
                         inputs_used=frozenset({ContextField.TIN}),
-                        angle_threshold_deg=self._angle_threshold_deg,
+                        slope_delta_threshold_deg=self._slope_delta_threshold_deg,
                         length=length,
                     ),
                 )
             )
         return result
 
-    def _detect_break_edges(
+    def _detect_change_edges(
         self,
         vertices: NDArray[np.float64],
         triangles: NDArray[np.int64],
     ) -> list[tuple[int, int]]:
         """
-        Detect interior edges whose adjacent triangles form a dihedral
-        angle greater than or equal to the configured threshold.
+        Detect interior edges whose adjacent triangles exhibit a slope
+        change greater than or equal to the configured threshold.
 
         Parameters
         ----------
@@ -156,8 +142,8 @@ class BreaklineDetector(BaseFeatureDetector):
         Returns
         -------
         list[tuple[int, int]]
-            Undirected vertex-index pairs representing detected
-            break edges.
+            Undirected vertex-index pairs representing slope-change
+            edges.
         """
         if triangles.size == 0:
             return []
@@ -172,6 +158,8 @@ class BreaklineDetector(BaseFeatureDetector):
             raise DetectionError("TIN triangle references missing vertex.")
 
         normals = triangle_normals(vertices, triangles)
+        slopes = triangle_slope_deg(normals)
+
         edge_map = build_edge_adjacency(triangles)
         edges_with_tris = interior_edges(edge_map)
 
@@ -179,26 +167,19 @@ class BreaklineDetector(BaseFeatureDetector):
             return []
 
         edges = [edge for edge, _ in edges_with_tris]
+
         tri_pairs = np.asarray(
             [pair for _, pair in edges_with_tris],
             dtype=np.int64,
         )
 
-        n1 = normals[tri_pairs[:, 0]]
-        n2 = normals[tri_pairs[:, 1]]
+        slope_delta = np.abs(slopes[tri_pairs[:, 0]] - slopes[tri_pairs[:, 1]])
 
-        cos_angle = np.clip(
-            np.einsum("ed,ed->e", n1, n2),
-            -1.0,
-            1.0,
-        )
+        keep = slope_delta >= self._slope_delta_threshold_deg
 
-        angles_deg = np.degrees(np.arccos(cos_angle))
-        keep = angles_deg >= self._angle_threshold_deg
-
-        return [edge for edge, is_break in zip(edges, keep.tolist(), strict=True) if is_break]
+        return [edge for edge, is_change in zip(edges, keep.tolist(), strict=True) if is_change]
 
 
-DetectorRegistry.register(BreaklineDetector)
+DetectorRegistry.register(SlopeChangeDetector)
 
-__all__ = ["BreaklineDetector"]
+__all__ = ["SlopeChangeDetector"]

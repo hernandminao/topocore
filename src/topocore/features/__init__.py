@@ -1,26 +1,23 @@
 """
 topocore.features
-==================
+====================
 
-Field-to-finish geometry construction: turns coded survey points into
-CAD/GIS-ready features (lines, polygons, symbols).
+Automatic geospatial feature extraction from point clouds, TINs,
+and DTMs — the bridge between raw processed point clouds and
+CAD/GIS deliverables.
 
-Implemented so far
--------------------
+Every detector returns a `FeatureCollection` (see `models.py`),
+providing a common representation for downstream consumers such as
+the DXF and GeoPackage exporters planned for PR16 and PR17.
 
-* ``feature_codes``   -- the code -> geometry-type dictionary
-* ``feature_builder`` -- groups survey points by code into geometry
+`FeatureGeometry` provides the geometric representation required by
+those exporters, while `Feature.attributes` and `FeatureMetadata`
+carry semantic attributes and detector provenance.
 
-Planned, not yet implemented
-------------------------------
-
-* ``line_builder`` / ``polygon_builder`` -- geometry refinement
-  (curve fitting, offset lines, closing tolerances)
-* ``symbol_builder``  -- CAD block/symbol placement
-* ``cad_layers`` / ``gis_layers`` -- layer/table mapping for DXF
-  (PR16) and GeoPackage (PR17) export
-* ``feature_classifier`` -- automatic classification for uncoded /
-  LiDAR-derived points, complementing this code-driven path
+Importing this package registers every built-in detector with
+`DetectorRegistry` — `FeatureExtractionManager.available_detectors`
+is populated as a side effect of importing the detector
+subpackages below.
 
 Author
 ------
@@ -33,24 +30,45 @@ MIT
 
 from __future__ import annotations
 
-from .catalogs import ALL_CODES
-from .feature_builder import FeatureBuilder
-from .feature_builder import FeatureSet
-from .feature_builder import LineFeature
-from .feature_builder import PointFeature
-from .feature_builder import build_features
-from .feature_codes import FeatureCodeDefinition
-from .feature_codes import FeatureCodeRegistry
-from .feature_codes import FeatureGeometryType
+from . import buildings, drainage, infrastructure, terrain, utilities, vegetation
+from .base import BaseFeatureDetector
+from .detector import DetectorRegistry
+from .exceptions import DetectionError, FeatureError, GeometryError
+from .manager import FeatureExtractionManager
+from .models import (
+    ContextField,
+    Feature,
+    FeatureCategory,
+    FeatureCollection,
+    FeatureGeometry,
+    FeatureMetadata,
+    FeatureType,
+    GeometryType,
+)
+from .protocols import DetectionContext, FeatureDetectorProtocol
 
 __all__ = [
-    "FeatureGeometryType",
-    "FeatureCodeDefinition",
-    "FeatureCodeRegistry",
-    "ALL_CODES",
-    "PointFeature",
-    "LineFeature",
-    "FeatureSet",
-    "FeatureBuilder",
-    "build_features",
+    "FeatureExtractionManager",
+    "DetectionContext",
+    "FeatureDetectorProtocol",
+    "BaseFeatureDetector",
+    "DetectorRegistry",
+    "Feature",
+    "FeatureCollection",
+    "FeatureGeometry",
+    "FeatureMetadata",
+    "FeatureType",
+    "FeatureCategory",
+    "GeometryType",
+    "ContextField",
+    "FeatureError",
+    "GeometryError",
+    "DetectionError",
+    # Subpackages imported for detector-registration side effects.
+    "terrain",
+    "buildings",
+    "infrastructure",
+    "drainage",
+    "vegetation",
+    "utilities",
 ]

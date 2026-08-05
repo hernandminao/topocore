@@ -38,11 +38,14 @@ class GeometryType(StrEnum):
     """
     Supported feature geometry primitives.
 
-    Named to map directly onto the eventual DXF/GeoPackage export
-    targets: POINT -> DXF POINT / GPKG Point, POLYLINE -> DXF
-    (LW)POLYLINE / GPKG LineString, POLYGON -> GPKG Polygon (closed
-    POLYLINE in DXF), MESH -> DXF 3DFACE/MESH (no direct GPKG
-    equivalent; meshes are exported as a set of triangles).
+    Loosely maps onto eventual DXF/GeoPackage export targets (POINT,
+    POLYLINE, POLYGON, MESH each have an obvious CAD/GIS analog),
+    but the exact target entity/geometry type per case — e.g.
+    whether a POLYGON becomes a closed DXF POLYLINE or an
+    LWPOLYLINE, or how MESH triangles get grouped into DXF 3DFACE
+    vs. MESH entities — is a PR16 export-layer decision, not fixed
+    here. This enum only commits to the four geometric primitives
+    `features` itself needs to represent detected entities.
     """
 
     POINT = "point"

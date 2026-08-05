@@ -143,6 +143,39 @@ class TIN:
         """
         return self._result.simplices.copy()
 
+    def vertex_array(
+        self,
+    ) -> NDArray[np.float64]:
+        """
+        Vertex coordinates as an ``(n, 3)`` array.
+
+        Complements ``vertices`` (a tuple of ``Point3D``, convenient
+        for per-point access and for ``ContourGenerator``, which
+        indexes individual vertices by triangle) with the bulk NumPy
+        form that vectorized consumers need — currently
+        ``features.terrain._mesh_utils.TINMesh``, which
+        `BreaklineDetector`/`SlopeChangeDetector`/`EmbankmentDetector`
+        rely on to build edge adjacency without a Python-level loop
+        over `Point3D` attribute access.
+
+        Returns
+        -------
+        ndarray
+            XYZ coordinates for every vertex, in vertex-index order
+            (row ``i`` corresponds to ``self.vertices[i]``).
+        """
+        return np.asarray(
+            [
+                (
+                    point.x,
+                    point.y,
+                    point.z,
+                )
+                for point in self.vertices
+            ],
+            dtype=np.float64,
+        )
+
     @property
     def neighbors(
         self,
@@ -499,29 +532,6 @@ class TIN:
         Return a string representation of the TIN.
         """
         return f"TIN(vertices={self.vertex_count}, triangles={self.triangle_count}, edges={self.edge_count})"
-
-    def vertex_array(
-        self,
-    ) -> NDArray[np.float64]:
-        """
-        Return all vertices as an array.
-
-        Returns
-        -------
-        ndarray
-            Array of shape (n, 3).
-        """
-        return np.asarray(
-            [
-                (
-                    point.x,
-                    point.y,
-                    point.z,
-                )
-                for point in self.vertices
-            ],
-            dtype=np.float64,
-        )
 
     def xy_array(
         self,

@@ -4,12 +4,6 @@ topocore.features.models
 
 Core data models for extracted geospatial features.
 
-Separates pure geometry (`FeatureGeometry`) from the semantic
-record (`Feature`) that wraps it with a type, category, confidence,
-provenance metadata, and free-form attributes. `FeatureCollection`
-is the aggregate result type that detectors and the manager return,
-and that PR16 (DXF) / PR17 (GeoPackage) will consume for export.
-
 Author
 ------
 Hernán Mina
@@ -35,19 +29,6 @@ from topocore.features.exceptions import GeometryError
 
 
 class GeometryType(StrEnum):
-    """
-    Supported feature geometry primitives.
-
-    Loosely maps onto eventual DXF/GeoPackage export targets (POINT,
-    POLYLINE, POLYGON, MESH each have an obvious CAD/GIS analog),
-    but the exact target entity/geometry type per case — e.g.
-    whether a POLYGON becomes a closed DXF POLYLINE or an
-    LWPOLYLINE, or how MESH triangles get grouped into DXF 3DFACE
-    vs. MESH entities — is a PR16 export-layer decision, not fixed
-    here. This enum only commits to the four geometric primitives
-    `features` itself needs to represent detected entities.
-    """
-
     POINT = "point"
     POLYLINE = "polyline"
     POLYGON = "polygon"
@@ -55,7 +36,7 @@ class GeometryType(StrEnum):
 
 
 class FeatureCategory(StrEnum):
-    """Top-level grouping, one per `features/` subpackage."""
+    """Top-level semantic domain of a feature."""
 
     TERRAIN = "terrain"
     BUILDING = "building"
@@ -63,65 +44,121 @@ class FeatureCategory(StrEnum):
     DRAINAGE = "drainage"
     VEGETATION = "vegetation"
     UTILITY = "utility"
+    CADASTRE = "cadastre"
+    CONTROL = "control"
 
 
 class FeatureType(StrEnum):
     """
-    Specific entity types, grouped by category in comments.
-
-    Single source of truth for "what TopoCore can detect" — new
-    detectors add a member here rather than inventing ad hoc string
-    literals.
+    Every semantic feature type TopoCore can represent -- produced
+    either by automatic PR15 detection (LiDAR/TIN) or by field
+    survey code interpretation (total station/GNSS via
+    ``topocore.features.feature_codes``). Single source of truth for
+    "what TopoCore can represent", not "what a detector can find".
     """
 
-    # terrain
+    # --- terrain (PR15 detectors) ---
     BREAKLINE = "breakline"
     CONTOUR = "contour"
-    EMBANKMENT = "embankment"
     SLOPE_CHANGE = "slope_change"
-    # building
+    EMBANKMENT = "embankment"
+    EMBANKMENT_CREST = "embankment_crest"
+    EMBANKMENT_TOE = "embankment_toe"
+
+    # --- building ---
     BUILDING = "building"
     WALL = "wall"
     RETAINING_WALL = "retaining_wall"
     ROOF = "roof"
-    # infrastructure
+    ROOF_EDGE = "roof_edge"
+    FENCE = "fence"
+    GATE = "gate"
+    HARDSCAPE = "hardscape"
+    POOL = "pool"
+    TANK = "tank"
+    STRUCTURAL_ELEMENT = "structural_element"
+    STAIR = "stair"
+    RAMP = "ramp"
+    OPENING = "opening"
+
+    # --- infrastructure ---
     ROAD = "road"
     CURB = "curb"
     PARKING = "parking"
     DRIVEWAY = "driveway"
-    # drainage
+    CENTERLINE = "centerline"
+    PAVEMENT_EDGE = "pavement_edge"
+    SIDEWALK = "sidewalk"
+    MEDIAN = "median"
+    SHOULDER = "shoulder"
+    GUARDRAIL = "guardrail"
+    BRIDGE = "bridge"
+    TUNNEL = "tunnel"
+    TRAFFIC_ISLAND = "traffic_island"
+    ROUNDABOUT = "roundabout"
+
+    # --- drainage ---
     DRAINAGE = "drainage"
     CHANNEL = "channel"
     MANHOLE = "manhole"
     INSPECTION_CHAMBER = "inspection_chamber"
-    # vegetation
+    WATERCOURSE = "watercourse"
+    WATERBODY = "waterbody"
+    SEWER_LINE = "sewer_line"
+    STORM_DRAIN_INLET = "storm_drain_inlet"
+    SPILLWAY = "spillway"
+    DIKE = "dike"
+    DAM = "dam"
+
+    # --- vegetation ---
     TREE = "tree"
     SHRUB = "shrub"
     GRASS = "grass"
-    # utility
+    FOREST = "forest"
+    CROP = "crop"
+    VEGETATION_LINE = "vegetation_line"
+    TREE_TRUNK = "tree_trunk"
+    TREE_STUMP = "tree_stump"
+    TREE_ROOT = "tree_root"
+
+    # --- utility ---
     POLE = "pole"
     SIGN = "sign"
     LIGHT_POLE = "light_pole"
+    TRANSMISSION_TOWER = "transmission_tower"
+    TRANSFORMER = "transformer"
+    SUBSTATION = "substation"
+    POWER_LINE = "power_line"
+    TELECOM_LINE = "telecom_line"
+    ANTENNA = "antenna"
+    WATER_LINE = "water_line"
+    VALVE = "valve"
+    HYDRANT = "hydrant"
+    WATER_METER = "water_meter"
+    GAS_LINE = "gas_line"
+    GAS_REGULATOR = "gas_regulator"
+    UTILITY_LINE = "utility_line"
+    UTILITY_BOX = "utility_box"
+    UTILITY_CHAMBER = "utility_chamber"
+
+    # --- cadastre ---
+    PARCEL = "parcel"
+    BLOCK = "block"
+    ZONE = "zone"
+    RIGHT_OF_WAY = "right_of_way"
+    BOUNDARY = "boundary"
+    EASEMENT = "easement"
+    SETBACK = "setback"
+    BOUNDARY_MONUMENT = "boundary_monument"
+    ADMINISTRATIVE_BOUNDARY = "administrative_boundary"
+    REFERENCE_POINT = "reference_point"
+
+    # --- control ---
+    CONTROL_POINT = "control_point"
+    ALIGNMENT_PI = "alignment_pi"
 
 
 class ContextField(StrEnum):
-    """
-    Every field `DetectionContext` (see `protocols.py`) can carry.
-
-    Detectors declare `required_inputs` using these members instead
-    of raw strings, so a typo like `"pointcloud"` vs `"point_cloud"`
-    is caught by mypy/IDE autocomplete instead of surfacing as a
-    silently-always-missing input at runtime.
-
-    Member *values* match the corresponding `DetectionContext`
-    attribute name exactly, since `BaseFeatureDetector.detect()`
-    resolves required inputs via ``getattr(context, field.value)``.
-    Member *names* are the readable, autocomplete-friendly form —
-    e.g. ``ContextField.POINT_CLOUD.value == "cloud"``, matching the
-    short attribute name already used elsewhere in TopoCore (e.g.
-    ``MachineLearningClassifier.fit(self, cloud, ...)``).
-    """
-
     POINT_CLOUD = "cloud"
     CLASSIFICATION = "classification"
     NORMALS = "normals"
@@ -131,35 +168,118 @@ class ContextField(StrEnum):
     SLOPE = "slope"
 
 
-# Which geometry primitives are valid for each feature type. A
-# frozenset (rather than a single GeometryType) leaves room for
-# feature types that can legitimately be represented more than one
-# way — e.g. a TREE as a trunk POINT or a canopy POLYGON, depending
-# on what the source data supports.
 _EXPECTED_GEOMETRY: dict[FeatureType, frozenset[GeometryType]] = {
+    # --- terrain ---
     FeatureType.BREAKLINE: frozenset({GeometryType.POLYLINE}),
     FeatureType.CONTOUR: frozenset({GeometryType.POLYLINE}),
-    FeatureType.EMBANKMENT: frozenset({GeometryType.POLYLINE}),
     FeatureType.SLOPE_CHANGE: frozenset({GeometryType.POLYLINE}),
+    FeatureType.EMBANKMENT: frozenset({GeometryType.POLYLINE}),
+    FeatureType.EMBANKMENT_CREST: frozenset({GeometryType.POLYLINE}),
+    FeatureType.EMBANKMENT_TOE: frozenset({GeometryType.POLYLINE}),
+    # --- building ---
     FeatureType.BUILDING: frozenset({GeometryType.POLYGON}),
-    FeatureType.WALL: frozenset({GeometryType.POLYLINE}),
-    FeatureType.RETAINING_WALL: frozenset({GeometryType.POLYLINE}),
-    FeatureType.ROOF: frozenset({GeometryType.MESH}),
+    # WALL/RETAINING_WALL accept both representations: PR15's
+    # WallDetector/RetainingWallDetector build a POLYGON footprint
+    # (convex_hull_polygon over a vertical-facade point cluster),
+    # while a field-surveyed MURO/MURCONT is a POLYLINE (its traced
+    # axis). Same physical object, two legitimate representations
+    # depending on the data source -- not two different concepts, so
+    # this is not split into WALL_LINE.
+    FeatureType.WALL: frozenset({GeometryType.POLYLINE, GeometryType.POLYGON}),
+    FeatureType.RETAINING_WALL: frozenset({GeometryType.POLYLINE, GeometryType.POLYGON}),
+    # CUBIERTA (field-surveyed roof footprint, POLYGON) is the same
+    # object as ROOF (PR15's triangulated MESH) with a different
+    # representation -- same precedent as WALL. ALERO (roof edge,
+    # LINE) is the *boundary* of the roof, not the roof itself --
+    # same precedent as ROAD/PAVEMENT_EDGE, so it gets its own type
+    # (ROOF_EDGE) rather than being folded in here.
+    FeatureType.ROOF: frozenset({GeometryType.MESH, GeometryType.POLYGON}),
+    FeatureType.ROOF_EDGE: frozenset({GeometryType.POLYLINE}),
+    FeatureType.FENCE: frozenset({GeometryType.POLYLINE}),
+    FeatureType.GATE: frozenset({GeometryType.POINT}),
+    FeatureType.HARDSCAPE: frozenset({GeometryType.POLYGON}),
+    FeatureType.POOL: frozenset({GeometryType.POLYGON}),
+    FeatureType.TANK: frozenset({GeometryType.POLYGON}),
+    FeatureType.STRUCTURAL_ELEMENT: frozenset({GeometryType.POINT}),
+    FeatureType.STAIR: frozenset({GeometryType.POLYLINE}),
+    FeatureType.RAMP: frozenset({GeometryType.POLYLINE}),
+    FeatureType.OPENING: frozenset({GeometryType.POINT}),
+    # --- infrastructure ---
     FeatureType.ROAD: frozenset({GeometryType.POLYGON}),
     FeatureType.CURB: frozenset({GeometryType.POLYLINE}),
     FeatureType.PARKING: frozenset({GeometryType.POLYGON}),
     FeatureType.DRIVEWAY: frozenset({GeometryType.POLYGON}),
+    FeatureType.CENTERLINE: frozenset({GeometryType.POLYLINE}),
+    FeatureType.PAVEMENT_EDGE: frozenset({GeometryType.POLYLINE}),
+    FeatureType.SIDEWALK: frozenset({GeometryType.POLYLINE}),
+    FeatureType.MEDIAN: frozenset({GeometryType.POLYLINE}),
+    FeatureType.SHOULDER: frozenset({GeometryType.POLYLINE}),
+    FeatureType.GUARDRAIL: frozenset({GeometryType.POLYLINE}),
+    FeatureType.BRIDGE: frozenset({GeometryType.POLYGON}),
+    FeatureType.TUNNEL: frozenset({GeometryType.POLYGON}),
+    FeatureType.TRAFFIC_ISLAND: frozenset({GeometryType.POLYGON}),
+    FeatureType.ROUNDABOUT: frozenset({GeometryType.POLYGON}),
+    # --- drainage ---
     FeatureType.DRAINAGE: frozenset({GeometryType.POLYLINE}),
     FeatureType.CHANNEL: frozenset({GeometryType.POLYLINE}),
     FeatureType.MANHOLE: frozenset({GeometryType.POINT}),
     FeatureType.INSPECTION_CHAMBER: frozenset({GeometryType.POINT}),
+    FeatureType.WATERCOURSE: frozenset({GeometryType.POLYLINE}),
+    FeatureType.WATERBODY: frozenset({GeometryType.POLYGON}),
+    FeatureType.SEWER_LINE: frozenset({GeometryType.POLYLINE}),
+    FeatureType.STORM_DRAIN_INLET: frozenset({GeometryType.POINT}),
+    FeatureType.SPILLWAY: frozenset({GeometryType.POLYLINE}),
+    FeatureType.DIKE: frozenset({GeometryType.POLYLINE}),
+    FeatureType.DAM: frozenset({GeometryType.POLYLINE}),
+    # --- vegetation ---
     FeatureType.TREE: frozenset({GeometryType.POINT, GeometryType.POLYGON}),
     FeatureType.SHRUB: frozenset({GeometryType.POINT, GeometryType.POLYGON}),
     FeatureType.GRASS: frozenset({GeometryType.POLYGON}),
+    FeatureType.FOREST: frozenset({GeometryType.POLYGON}),
+    FeatureType.CROP: frozenset({GeometryType.POLYGON}),
+    FeatureType.VEGETATION_LINE: frozenset({GeometryType.POLYLINE}),
+    # Added when TRONCO/TOCON/RAIZ were migrated out of vegetation.py's
+    # deferred set -- ROCAARBOL remains deferred, its semantics unclear
+    # from the catalog definition alone ("Tree on Rock" -- marks the
+    # rock, the tree, or a composite feature? undetermined).
+    FeatureType.TREE_TRUNK: frozenset({GeometryType.POINT}),
+    FeatureType.TREE_STUMP: frozenset({GeometryType.POINT}),
+    FeatureType.TREE_ROOT: frozenset({GeometryType.POINT}),
+    # --- utility ---
     FeatureType.POLE: frozenset({GeometryType.POINT}),
     FeatureType.SIGN: frozenset({GeometryType.POINT}),
     FeatureType.LIGHT_POLE: frozenset({GeometryType.POINT}),
+    FeatureType.TRANSMISSION_TOWER: frozenset({GeometryType.POINT}),
+    FeatureType.TRANSFORMER: frozenset({GeometryType.POINT}),
+    FeatureType.SUBSTATION: frozenset({GeometryType.POLYGON}),
+    FeatureType.POWER_LINE: frozenset({GeometryType.POLYLINE}),
+    FeatureType.TELECOM_LINE: frozenset({GeometryType.POLYLINE}),
+    FeatureType.ANTENNA: frozenset({GeometryType.POINT}),
+    FeatureType.WATER_LINE: frozenset({GeometryType.POLYLINE}),
+    FeatureType.VALVE: frozenset({GeometryType.POINT}),
+    FeatureType.HYDRANT: frozenset({GeometryType.POINT}),
+    FeatureType.WATER_METER: frozenset({GeometryType.POINT}),
+    FeatureType.GAS_LINE: frozenset({GeometryType.POLYLINE}),
+    FeatureType.GAS_REGULATOR: frozenset({GeometryType.POINT}),
+    FeatureType.UTILITY_LINE: frozenset({GeometryType.POLYLINE}),
+    FeatureType.UTILITY_BOX: frozenset({GeometryType.POINT}),
+    FeatureType.UTILITY_CHAMBER: frozenset({GeometryType.POINT}),
+    # --- cadastre ---
+    FeatureType.PARCEL: frozenset({GeometryType.POLYGON}),
+    FeatureType.BLOCK: frozenset({GeometryType.POLYGON}),
+    FeatureType.ZONE: frozenset({GeometryType.POLYGON}),
+    FeatureType.RIGHT_OF_WAY: frozenset({GeometryType.POLYGON}),
+    FeatureType.BOUNDARY: frozenset({GeometryType.POLYLINE}),
+    FeatureType.EASEMENT: frozenset({GeometryType.POLYLINE}),
+    FeatureType.SETBACK: frozenset({GeometryType.POLYLINE}),
+    FeatureType.BOUNDARY_MONUMENT: frozenset({GeometryType.POINT}),
+    FeatureType.ADMINISTRATIVE_BOUNDARY: frozenset({GeometryType.POLYGON}),
+    FeatureType.REFERENCE_POINT: frozenset({GeometryType.POINT}),
+    # --- control ---
+    FeatureType.CONTROL_POINT: frozenset({GeometryType.POINT}),
+    FeatureType.ALIGNMENT_PI: frozenset({GeometryType.POINT}),
 }
+
 
 _MIN_VERTICES: dict[GeometryType, int] = {
     GeometryType.POINT: 1,
@@ -171,33 +291,6 @@ _MIN_VERTICES: dict[GeometryType, int] = {
 
 @dataclass(frozen=True, slots=True)
 class FeatureGeometry:
-    """
-    Immutable geometric representation of a feature.
-
-    Parameters
-    ----------
-    geometry_type
-        The geometric primitive this represents.
-    vertices
-        Vertex coordinates as an ``(n, 3)`` array, always XYZ (use
-        0.0 for Z on purely 2D features rather than a separate 2D
-        code path, so downstream export always sees a consistent
-        shape).
-    closed
-        Whether a POLYGON/POLYLINE's last vertex implicitly connects
-        back to the first. Ignored for POINT/MESH.
-    faces
-        For MESH only: ``(m, 3)`` array of vertex-index triplets
-        defining triangles. ``None`` for all other geometry types.
-
-    Raises
-    ------
-    GeometryError
-        If the vertex array shape is invalid, contains non-finite
-        coordinates, or has fewer vertices than the geometry type
-        requires.
-    """
-
     geometry_type: GeometryType
     vertices: NDArray[np.float64]
     closed: bool = False
@@ -232,7 +325,6 @@ class FeatureGeometry:
 
     @property
     def bounds(self) -> tuple[float, float, float, float, float, float]:
-        """``(min_x, min_y, min_z, max_x, max_y, max_z)``."""
         mins = self.vertices.min(axis=0)
         maxs = self.vertices.max(axis=0)
         return (
@@ -247,32 +339,6 @@ class FeatureGeometry:
 
 @dataclass(frozen=True, slots=True)
 class FeatureMetadata:
-    """
-    Provenance for a detected feature — QA, auditing (PR19), and
-    comparing detector algorithms/versions.
-
-    Kept separate from `Feature.confidence`, which stays a
-    first-class field on `Feature` itself; `metadata` is for
-    information about *how* the feature was produced, not the
-    detection score itself.
-
-    Parameters
-    ----------
-    detector
-        ``name()`` of the detector that produced this feature.
-    version
-        Detector algorithm version string, for reproducibility when
-        comparing runs across TopoCore releases.
-    inputs_used
-        Which `ContextField`s the detector actually consumed to
-        produce this specific feature (may be a subset of the
-        detector's `required_inputs`, if some were only used for
-        validation rather than the algorithm itself).
-    extra
-        Any additional detector-specific provenance not covered by
-        the fields above.
-    """
-
     detector: str
     version: str = "1.0"
     inputs_used: frozenset[ContextField] = field(default_factory=frozenset)
@@ -285,56 +351,6 @@ class FeatureMetadata:
 
 @dataclass(frozen=True, slots=True)
 class Feature:
-    """
-    A single detected geospatial feature.
-
-    Parameters
-    ----------
-    feature_id
-        Identifier within a `FeatureCollection`. May be ``None`` or
-        a detector-local (possibly colliding-with-other-detectors)
-        value while a detector is building its own
-        `FeatureCollection`; `FeatureExtractionManager` always calls
-        `FeatureCollection.normalize_ids()` before returning, which
-        overwrites this with a contiguous, collision-free ``1..N``
-        range. Only features obtained by calling a detector directly
-        (bypassing the manager) may retain a non-normalized value.
-    category
-        Top-level grouping (matches the `features/` subpackage that
-        produced it).
-    feature_type
-        Specific entity type.
-    geometry
-        The feature's shape.
-    confidence
-        Detector confidence in ``[0, 1]``. Rule-based detectors that
-        don't naturally produce a probability should report ``1.0``.
-    metadata
-        Provenance information (which detector/version/inputs
-        produced this feature). ``None`` is allowed for lightweight
-        or test-constructed features, but detectors are expected to
-        always populate it — see `BaseFeatureDetector._metadata()`.
-    attributes
-        Free-form semantic attributes (e.g. ``{"diameter_m": 0.4}``
-        for a manhole, ``{"height_m": 12.3}`` for a building). Kept
-        as a generic mapping rather than per-type dataclasses so new
-        attributes don't require a schema migration; detector
-        modules are expected to document the attribute keys they
-        populate.
-    source_point_indices
-        Indices into the source point cloud that contributed to this
-        feature, for traceability and later refinement. ``None`` if
-        the feature was derived from terrain geometry (TIN/DTM)
-        rather than directly from points.
-
-    Raises
-    ------
-    GeometryError
-        If ``geometry.geometry_type`` isn't one of the primitives
-        allowed for ``feature_type`` (see `_EXPECTED_GEOMETRY`), or
-        if ``confidence`` is outside ``[0, 1]``.
-    """
-
     feature_id: int | None
     category: FeatureCategory
     feature_type: FeatureType
@@ -362,15 +378,6 @@ class Feature:
 
 @dataclass(slots=True)
 class FeatureCollection:
-    """
-    Aggregate result of one or more detectors.
-
-    Parameters
-    ----------
-    features
-        All detected features, in no particular order.
-    """
-
     features: list[Feature] = field(default_factory=list)
 
     def __len__(self) -> int:
@@ -395,25 +402,12 @@ class FeatureCollection:
         return np.array([f.confidence for f in self.features], dtype=np.float64)
 
     def normalize_ids(self) -> None:
-        """
-        Reassign ``feature_id`` for every feature to a contiguous
-        ``1..N`` range, in the collection's current order.
-
-        Since `Feature` is frozen, this replaces each entry with
-        ``dataclasses.replace(feature, feature_id=...)`` rather than
-        mutating in place. Called automatically by
-        `FeatureExtractionManager` after detection, so any detector
-        -local IDs (which may collide across detectors) are only
-        meaningful before this runs.
-        """
         self.features = [replace(f, feature_id=i) for i, f in enumerate(self.features, start=1)]
 
     @property
     def bounds(self) -> tuple[float, float, float, float, float, float] | None:
-        """Combined XYZ bounds of every feature, or ``None`` if empty."""
         if not self.features:
             return None
-
         all_bounds = np.array([f.geometry.bounds for f in self.features])
         mins = all_bounds[:, :3].min(axis=0)
         maxs = all_bounds[:, 3:].max(axis=0)
@@ -428,12 +422,12 @@ class FeatureCollection:
 
 
 __all__ = [
-    "GeometryType",
-    "FeatureCategory",
-    "FeatureType",
     "ContextField",
+    "Feature",
+    "FeatureCategory",
+    "FeatureCollection",
     "FeatureGeometry",
     "FeatureMetadata",
-    "Feature",
-    "FeatureCollection",
+    "FeatureType",
+    "GeometryType",
 ]

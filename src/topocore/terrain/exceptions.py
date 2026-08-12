@@ -58,12 +58,21 @@ class TerrainValidationError(TerrainError):
     """
 
 
+class ConversionError(TerrainError):
+    """
+    Raised when adapting an external representation (e.g. PointCloud)
+    into a Terrain-native type fails. Added for `terrain.conversion`
+    -- not yet part of Hernán's real repo as of this dump.
+    """
+
+
 __all__ = [
-    "TerrainError",
-    "TriangulationError",
-    "InterpolationError",
-    "ContourError",
     "BreaklineError",
+    "ContourError",
+    "ConversionError",
     "GridError",
+    "InterpolationError",
+    "TerrainError",
     "TerrainValidationError",
+    "TriangulationError",
 ]

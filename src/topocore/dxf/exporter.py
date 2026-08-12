@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 
 from topocore.dxf._ezdxf_compat import is_available, require_ezdxf
@@ -22,7 +23,7 @@ _INSUNITS_ATTR: dict[DrawingUnits, str] = {
 
 
 class DXFExporter:
-    __slots__ = ("_context", "_validator", "_mapper")
+    __slots__ = ("_context", "_mapper", "_validator")
 
     def __init__(self, context: ExportContext | None = None) -> None:
         if not is_available():
@@ -42,7 +43,8 @@ class DXFExporter:
 
     def export(self, collection: FeatureCollection, path: str | Path) -> DXFExportReport:
         ezdxf = require_ezdxf()
-        ezdxf_units = ezdxf.units
+
+        ezdxf_units = importlib.import_module("ezdxf.units")
 
         options = self._context.options
         report = _ReportBuilder()
@@ -62,14 +64,6 @@ class DXFExporter:
             report.feature_count += 1
             report.features_by_type[feature.feature_type] += 1
 
-            # Validation always runs and always records its issues.
-            # `strict` only decides what happens next for ERROR-severity
-            # issues. This is inlined here (not delegated to
-            # DXFValidator.validate_or_raise) so the loop itself
-            # controls skip-counting in non-strict mode -- relying on
-            # an exception to signal "skip" silently failed to fire
-            # when validate() doesn't raise, which is exactly what a
-            # real pytest run caught before this was fixed.
             issues = self._validator.validate(feature)
             for issue in issues:
                 report.warnings.append(f"[{issue.code}] feature {issue.feature_id}: {issue.message}")
@@ -126,6 +120,24 @@ class DXFExporter:
                 layer.dxf.lineweight = style.lineweight
 
     def _resolve_layer(self, feature: Feature, index_contour_every: int) -> str:
+        """
+        Layer resolution precedence:
+
+        1. ``feature.attributes["cad_layer"]``, if present -- an
+           explicit layer the source of the feature already knows
+           (survey field codes via `FeatureCodeDefinition.layer`).
+           Never guessed from `FeatureType` when the data itself
+           already declares it.
+        2. Contour MAJOR/MINOR/neutral resolution, for
+           `FeatureType.CONTOUR` specifically (PR15-only; contours
+           never carry `cad_layer`).
+        3. `LAYER_BY_FEATURE_TYPE`, the PR15-detector fallback table --
+           only reached for features that declare neither.
+        """
+        cad_layer = feature.attributes.get("cad_layer")
+        if isinstance(cad_layer, str) and cad_layer:
+            return cad_layer
+
         if feature.feature_type == FeatureType.CONTOUR:
             extra = feature.metadata.extra if feature.metadata else {}
             return contour_layer_name(

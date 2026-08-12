@@ -24,6 +24,7 @@ MIT
 
 from __future__ import annotations
 
+import inspect
 from typing import Any, ClassVar
 
 import numpy as np
@@ -295,7 +296,7 @@ class GroundManager:
         """Estimate ground elevation for each point."""
         estimator_class = self._ELEVATION_ESTIMATORS.get(self._method)
         if estimator_class is not None:
-            estimator = estimator_class(**self._get_params(**kwargs))
+            estimator = estimator_class(**self._get_params(estimator_class, **kwargs))
             return estimator.estimate(cloud)
 
         mask = self.classify(cloud, **kwargs)
@@ -309,10 +310,26 @@ class GroundManager:
 
     def _get_classifier(self, **kwargs: Any) -> GroundClassifier:
         classifier_class = self._SUPPORTED_METHODS[self._method]
-        return classifier_class(**self._get_params(**kwargs))
+        return classifier_class(**self._get_params(classifier_class, **kwargs))
 
-    def _get_params(self, **kwargs: Any) -> dict[str, Any]:
-        """Return constructor parameters for the selected implementation."""
+    def _get_params(self, target_class: type, **kwargs: Any) -> dict[str, Any]:
+        """
+        Return constructor parameters for `target_class`, filtered to
+        only the names its own ``__init__`` actually accepts.
+
+        `_get_params` is shared by three different kinds of
+        consumers per method -- a classifier, an extractor, and
+        (for "grid") an elevation estimator -- and their
+        constructors don't all accept the same parameter set (e.g.
+        `GridGroundElevationEstimator` only takes `cell_size`, not
+        `height_threshold`). Building one parameter dict per method
+        and then filtering it against `target_class`'s real
+        signature means a narrower constructor is handled
+        automatically, for every method, without hand-maintaining
+        which key belongs to which (method, consumer) combination --
+        a list that would only grow more error-prone as more
+        methods/consumers are added.
+        """
         if self._method == "grid":
             parameters: dict[str, Any] = {
                 "cell_size": self._cell_size,
@@ -356,14 +373,16 @@ class GroundManager:
             }
 
         parameters.update(kwargs)
-        return parameters
+
+        accepted = set(inspect.signature(target_class).parameters)
+        return {key: value for key, value in parameters.items() if key in accepted}
 
     def _create_extractor(
         self,
         extractor_class: type[GroundExtractor],
         **kwargs: Any,
     ) -> GroundExtractor:
-        return extractor_class(**self._get_params(**kwargs))
+        return extractor_class(**self._get_params(extractor_class, **kwargs))
 
     def __call__(
         self,

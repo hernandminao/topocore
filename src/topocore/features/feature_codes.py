@@ -4,7 +4,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from enum import Enum
 
-from topocore.features.models import FeatureCategory, FeatureType
+from topocore.features.models import FeatureCategory, FeatureType, GeometryType
 
 
 class FeatureGeometryType(Enum):
@@ -13,6 +13,21 @@ class FeatureGeometryType(Enum):
     LINE = "line"
     POLYGON = "polygon"
     GROUND = "ground"
+
+
+CATALOG_TO_MODEL_GEOMETRY: dict[FeatureGeometryType, GeometryType] = {
+    FeatureGeometryType.POINT: GeometryType.POINT,
+    FeatureGeometryType.SYMBOL: GeometryType.POINT,
+    FeatureGeometryType.LINE: GeometryType.POLYLINE,
+    FeatureGeometryType.POLYGON: GeometryType.POLYGON,
+    # FeatureGeometryType.GROUND has no GeometryType equivalent --
+    # ground-classified points never become a Feature at all.
+}
+"""
+Single source of truth for the catalog-geometry -> model-geometry
+mapping, shared by ``catalogs._validation`` and ``feature_builder``
+-- previously duplicated as a private copy inside ``_validation.py``.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +98,31 @@ class FeatureCodeRegistry:
         registry.register_many(ALL_CODES)
         return registry
 
+    @classmethod
+    def from_json(cls, path: str) -> FeatureCodeRegistry:
+        """
+        Build a standalone registry from an external JSON catalog.
+        Use `register_many(load_json(path))` on an existing registry
+        instead to layer external codes on top of the built-in ones.
+        """
+        from topocore.features.catalogs.loaders.json_loader import load_json
+
+        return cls(load_json(path))
+
+    @classmethod
+    def from_csv(cls, path: str) -> FeatureCodeRegistry:
+        """Build a standalone registry from an external CSV catalog."""
+        from topocore.features.catalogs.loaders.csv_loader import load_csv
+
+        return cls(load_csv(path))
+
+    @classmethod
+    def from_yaml(cls, path: str) -> FeatureCodeRegistry:
+        """Build a standalone registry from an external YAML catalog. Requires `pyyaml`."""
+        from topocore.features.catalogs.loaders.yaml_loader import load_yaml
+
+        return cls(load_yaml(path))
+
     def register(self, definition: FeatureCodeDefinition, *, overwrite: bool = False) -> None:
         keys = [
             definition.code.upper(),
@@ -122,4 +162,9 @@ class FeatureCodeRegistry:
         return iter(self.definitions)
 
 
-__all__ = ["FeatureCodeDefinition", "FeatureCodeRegistry", "FeatureGeometryType"]
+__all__ = [
+    "CATALOG_TO_MODEL_GEOMETRY",
+    "FeatureCodeDefinition",
+    "FeatureCodeRegistry",
+    "FeatureGeometryType",
+]

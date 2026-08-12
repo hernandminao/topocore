@@ -28,6 +28,8 @@ MIT
 
 from __future__ import annotations
 
+import csv
+import io
 from pathlib import Path
 from typing import Final
 
@@ -57,6 +59,13 @@ _HEADER_ALIASES: Final[dict[str, tuple[str, ...]]] = {
     ),
 }
 
+#: A numbered raw line: (1-based physical line number in the source
+#: file, stripped text) -- kept separate from any per-data-row
+#: sequential fallback ID, since after removing comments/blank lines
+#: the two no longer coincide.
+_NumberedLine = tuple[int, str]
+_NumberedRow = tuple[int, list[str]]
+
 
 def _normalize(value: str) -> str:
     return value.strip().lower().replace(" ", "").replace("_", "").replace("-", "")
@@ -85,19 +94,36 @@ def _detect_delimiter(line: str) -> str | None:
 
 
 def _split(line: str, delimiter: str | None) -> list[str]:
+    """
+    Split one data line into fields.
+
+    For comma/semicolon/tab, uses `csv.reader` (quote-aware) rather
+    than a plain `str.split()`, so a quoted field containing the
+    delimiter itself (e.g. a description like
+    ``"CERCA, COSTADO NORTE"`` in a comma-delimited file) is not
+    incorrectly split into extra fields.
+    """
     if delimiter is None:
         return line.split()
 
-    return [field.strip() for field in line.split(delimiter)]
+    reader = csv.reader(io.StringIO(line), delimiter=delimiter)
+    fields = next(reader)
+    return [field.strip() for field in fields]
 
 
-def _read_data_lines(path: Path, encoding: str) -> list[str]:
+def _read_data_lines(path: Path, encoding: str) -> list[_NumberedLine]:
+    """
+    Read non-blank, non-comment lines, each tagged with its 1-based
+    physical line number in the source file (so error messages and
+    future diagnostics can point back to the real file, even after
+    comments/blank lines have been filtered out).
+    """
     with path.open("r", encoding=encoding) as stream:
         raw_lines = stream.readlines()
 
-    lines: list[str] = []
+    lines: list[_NumberedLine] = []
 
-    for raw_line in raw_lines:
+    for source_line, raw_line in enumerate(raw_lines, start=1):
         line = raw_line.strip()
 
         if not line:
@@ -106,7 +132,7 @@ def _read_data_lines(path: Path, encoding: str) -> list[str]:
         if line.startswith(_COMMENT_PREFIXES):
             continue
 
-        lines.append(line)
+        lines.append((source_line, line))
 
     return lines
 
@@ -129,18 +155,40 @@ def _layout_from_header(fields: list[str]) -> ColumnLayout | None:
 def _build_point(
     row: list[str],
     layout: ColumnLayout,
+    *,
+    source_line: int,
     fallback_id: int,
 ) -> SurveyPoint:
+    """
+    Parameters
+    ----------
+    source_line
+        1-based physical line number in the original file --
+        used only for error messages, so they point to a line the
+        user can actually go find.
+    fallback_id
+        1-based sequential position among data rows -- used only as
+        the generated `SurveyPoint.id` when the file has no ID
+        column (or the ID cell for this row is empty). Deliberately
+        NOT the same value as `source_line`: an auto-generated ID is
+        meant to just be a stable, unique label, not a claim about
+        which physical line produced it.
+    """
     try:
         x = float(row[layout.x_column])
         y = float(row[layout.y_column])
         z = float(row[layout.z_column])
     except (IndexError, ValueError) as exc:
-        raise SurveyRecordError(f"Invalid coordinate values in row {fallback_id}: {row}") from exc
+        raise SurveyRecordError(f"Invalid coordinate values at line {source_line} of the survey file: {row}") from exc
 
     point_id = str(fallback_id)
     if layout.id_column is not None and layout.id_column < len(row):
-        point_id = row[layout.id_column]
+        raw_id = row[layout.id_column].strip()
+        if raw_id:
+            point_id = raw_id
+        # else: ID column exists but this row's cell is empty --
+        # keep the sequential fallback rather than producing
+        # SurveyPoint(id="", ...).
 
     code = None
     if layout.code_column is not None and layout.code_column < len(row):
@@ -199,31 +247,36 @@ class SurveyTXTReader:
         SurveyRecordError
             If a data row has non-numeric or missing coordinates.
         """
-        lines = _read_data_lines(self._path, self._encoding)
+        numbered_lines = _read_data_lines(self._path, self._encoding)
 
-        if not lines:
+        if not numbered_lines:
             return SurveyPointSet(points=())
 
-        delimiter = self._delimiter or _detect_delimiter(lines[0])
-        rows = [_split(line, delimiter) for line in lines]
+        delimiter = self._delimiter or _detect_delimiter(numbered_lines[0][1])
+        numbered_rows: list[_NumberedRow] = [
+            (source_line, _split(text, delimiter)) for source_line, text in numbered_lines
+        ]
 
-        layout, data_rows = self._resolve_layout(rows)
+        layout, data_rows = self._resolve_layout(numbered_rows)
 
-        points = tuple(_build_point(row, layout, index + 1) for index, row in enumerate(data_rows))
+        points = tuple(
+            _build_point(row, layout, source_line=source_line, fallback_id=index + 1)
+            for index, (source_line, row) in enumerate(data_rows)
+        )
 
         return SurveyPointSet(points=points)
 
     def _resolve_layout(
         self,
-        rows: list[list[str]],
-    ) -> tuple[ColumnLayout, list[list[str]]]:
+        numbered_rows: list[_NumberedRow],
+    ) -> tuple[ColumnLayout, list[_NumberedRow]]:
         if self._format is not None:
-            return column_layout(self._format), rows
+            return column_layout(self._format), numbered_rows
 
-        layout = _layout_from_header(rows[0])
+        layout = _layout_from_header(numbered_rows[0][1])
 
         if layout is not None:
-            return layout, rows[1:]
+            return layout, numbered_rows[1:]
 
         raise SurveyFormatError(
             f"Could not detect a header in '{self._path.name}' and no "

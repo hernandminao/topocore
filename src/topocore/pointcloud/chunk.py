@@ -76,7 +76,7 @@ class Chunk:
         self._data: dict[
             PointAttribute,
             PointAttributeArray,
-        ]
+        ] = {}
 
         for attribute in unique_attributes:
             info = ATTRIBUTE_DEFINITIONS[attribute]

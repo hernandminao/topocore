@@ -23,17 +23,12 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from topocore.features.feature_codes import FeatureCodeDefinition, FeatureGeometryType
-from topocore.features.models import _EXPECTED_GEOMETRY, GeometryType
-
-_CATALOG_TO_MODEL_GEOMETRY: dict[FeatureGeometryType, GeometryType] = {
-    FeatureGeometryType.POINT: GeometryType.POINT,
-    FeatureGeometryType.SYMBOL: GeometryType.POINT,
-    FeatureGeometryType.LINE: GeometryType.POLYLINE,
-    FeatureGeometryType.POLYGON: GeometryType.POLYGON,
-    # FeatureGeometryType.GROUND has no GeometryType equivalent --
-    # ground-classified points never become a Feature at all.
-}
+from topocore.features.feature_codes import (
+    CATALOG_TO_MODEL_GEOMETRY,
+    FeatureCodeDefinition,
+    FeatureGeometryType,
+)
+from topocore.features.models import _EXPECTED_GEOMETRY
 
 
 class CatalogGeometryError(ValueError):
@@ -66,7 +61,7 @@ def validate_definition_geometry(definition: FeatureCodeDefinition) -> None:
             f"geometry_type={definition.geometry_type.value} produces a Feature."
         )
 
-    expected_model_geometry = _CATALOG_TO_MODEL_GEOMETRY[definition.geometry_type]
+    expected_model_geometry = CATALOG_TO_MODEL_GEOMETRY[definition.geometry_type]
     allowed = _EXPECTED_GEOMETRY.get(definition.feature_type)
 
     if allowed is None:

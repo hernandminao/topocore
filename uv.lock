@@ -1381,6 +1381,7 @@ full = [
     { name = "ezdxf" },
     { name = "joblib" },
     { name = "lightgbm" },
+    { name = "pyyaml" },
     { name = "scikit-learn" },
     { name = "xgboost" },
 ]
@@ -1397,6 +1398,9 @@ terrain = [
 xgboost = [
     { name = "xgboost" },
 ]
+yaml = [
+    { name = "pyyaml" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -1410,6 +1414,8 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
     { name = "scipy-stubs" },
+    { name = "types-pyyaml" },
+    { name = "types-shapely" },
 ]
 
 [package.metadata]
@@ -1425,6 +1431,8 @@ requires-dist = [
     { name = "lightgbm", marker = "extra == 'lightgbm'", specifier = ">=4.0" },
     { name = "numpy", specifier = ">=2.3.0" },
     { name = "pyproj", specifier = ">=3.7.0" },
+    { name = "pyyaml", marker = "extra == 'full'", specifier = ">=6.0" },
+    { name = "pyyaml", marker = "extra == 'yaml'", specifier = ">=6.0" },
     { name = "scikit-learn", marker = "extra == 'full'", specifier = ">=1.7.0" },
     { name = "scikit-learn", marker = "extra == 'ml'", specifier = ">=1.7.0" },
     { name = "scipy", specifier = ">=1.10,<2.0" },
@@ -1432,7 +1440,7 @@ requires-dist = [
     { name = "xgboost", marker = "extra == 'full'", specifier = ">=2.0" },
     { name = "xgboost", marker = "extra == 'xgboost'", specifier = ">=2.0" },
 ]
-provides-extras = ["terrain", "ml", "lightgbm", "xgboost", "dxf", "full"]
+provides-extras = ["terrain", "ml", "lightgbm", "xgboost", "dxf", "yaml", "full"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1446,6 +1454,29 @@ dev = [
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "ruff", specifier = ">=0.15.20" },
     { name = "scipy-stubs", specifier = ">=1.16.0" },
+    { name = "types-pyyaml" },
+    { name = "types-shapely" },
+]
+
+[[package]]
+name = "types-pyyaml"
+version = "6.0.12.20260724"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3f/6f/a28f44bcd56bebed42b028a2894c79853e2f5e6b5279e633cb3f287a05e7/types_pyyaml-6.0.12.20260724.tar.gz", hash = "sha256:3c1ce1bb73cd5ec02e90390c2b1f00e810d241d8825fd73ff359696839271b6b", size = 17893, upload-time = "2026-07-24T04:58:43.453Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8b/42/0337fefc615e20ee55d1c8f71b774a9b2b734a04669139c20753b27a2a3a/types_pyyaml-6.0.12.20260724-py3-none-any.whl", hash = "sha256:d57db930a4b2efbc57cf430ec8882765d246929432fa253092f383902329a453", size = 20312, upload-time = "2026-07-24T04:58:42.486Z" },
+]
+
+[[package]]
+name = "types-shapely"
+version = "2.1.0.20260728"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/be/cf/1ea740a3532b6e4cdeae8ba121618eb58a543eba2721016d358e4c0992e3/types_shapely-2.1.0.20260728.tar.gz", hash = "sha256:8ec23a5aa484c1ec7bbc56aa353cc230ae63e38e0f35a6e4b79a011d99bcfcc2", size = 27501, upload-time = "2026-07-28T04:51:41.724Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/79/8d/2e6c38118cc6b20075ccd1609840314aa8a694a255a09149b185d8a608e1/types_shapely-2.1.0.20260728-py3-none-any.whl", hash = "sha256:7299a62025528b3f0cc5af37095f05fbe7d76d399bdc8d7ea9b3d395e988f547", size = 38539, upload-time = "2026-07-28T04:51:40.638Z" },
 ]
 
 [[package]]

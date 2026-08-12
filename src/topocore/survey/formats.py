@@ -12,7 +12,15 @@ which of the first two columns is X and which is Y -- there is no
 way to tell them apart by inspecting the data. Naming the convention
 explicitly, instead of asking the caller to figure out
 ``x_column``/``y_column`` indices by hand, turns a silent,
-undetectable blunder into a one-time, explicit choice.
+undetectable blunder into a one-time, explicit choice. PNEZ/PNEZD
+exist for the same reason as PENZ/PENZD, just with Northing before
+Easting -- the other classic column order.
+
+XYZI/XYZRGB only ever populate x/y/z -- intensity and RGB columns
+are recognized (so files in these layouts parse instead of raising
+SurveyFormatError) but are not extracted anywhere; SurveyPoint has no
+slot for them. Longer term these two presets belong closer to
+topocore.io.ascii/PointCloud than to the Survey/Feature pipeline.
 
 Author
 ------
@@ -49,10 +57,16 @@ class SurveyFormat(Enum):
     #: Punto, Este, Norte, Z, Descripcion
     PENZD = "penzd"
 
-    #: X, Y, Z, Intensity (no code)
+    #: Punto, Norte, Este, Z (Northing before Easting)
+    PNEZ = "pnez"
+
+    #: Punto, Norte, Este, Z, Descripcion (Northing before Easting)
+    PNEZD = "pnezd"
+
+    #: X, Y, Z, Intensity -- intensity is recognized but discarded (see module docstring)
     XYZI = "xyzi"
 
-    #: X, Y, Z, R, G, B (no code)
+    #: X, Y, Z, R, G, B -- color is recognized but discarded (see module docstring)
     XYZRGB = "xyzrgb"
 
 
@@ -103,6 +117,19 @@ _LAYOUTS: dict[SurveyFormat, ColumnLayout] = {
         z_column=3,
         code_column=4,
     ),
+    SurveyFormat.PNEZ: ColumnLayout(
+        id_column=0,
+        x_column=2,
+        y_column=1,
+        z_column=3,
+    ),
+    SurveyFormat.PNEZD: ColumnLayout(
+        id_column=0,
+        x_column=2,
+        y_column=1,
+        z_column=3,
+        code_column=4,
+    ),
     SurveyFormat.XYZI: ColumnLayout(
         x_column=0,
         y_column=1,
@@ -124,7 +151,7 @@ def column_layout(fmt: SurveyFormat) -> ColumnLayout:
 
 
 __all__ = [
-    "SurveyFormat",
     "ColumnLayout",
+    "SurveyFormat",
     "column_layout",
 ]

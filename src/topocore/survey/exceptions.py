@@ -15,8 +15,10 @@ MIT
 
 from __future__ import annotations
 
+from topocore.core.exceptions import TopoCoreError
 
-class SurveyError(Exception):
+
+class SurveyError(TopoCoreError):
     """
     Base exception for the survey subsystem.
     """

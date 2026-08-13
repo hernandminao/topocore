@@ -25,7 +25,16 @@ import numpy as np
 
 from topocore.core.types import PointAttributeArray
 
-from .attributes import ATTRIBUTE_DEFINITIONS, PointAttribute
+from .attributes import ATTRIBUTE_DEFINITIONS, AttributeRequirement, PointAttribute
+
+#: Attributes ATTRIBUTE_DEFINITIONS marks REQUIRED -- derived from the
+#: model itself, never hardcoded, so this stays correct automatically
+#: if the requirement matrix ever changes. FORMAT_DEPENDENT and
+#: OPTIONAL attributes are deliberately excluded: a chunk lacking
+#: INTENSITY or NORMAL is not malformed, only one lacking X/Y/Z is.
+_REQUIRED_ATTRIBUTES: frozenset[PointAttribute] = frozenset(
+    attribute for attribute, info in ATTRIBUTE_DEFINITIONS.items() if info.requirement is AttributeRequirement.REQUIRED
+)
 
 
 class Chunk:
@@ -68,6 +77,11 @@ class Chunk:
 
         if len(unique_attributes) != len(attributes):
             raise ValueError("Duplicate attributes are not allowed.")
+
+        missing_required = _REQUIRED_ATTRIBUTES - set(unique_attributes)
+        if missing_required:
+            names = sorted(attribute.value for attribute in missing_required)
+            raise ValueError(f"Chunk is missing required attribute(s): {names}.")
 
         self._size = size
         self._source_id = source_id
@@ -128,6 +142,19 @@ class Chunk:
         Return whether an attribute exists.
         """
         return attribute in self._data
+
+    def clone(self) -> Chunk:
+        """
+        Return a structurally independent copy.
+
+        All NumPy arrays are duplicated -- mutating either `Chunk`
+        (this one or the clone) never affects the other. Immutable
+        metadata (`size`, `attributes`, `source_id`) is preserved.
+        """
+        cloned = Chunk(size=self._size, attributes=self._attributes, source_id=self._source_id)
+        for attribute in self._attributes:
+            cloned._data[attribute][:] = self._data[attribute]
+        return cloned
 
     def __getitem__(
         self,

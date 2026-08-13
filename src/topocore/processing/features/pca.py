@@ -30,7 +30,7 @@ from numpy.typing import NDArray
 
 from topocore.pointcloud.pointcloud import PointCloud
 from topocore.processing._shared import compute_pca
-from topocore.processing.exceptions import FeatureError, ProcessingError
+from topocore.processing.exceptions import PointDescriptorError, ProcessingError
 from topocore.processing.neighbors import NeighborhoodManager
 from topocore.processing.types import FloatArray1D, FloatArray2D
 
@@ -88,7 +88,7 @@ class PCAFeatures:
         k: int = 10,
     ) -> None:
         if k < 3:
-            raise FeatureError(f"k must be at least 3 for PCA, got {k}.")
+            raise PointDescriptorError(f"k must be at least 3 for PCA, got {k}.")
         self._k = k
 
     @property
@@ -116,16 +116,18 @@ class PCAFeatures:
 
         Raises
         ------
-        FeatureError
+        PointDescriptorError
             If the cloud is empty, contains invalid coordinates,
             does not have enough points, neighborhood search returns
             an invalid shape, or eigendecomposition fails.
         """
         if cloud.is_empty:
-            raise FeatureError("Cannot compute PCA features on an empty point cloud.")
+            raise PointDescriptorError("Cannot compute PCA features on an empty point cloud.")
 
         if cloud.point_count < self._k:
-            raise FeatureError(f"Point cloud has {cloud.point_count} points, but PCA requires at least {self._k}.")
+            raise PointDescriptorError(
+                f"Point cloud has {cloud.point_count} points, but PCA requires at least {self._k}."
+            )
 
         if manager is None:
             manager = NeighborhoodManager.from_point_cloud(
@@ -139,7 +141,7 @@ class PCAFeatures:
             )
 
         except ProcessingError as exc:
-            raise FeatureError(
+            raise PointDescriptorError(
                 str(exc),
             ) from exc
 
@@ -338,7 +340,7 @@ class PCAFeatureComputer(FeatureComputer):
         k: int = 10,
     ) -> None:
         if feature_name not in self._DIMENSIONS:
-            raise FeatureError(f"Unknown PCA feature: {feature_name}")
+            raise PointDescriptorError(f"Unknown PCA feature: {feature_name}")
 
         self._feature_name = feature_name
         self._pca = PCAFeatures(k)
@@ -396,7 +398,7 @@ class PCAFeatureComputer(FeatureComputer):
             case "eigenentropy":
                 return features["eigenentropy"]
 
-        raise FeatureError(f"Unknown PCA feature: {self._feature_name}")
+        raise PointDescriptorError(f"Unknown PCA feature: {self._feature_name}")
 
     def name(self) -> str:
         return f"pca_{self._feature_name}"

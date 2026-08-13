@@ -31,7 +31,7 @@ import numpy as np
 
 from topocore.pointcloud.attributes import PointAttribute
 from topocore.pointcloud.pointcloud import PointCloud
-from topocore.processing.exceptions import FeatureError
+from topocore.processing.exceptions import PointDescriptorError
 from topocore.processing.neighbors import NeighborhoodManager
 from topocore.processing.types import FloatArray1D, FloatArray2D, IntArray1D
 
@@ -51,7 +51,7 @@ class HeightFeatureComputer(FeatureComputer):
         cloud: PointCloud,
     ) -> FloatArray1D:
         if PointAttribute.Z not in cloud.attributes:
-            raise FeatureError("Point cloud has no Z coordinate.")
+            raise PointDescriptorError("Point cloud has no Z coordinate.")
 
         z_values = []
         for chunk in cloud:
@@ -106,10 +106,10 @@ class RelativeHeightFeatureComputer(FeatureComputer):
         cloud: PointCloud,
     ) -> FloatArray1D:
         if PointAttribute.Z not in cloud.attributes:
-            raise FeatureError("Point cloud has no Z coordinate.")
+            raise PointDescriptorError("Point cloud has no Z coordinate.")
 
         if PointAttribute.CLASSIFICATION not in cloud.attributes:
-            raise FeatureError("Point cloud has no classification attribute.")
+            raise PointDescriptorError("Point cloud has no classification attribute.")
 
         # Extract all points
         z_values: list[FloatArray1D] = []
@@ -125,7 +125,7 @@ class RelativeHeightFeatureComputer(FeatureComputer):
         ground_mask = cls == self._ground_class
 
         if not ground_mask.any():
-            raise FeatureError("No ground points found for relative height computation.")
+            raise PointDescriptorError("No ground points found for relative height computation.")
 
         # Build index from ground points
         ground_points: FloatArray2D = np.stack(
@@ -182,7 +182,7 @@ class DensityFeatureComputer(FeatureComputer):
         radius: float = 1.0,
     ) -> None:
         if radius <= 0:
-            raise FeatureError(f"radius must be positive, got {radius}.")
+            raise PointDescriptorError(f"radius must be positive, got {radius}.")
         self._radius = radius
 
     def compute(
@@ -236,7 +236,7 @@ class DistanceToNeighborFeatureComputer(FeatureComputer):
         k: int = 1,
     ) -> None:
         if k < 1:
-            raise FeatureError(f"k must be at least 1, got {k}.")
+            raise PointDescriptorError(f"k must be at least 1, got {k}.")
         self._k = k
 
     def compute(

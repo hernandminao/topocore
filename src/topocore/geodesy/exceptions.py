@@ -15,8 +15,10 @@ MIT
 
 from __future__ import annotations
 
+from topocore.core.exceptions import TopoCoreError
 
-class GeodesyError(Exception):
+
+class GeodesyError(TopoCoreError):
     """Base exception for all geodesy-related errors."""
 
 
@@ -37,9 +39,9 @@ class ValidationError(GeodesyError):
 
 
 __all__ = [
-    "GeodesyError",
     "CRSError",
-    "TransformationError",
     "GeodesicError",
+    "GeodesyError",
+    "TransformationError",
     "ValidationError",
 ]

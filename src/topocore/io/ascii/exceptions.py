@@ -15,8 +15,10 @@ MIT
 
 from __future__ import annotations
 
+from topocore.core.exceptions import TopoCoreError
 
-class ASCIIError(Exception):
+
+class ASCIIError(TopoCoreError):
     """
     Base exception for ASCII readers.
     """
@@ -25,12 +27,6 @@ class ASCIIError(Exception):
 class InvalidASCIIRecordError(ASCIIError):
     """
     Raised when an ASCII record cannot be parsed.
-    """
-
-
-class InvalidHeaderError(ASCIIError):
-    """
-    Raised when a header cannot be interpreted.
     """
 
 

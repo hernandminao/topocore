@@ -14,7 +14,7 @@ indices for maximum memory efficiency. High-level geometry objects
 
 Author
 ------
-Hernán Mina
+HernÃ¡n Mina
 
 License
 -------
@@ -31,6 +31,8 @@ from numpy.typing import NDArray
 
 from topocore.geometry.point3d import Point3D
 from topocore.terrain.algorithms import DelaunayResult, DelaunayTriangulator
+from topocore.terrain.constants import EPSILON
+from topocore.terrain.exceptions import TriangulationError
 from topocore.terrain.models import Edge, Triangle
 
 
@@ -71,6 +73,118 @@ def _point_in_triangle(
     has_positive = (d1 > 0.0) or (d2 > 0.0) or (d3 > 0.0)
 
     return not (has_negative and has_positive)
+
+
+def _build_neighbors(
+    simplices: NDArray[np.int32],
+) -> NDArray[np.int32]:
+    """
+    Compute triangle adjacency from explicit triangle connectivity.
+
+    Reuses the same edge-sharing idea already used by
+    ``terrain.algorithms.constrained_delaunay._build_mesh``: two
+    triangles are neighbors exactly when they share an edge (a pair
+    of vertex indices). No ``scipy.spatial.Delaunay`` call is
+    involved -- this only reads the given connectivity.
+
+    Matches the ``scipy.spatial.Delaunay.neighbors`` convention used
+    everywhere else in ``TIN``: ``neighbors[i, j]`` is the neighbor
+    of triangle ``i`` across the edge opposite vertex ``j`` (i.e.
+    the edge formed by the *other* two vertices of the triangle).
+
+    Parameters
+    ----------
+    simplices
+        Triangle vertex indices, shape ``(n, 3)``.
+
+    Returns
+    -------
+    ndarray
+        Neighbor triangle indices, shape ``(n, 3)``. ``-1`` marks a
+        boundary edge (no neighbor, or an edge shared by more than
+        two triangles -- non-manifold input is treated as boundary
+        rather than guessed at).
+    """
+    triangle_count = simplices.shape[0]
+
+    edge_map: dict[frozenset[int], list[int]] = {}
+
+    for triangle_index in range(triangle_count):
+        v0, v1, v2 = (int(simplices[triangle_index, k]) for k in range(3))
+
+        # Edge opposite vertex j is the edge formed by the other two.
+        opposite_edges = (
+            frozenset((v1, v2)),  # opposite v0
+            frozenset((v0, v2)),  # opposite v1
+            frozenset((v0, v1)),  # opposite v2
+        )
+
+        for edge in opposite_edges:
+            edge_map.setdefault(edge, []).append(triangle_index)
+
+    neighbors = np.full((triangle_count, 3), -1, dtype=np.int32)
+
+    for triangle_index in range(triangle_count):
+        v0, v1, v2 = (int(simplices[triangle_index, k]) for k in range(3))
+
+        opposite_edges = (
+            frozenset((v1, v2)),
+            frozenset((v0, v2)),
+            frozenset((v0, v1)),
+        )
+
+        for local_j, edge in enumerate(opposite_edges):
+            sharing = edge_map[edge]
+
+            if len(sharing) == 2:
+                other = sharing[0] if sharing[1] == triangle_index else sharing[1]
+                neighbors[triangle_index, local_j] = other
+
+    return neighbors
+
+
+def _validate_mesh(
+    vertices: tuple[Point3D, ...],
+    simplices: NDArray[np.int32],
+) -> None:
+    """
+    Validate explicit vertex/triangle connectivity before building a
+    ``TIN`` via ``TIN.from_mesh()``.
+
+    Structural checks only -- format-specific interpretation (e.g.
+    resolving LandXML ``<P>``/``<F>`` ids into these indices) is the
+    caller's responsibility.
+    """
+    if len(vertices) == 0:
+        raise TriangulationError("At least one vertex is required to build a TIN from an explicit mesh.")
+
+    if simplices.ndim != 2 or simplices.shape[1] != 3:
+        raise TriangulationError("simplices must be an (n, 3) array of triangle vertex indices.")
+
+    if simplices.shape[0] == 0:
+        raise TriangulationError("At least one triangle is required to build a TIN from an explicit mesh.")
+
+    vertex_count = len(vertices)
+
+    if np.any(simplices < 0) or np.any(simplices >= vertex_count):
+        raise TriangulationError(
+            "Triangle connectivity references a vertex index outside the range of the given vertices."
+        )
+
+    for triangle_index in range(simplices.shape[0]):
+        v0, v1, v2 = (int(simplices[triangle_index, k]) for k in range(3))
+
+        if v0 == v1 or v1 == v2 or v0 == v2:
+            raise TriangulationError(f"Triangle at index {triangle_index} has duplicated vertex indices.")
+
+        p0, p1, p2 = vertices[v0], vertices[v1], vertices[v2]
+
+        area = _orientation(p0.x, p0.y, p1.x, p1.y, p2.x, p2.y)
+
+        if abs(area) <= EPSILON:
+            raise TriangulationError(
+                f"Triangle at index {triangle_index} is degenerate (zero XY area / collinear vertices)."
+            )
 
 
 @dataclass(slots=True)
@@ -120,6 +234,59 @@ class TIN:
             DelaunayTriangulator.triangulate(points),
         )
 
+    @classmethod
+    def from_mesh(
+        cls,
+        vertices: tuple[Point3D, ...],
+        simplices: NDArray[np.int32],
+    ) -> TIN:
+        """
+        Build a TIN from explicit vertex/triangle connectivity,
+        without recomputing a Delaunay triangulation.
+
+        Unlike ``from_points()``, this does not call
+        ``scipy.spatial.Delaunay`` at all: the triangle connectivity
+        is taken exactly as given. Use this when triangle
+        connectivity comes from an external source that may not
+        match what a Delaunay triangulation of the same points would
+        produce -- e.g. a LandXML ``<Surface>``/``<Faces>``
+        definition, which can encode breaklines, trimmed boundaries,
+        or manually edited TINs. Re-triangulating such a surface
+        with ``from_points()`` would silently discard that
+        information and produce a different, geometrically
+        incorrect, surface.
+
+        Parameters
+        ----------
+        vertices
+            TIN vertices, in the index order referenced by
+            ``simplices``.
+        simplices
+            Triangle vertex indices, shape ``(n, 3)``.
+
+        Returns
+        -------
+        TIN
+
+        Raises
+        ------
+        TriangulationError
+            If ``vertices``/``simplices`` are empty, malformed,
+            reference an out-of-range vertex index, or contain a
+            degenerate (duplicated-vertex or zero-XY-area) triangle.
+        """
+        _validate_mesh(vertices, simplices)
+
+        neighbors = _build_neighbors(simplices)
+
+        return cls(
+            DelaunayResult(
+                vertices=vertices,
+                simplices=simplices.copy(),
+                neighbors=neighbors,
+            ),
+        )
+
     @property
     def vertices(
         self,
@@ -152,7 +319,7 @@ class TIN:
         Complements ``vertices`` (a tuple of ``Point3D``, convenient
         for per-point access and for ``ContourGenerator``, which
         indexes individual vertices by triangle) with the bulk NumPy
-        form that vectorized consumers need — currently
+        form that vectorized consumers need â€” currently
         ``features.terrain._mesh_utils.TINMesh``, which
         `BreaklineDetector`/`SlopeChangeDetector`/`EmbankmentDetector`
         rely on to build edge adjacency without a Python-level loop

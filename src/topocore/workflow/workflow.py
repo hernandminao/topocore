@@ -34,7 +34,10 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from topocore.terrain.interpolation import InterpolationMethod
 
 from topocore.workflow.artifacts import ArtifactStore, ArtifactType
 from topocore.workflow.exceptions import WorkflowExecutionError
@@ -149,6 +152,27 @@ class Workflow:
         TIN, DXF, or any other domain module -- `work` is an opaque
         zero-argument callable supplied by the caller.
 
+        Parameters
+        ----------
+        work
+            Does the actual domain work and returns its raw result.
+        dependencies
+            Every artifact (required or optional) this stage reads,
+            already resolved to `ArtifactDependency` by the caller
+            (who knows which artifacts it read and at what version).
+        produces
+            If given, `work()`'s return value is written to
+            `self._store` under this `ArtifactType` on success. `None`
+            for stages that never write to the store (export stages).
+        metrics_fn
+            Optional: computes `StageMetrics` from `work()`'s result,
+            only called on success.
+
+        Returns
+        -------
+        Any
+            Whatever `work()` returned.
+
         Raises
         ------
         WorkflowExecutionError
@@ -199,7 +223,7 @@ class Workflow:
         return raw_result
 
     def _dependency(self, artifact_type: ArtifactType, *, required: bool) -> ArtifactDependency:
-        """Build an ArtifactDependency at the artifact's CURRENT version."""
+        """Build an ArtifactDependency at the artifact's CURRENT version -- called right before _execute_stage, so the version recorded is exactly what the stage is about to consume."""
         version = self._store.version_of(artifact_type)
         assert version is not None  # caller must have already validated presence via WorkflowValidator
         return ArtifactDependency(artifact=artifact_type, version=version, required=required)
@@ -300,7 +324,9 @@ class Workflow:
 
         Calls `GroundManager.extract()` exactly once -- never
         `.classify()` too, which would run the same algorithm twice
-        just to also have the boolean mask.
+        just to also have the boolean mask (see the Fase 2 audit:
+        no real consumer needs the raw mask; ground/non-ground point
+        counts are cheaper to derive from `.point_count`).
         """
         _V.require(WorkflowStage.CLASSIFY_GROUND, self._store, ArtifactType.POINT_CLOUD)
         cloud = self._store.get(ArtifactType.POINT_CLOUD)
@@ -394,7 +420,7 @@ class Workflow:
         )
         return self
 
-    def build_dtm(self, grid: Any, interpolator: Any) -> Workflow:
+    def build_dtm(self, grid: Any, *, method: InterpolationMethod, power: float = 2.0) -> Workflow:
         """
         Requires
         --------
@@ -404,9 +430,21 @@ class Workflow:
         --------
         ArtifactType.DTM
 
-        `grid` and `interpolator` are required, explicit parameters
-        -- no implicit default: Workflow never decides scientific
-        algorithm choices on the user's behalf.
+        `grid` and `method` are required, explicit parameters -- no
+        implicit default (Opción A, per the frozen contract):
+        Workflow never decides scientific algorithm choices on the
+        user's behalf. `power` (only meaningful for
+        `InterpolationMethod.IDW`) keeps `TerrainInterpolator`'s own
+        default, since it's a secondary tuning parameter, not a
+        fundamental algorithm choice.
+
+        Workflow constructs the `TerrainInterpolator` internally,
+        bound to the `TIN` it already holds -- the user never needs
+        to (and, with the public API alone, has no way to) obtain
+        that `TIN` object to build one themselves. This mirrors
+        every other stage: the user never constructs `GroundManager`,
+        `ClassificationManager`, `DXFExporter`, or
+        `GeoPackageExporter` directly either -- Workflow always does.
         """
         _V.require(WorkflowStage.BUILD_DTM, self._store, ArtifactType.TIN)
         tin = self._store.get(ArtifactType.TIN)
@@ -414,7 +452,34 @@ class Workflow:
 
         def work() -> Any:
             from topocore.terrain.dtm import DTM
+            from topocore.terrain.interpolation import InterpolationMethod
 
+            interpolator: Any
+            if method == InterpolationMethod.LINEAR:
+                from topocore.terrain.linear import LinearInterpolator
+
+                interpolator = LinearInterpolator(tin)
+            elif method == InterpolationMethod.BARYCENTRIC:
+                from topocore.terrain.barycentric import BarycentricInterpolator
+
+                interpolator = BarycentricInterpolator(tin)
+            elif method == InterpolationMethod.IDW:
+                from topocore.terrain.idw import IDWInterpolator
+
+                interpolator = IDWInterpolator(tin, power=power)
+            else:
+                from topocore.terrain.nearest import NearestInterpolator
+
+                interpolator = NearestInterpolator(tin)
+
+            # DTM.from_tin() types `interpolator` as `BaseInterpolator`,
+            # but none of the four concrete interpolator classes above
+            # actually declare that inheritance (a pre-existing gap in
+            # topocore.terrain, not introduced here) -- verified
+            # correct at runtime (DTM.from_tin only ever calls
+            # `.interpolate(...)` on it, duck-typed), reported to
+            # Hernán rather than silently worked around with an
+            # unrelated wrapper type.
             return DTM.from_tin(tin, grid, interpolator)
 
         self._execute_stage(
@@ -435,7 +500,8 @@ class Workflow:
         --------
         ArtifactType.CONTOURS
 
-        Consumes TIN directly -- never DTM.
+        Consumes TIN directly -- never DTM (see the Fase 1 audit:
+        `ContourGenerator` has no dependency on `DTM` at all).
         """
         _V.require(WorkflowStage.EXTRACT_CONTOURS, self._store, ArtifactType.TIN)
         tin = self._store.get(ArtifactType.TIN)
@@ -507,7 +573,9 @@ class Workflow:
         --------
         ArtifactType.TIN, ArtifactType.DTM, ArtifactType.CLASSIFICATION_RESULT,
         ArtifactType.GROUND_CLOUD -- whichever are available are
-        passed through.
+        passed through; `FeatureExtractionManager` itself decides
+        which detectors can run with what's present (same behavior
+        as calling it directly, non-strict skips unmet detectors).
 
         Produces
         --------
@@ -558,7 +626,8 @@ class Workflow:
         ArtifactType.FEATURE_COLLECTION
 
         Never writes to the ArtifactStore -- may be called any
-        number of times, including alongside `export_gpkg()`.
+        number of times, including alongside `export_gpkg()` on the
+        same FeatureCollection.
         """
         _V.require(WorkflowStage.EXPORT_DXF, self._store, ArtifactType.FEATURE_COLLECTION)
         features = self._store.get(ArtifactType.FEATURE_COLLECTION)
@@ -579,7 +648,8 @@ class Workflow:
         ArtifactType.FEATURE_COLLECTION
 
         Never writes to the ArtifactStore -- may be called any
-        number of times, including alongside `export_dxf()`.
+        number of times, including alongside `export_dxf()` on the
+        same FeatureCollection.
         """
         _V.require(WorkflowStage.EXPORT_GPKG, self._store, ArtifactType.FEATURE_COLLECTION)
         features = self._store.get(ArtifactType.FEATURE_COLLECTION)

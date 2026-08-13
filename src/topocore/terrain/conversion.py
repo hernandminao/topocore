@@ -28,8 +28,6 @@ from topocore.pointcloud.attributes import PointAttribute
 from topocore.pointcloud.pointcloud import PointCloud
 from topocore.terrain.exceptions import ConversionError
 
-_REQUIRED = (PointAttribute.X, PointAttribute.Y, PointAttribute.Z)
-
 
 def pointcloud_to_points(cloud: PointCloud) -> tuple[Point3D, ...]:
     """
@@ -39,16 +37,16 @@ def pointcloud_to_points(cloud: PointCloud) -> tuple[Point3D, ...]:
     Parameters
     ----------
     cloud
-        Source point cloud. X/Y/Z must be present in every chunk --
-        they're declared ``REQUIRED`` in
-        ``pointcloud.attributes.ATTRIBUTE_DEFINITIONS``, so a chunk
-        missing one is itself malformed, not merely an edge case to
-        silently skip.
+        Source point cloud. Every chunk is guaranteed to have X, Y,
+        and Z -- as of TD-004, `Chunk.__init__` itself rejects
+        construction if any of them is missing (they're declared
+        ``REQUIRED`` in ``pointcloud.attributes.ATTRIBUTE_DEFINITIONS``),
+        so there is no longer a per-chunk check to make here.
 
     Raises
     ------
     ConversionError
-        If ``cloud`` is empty, or any chunk is missing X, Y, or Z.
+        If ``cloud`` is empty.
     """
     if cloud.is_empty:
         raise ConversionError("Cannot convert an empty PointCloud to Point3D.")
@@ -56,14 +54,6 @@ def pointcloud_to_points(cloud: PointCloud) -> tuple[Point3D, ...]:
     points: list[Point3D] = []
 
     for chunk in cloud:
-        missing = [attribute for attribute in _REQUIRED if attribute not in chunk]
-        if missing:
-            raise ConversionError(
-                f"Chunk is missing required attribute(s) "
-                f"{[attribute.value for attribute in missing]}; X/Y/Z are "
-                f"mandatory for every chunk (see ATTRIBUTE_DEFINITIONS)."
-            )
-
         xs = chunk[PointAttribute.X]
         ys = chunk[PointAttribute.Y]
         zs = chunk[PointAttribute.Z]

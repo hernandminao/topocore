@@ -40,9 +40,9 @@ class NeighborError(ProcessingError):
     """
 
 
-class FeatureError(ProcessingError):
+class PointDescriptorError(ProcessingError):
     """
-    Raised when a feature computation fails.
+    Raised when a point descriptor computation fails.
 
     This can occur when an attribute is missing from the point cloud,
     or when the computation encounters numerical issues (e.g., division
@@ -115,14 +115,14 @@ class ClassificationError(ProcessingError):
 
 
 __all__ = [
-    "ProcessingError",
-    "NeighborError",
-    "FeatureError",
-    "NormalError",
-    "GroundError",
-    "FilterError",
-    "SamplingError",
-    "RegistrationError",
-    "SegmentationError",
     "ClassificationError",
+    "FilterError",
+    "GroundError",
+    "NeighborError",
+    "NormalError",
+    "PointDescriptorError",
+    "ProcessingError",
+    "RegistrationError",
+    "SamplingError",
+    "SegmentationError",
 ]

@@ -15,8 +15,10 @@ MIT
 
 from __future__ import annotations
 
+from topocore.core.exceptions import TopoCoreError
 
-class TerrainError(Exception):
+
+class TerrainError(TopoCoreError):
     """
     Base exception for all terrain-related errors.
     """

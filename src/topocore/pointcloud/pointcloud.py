@@ -136,8 +136,13 @@ class PointCloud:
     def update_bounds(self) -> None:
         """
         Calculate and update the 3D bounding box from all chunks.
+
+        Every chunk is guaranteed to have X, Y, and Z whenever the
+        cloud isn't empty -- `Chunk.__init__` itself rejects
+        construction if any of them is missing (TD-004), so there is
+        no longer a presence check to make here.
         """
-        if self.is_empty or PointAttribute.X not in self.attributes:
+        if self.is_empty:
             self._metadata.bounds = None
             return
 
@@ -145,9 +150,6 @@ class PointCloud:
         max_x = max_y = max_z = float("-inf")
 
         for chunk in self._chunks:
-            if PointAttribute.X not in chunk:
-                continue
-
             x = chunk[PointAttribute.X]
             y = chunk[PointAttribute.Y]
             z = chunk[PointAttribute.Z]
@@ -187,10 +189,13 @@ class PointCloud:
 
     def clone(self) -> PointCloud:
         """
-        Create a deep copy of the point cloud.
+        Create a deep copy of the point cloud: brand-new `Chunk`
+        objects (via `Chunk.clone()`), each with its own independent
+        NumPy arrays -- never shared with the original. Mutating the
+        clone's data never affects this point cloud, and vice versa.
         """
         cloned = PointCloud()
-        cloned._chunks = list(self._chunks)  # Shallow copy of chunks for memory efficiency, or deep copy if needed
+        cloned._chunks = [chunk.clone() for chunk in self._chunks]
         cloned._metadata = PointCloudMetadata(
             crs=self._metadata.crs,
             bounds=self._metadata.bounds,

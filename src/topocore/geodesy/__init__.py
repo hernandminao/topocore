@@ -15,6 +15,7 @@ MIT
 
 from __future__ import annotations
 
+from .accuracy import TransformationAccuracy
 from .crs import CRS
 from .datum import Datum
 from .distance import distance2d, distance3d
@@ -27,7 +28,17 @@ from .exceptions import (
     ValidationError,
 )
 from .geodesic import GeodesicCalculator
+from .grid_shift import GridShift, GridShiftFormat
+from .helmert import HelmertParameters
+from .local_crs import LocalCRS
+from .operation import CoordinateOperation
+from .operation_type import OperationType
 from .projection import ProjectionInfo
+from .transform import (
+    transform_feature_collection,
+    transform_point_cloud,
+    transform_survey,
+)
 from .transformer import CoordinateTransformer
 from .utm import UTMZone
 from .validation import (
@@ -37,25 +48,37 @@ from .validation import (
     validate_epsg,
     validate_lat_lon,
 )
+from .vertical_datum import VerticalDatum
 
 __all__ = [
     "CRS",
+    "CRSError",
+    "CoordinateOperation",
     "CoordinateTransformer",
     "Datum",
     "Ellipsoid",
     "GeodesicCalculator",
-    "GeodesyError",
-    "CRSError",
-    "TransformationError",
     "GeodesicError",
-    "ValidationError",
-    "validate_coordinate_arrays",
+    "GeodesyError",
+    "GridShift",
+    "GridShiftFormat",
+    "HelmertParameters",
+    "LocalCRS",
+    "OperationType",
     "ProjectionInfo",
+    "TransformationAccuracy",
+    "TransformationError",
     "UTMZone",
+    "ValidationError",
+    "VerticalDatum",
     "distance2d",
     "distance3d",
-    "validate_lat_lon",
-    "validate_epsg",
-    "validate_bbox",
+    "transform_feature_collection",
+    "transform_point_cloud",
+    "transform_survey",
     "validate_array",
+    "validate_bbox",
+    "validate_coordinate_arrays",
+    "validate_epsg",
+    "validate_lat_lon",
 ]

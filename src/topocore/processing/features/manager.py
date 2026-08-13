@@ -25,7 +25,7 @@ from typing import Any, TypeAlias
 
 from topocore.pointcloud.pointcloud import PointCloud
 from topocore.processing.cache import LRUCache
-from topocore.processing.exceptions import FeatureError
+from topocore.processing.exceptions import PointDescriptorError
 
 from .base import FeatureComputer
 
@@ -107,7 +107,7 @@ class FeatureManager:
         Compute a single feature.
         """
         if name not in self._computers:
-            raise FeatureError(f"Feature '{name}' is not registered.")
+            raise PointDescriptorError(f"Feature '{name}' is not registered.")
 
         cache_key: CacheKey = (
             self._cloud_id,
@@ -154,7 +154,7 @@ class FeatureManager:
                         **kwargs,
                     )
                 except Exception as e:
-                    raise FeatureError(f"Failed to compute feature '{name}': {e}") from e
+                    raise PointDescriptorError(f"Failed to compute feature '{name}': {e}") from e
 
         return results
 

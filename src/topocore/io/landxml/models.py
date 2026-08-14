@@ -33,6 +33,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from topocore.alignment.models import Alignment, DesignProfile
 from topocore.survey.models import SurveyPointSet
 from topocore.terrain.tin import TIN
 
@@ -99,19 +100,48 @@ class NamedPointGroup:
 
 
 @dataclass(frozen=True, slots=True)
+class NamedAlignment:
+    """
+    A LandXML ``<Alignment>``, with its name/desc and optional
+    vertical design profile.
+
+    Parameters
+    ----------
+    name
+        The ``<Alignment name="...">`` attribute. Must be unique
+        within a document's alignment collection (validated by
+        ``LandXMLValidator``).
+    alignment
+        The horizontal geometry, built from ``<CoordGeom>``'s
+        ``<Line>``/``<Curve>``/``<Spiral>`` sequence.
+    profile
+        The vertical design profile, if the ``<Alignment>`` has a
+        ``<Profile>``/``<ProfAlign>``. ``None`` if horizontal-only.
+    desc
+        The ``<Alignment desc="...">`` attribute, if present.
+    """
+
+    name: str
+    alignment: Alignment
+    profile: DesignProfile | None = None
+    desc: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class LandXMLDocument:
     """
     Root container for a LandXML file's supported content.
 
-    Only ``<Surfaces>`` and ``<CgPoints>`` are represented -- see the
-    PR18B contract. ``<Alignments>``, ``<Profile>`` and ``<Feature>``
-    (embedded in ``<CgPoint>``) are out of scope: TopoCore has no
-    domain model for them yet, and this subsystem does not invent
-    one just to round-trip LandXML.
+    ``<Surfaces>``, ``<CgPoints>``, and ``<Alignments>`` (horizontal
+    ``<CoordGeom>`` plus vertical ``<Profile>``) are represented.
+    ``<Feature>`` embedded in ``<CgPoint>`` remains out of scope --
+    TopoCore has no domain model for it yet, and this subsystem does
+    not invent one just to round-trip LandXML.
     """
 
     surfaces: tuple[NamedSurface, ...] = ()
     point_groups: tuple[NamedPointGroup, ...] = ()
+    alignments: tuple[NamedAlignment, ...] = ()
     crs: str | None = None
     linear_unit: LinearUnit = LinearUnit.METER
 
@@ -119,6 +149,7 @@ class LandXMLDocument:
 __all__ = [
     "LandXMLDocument",
     "LinearUnit",
+    "NamedAlignment",
     "NamedPointGroup",
     "NamedSurface",
 ]

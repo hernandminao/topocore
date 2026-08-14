@@ -29,6 +29,7 @@ class LandXMLReadReport:
     input_path: Path
     surface_count: int
     point_group_count: int
+    alignment_count: int
     triangle_count: int
     point_count: int
     warnings: tuple[str, ...] = ()
@@ -42,6 +43,7 @@ class LandXMLReadReport:
             "input_path": str(self.input_path),
             "surface_count": self.surface_count,
             "point_group_count": self.point_group_count,
+            "alignment_count": self.alignment_count,
             "triangle_count": self.triangle_count,
             "point_count": self.point_count,
             "warnings": list(self.warnings),
@@ -54,6 +56,7 @@ class _ReadReportBuilder:
     input_path: Path = field(default_factory=Path)
     surface_count: int = 0
     point_group_count: int = 0
+    alignment_count: int = 0
     triangle_count: int = 0
     point_count: int = 0
     warnings: list[str] = field(default_factory=list)
@@ -63,6 +66,7 @@ class _ReadReportBuilder:
             input_path=self.input_path,
             surface_count=self.surface_count,
             point_group_count=self.point_group_count,
+            alignment_count=self.alignment_count,
             triangle_count=self.triangle_count,
             point_count=self.point_count,
             warnings=tuple(self.warnings),
@@ -74,6 +78,7 @@ class LandXMLWriteReport:
     output_path: Path
     surface_count: int
     point_group_count: int
+    alignment_count: int
     triangle_count: int
     point_count: int
     warnings: tuple[str, ...] = ()
@@ -87,6 +92,7 @@ class LandXMLWriteReport:
             "output_path": str(self.output_path),
             "surface_count": self.surface_count,
             "point_group_count": self.point_group_count,
+            "alignment_count": self.alignment_count,
             "triangle_count": self.triangle_count,
             "point_count": self.point_count,
             "warnings": list(self.warnings),
@@ -99,6 +105,7 @@ class _WriteReportBuilder:
     output_path: Path = field(default_factory=Path)
     surface_count: int = 0
     point_group_count: int = 0
+    alignment_count: int = 0
     triangle_count: int = 0
     point_count: int = 0
     warnings: list[str] = field(default_factory=list)
@@ -108,6 +115,7 @@ class _WriteReportBuilder:
             output_path=self.output_path,
             surface_count=self.surface_count,
             point_group_count=self.point_group_count,
+            alignment_count=self.alignment_count,
             triangle_count=self.triangle_count,
             point_count=self.point_count,
             warnings=tuple(self.warnings),

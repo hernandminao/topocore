@@ -14,7 +14,7 @@ indices for maximum memory efficiency. High-level geometry objects
 
 Author
 ------
-HernÃ¡n Mina
+Hernán Mina
 
 License
 -------
@@ -319,7 +319,7 @@ class TIN:
         Complements ``vertices`` (a tuple of ``Point3D``, convenient
         for per-point access and for ``ContourGenerator``, which
         indexes individual vertices by triangle) with the bulk NumPy
-        form that vectorized consumers need â€” currently
+        form that vectorized consumers need — currently
         ``features.terrain._mesh_utils.TINMesh``, which
         `BreaklineDetector`/`SlopeChangeDetector`/`EmbankmentDetector`
         rely on to build edge adjacency without a Python-level loop

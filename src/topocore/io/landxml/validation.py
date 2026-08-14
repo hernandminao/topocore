@@ -79,6 +79,9 @@ class LandXMLValidator:
         for point_groups in _children(root, "CgPoints"):
             self._validate_cgpoints(point_groups)
 
+        for alignments in _children(root, "Alignments"):
+            self._validate_alignments(alignments)
+
     def _validate_surfaces(self, surfaces: Element) -> None:
         surface_names: list[str] = []
 
@@ -139,22 +142,85 @@ class LandXMLValidator:
                         )
 
     def _validate_cgpoints(self, point_groups: Element) -> None:
-        name = point_groups.get("name")
-
-        if not name:
-            raise LandXMLValidationError("<CgPoints> is missing a required 'name' attribute.")
+        """
+        ``<CgPoints name="...">`` on the *group* is optional per the
+        LandXML schema -- confirmed against a genuine Autodesk
+        Civil 3D 2007 export that omits it (see the PR18C session
+        notes). Only ``<CgPoint name="...">``, the individual point,
+        is required -- UNLESS it uses ``pntRef`` (point-by-reference,
+        another real, valid LandXML feature confirmed in the same
+        export): the point's identity then comes from the
+        referenced point, not its own ``name``. ``LandXMLReader``
+        skips ``pntRef`` points individually with an explicit
+        warning (not supported -- no literal coordinates to parse),
+        rather than this validator rejecting the whole group over a
+        missing ``name`` that was never required in that case.
+        """
+        name = point_groups.get("name") or "<CgPoints> (unnamed)"
 
         point_names: list[str] = []
 
         for cgpoint in _children(point_groups, "CgPoint"):
             point_name = cgpoint.get("name")
+            point_ref = cgpoint.get("pntRef")
 
             if not point_name:
+                if point_ref:
+                    continue
+
                 raise LandXMLValidationError(f"CgPoints '{name}': <CgPoint> is missing a required 'name'.")
 
             point_names.append(point_name)
 
         _raise_on_duplicates(point_names, f"CgPoints '{name}': <CgPoint> name")
+
+    def _validate_alignments(self, alignments: Element) -> None:
+        alignment_names: list[str] = []
+
+        for alignment in _children(alignments, "Alignment"):
+            name = alignment.get("name")
+
+            if not name:
+                raise LandXMLValidationError("<Alignment> is missing a required 'name' attribute.")
+
+            alignment_names.append(name)
+
+            for coordgeom in _children(alignment, "CoordGeom"):
+                self._validate_coordgeom(coordgeom, alignment_name=name)
+
+        _raise_on_duplicates(alignment_names, "<Alignment> name")
+
+    def _validate_coordgeom(self, coordgeom: Element, *, alignment_name: str) -> None:
+        for child in coordgeom:
+            tag = _local_tag(child)
+
+            if tag == "Line":
+                self._require_children(
+                    child,
+                    ("Start", "End"),
+                    context=f"Alignment '{alignment_name}': <Line>",
+                )
+            elif tag == "Curve":
+                # <Center> may legitimately be absent for chord-defined
+                # curves -- the reader skips those with a warning
+                # (crvType handling), not a hard error, so it is not
+                # required here.
+                self._require_children(
+                    child,
+                    ("Start", "End"),
+                    context=f"Alignment '{alignment_name}': <Curve>",
+                )
+            elif tag == "Spiral":
+                self._require_children(
+                    child,
+                    ("Start", "End", "PI"),
+                    context=f"Alignment '{alignment_name}': <Spiral>",
+                )
+
+    def _require_children(self, element: Element, tags: tuple[str, ...], *, context: str) -> None:
+        for tag in tags:
+            if not _children(element, tag):
+                raise LandXMLValidationError(f"{context} is missing a required <{tag}>.")
 
     def validate_document(self, document: LandXMLDocument) -> None:
         """
@@ -178,6 +244,10 @@ class LandXMLValidator:
         group_names = [group.name for group in document.point_groups]
         _raise_on_duplicates(group_names, "Point group name")
         _raise_on_blank(group_names, "Point group name")
+
+        alignment_names = [alignment.name for alignment in document.alignments]
+        _raise_on_duplicates(alignment_names, "Alignment name")
+        _raise_on_blank(alignment_names, "Alignment name")
 
         for surface in document.surfaces:
             for vertex in surface.tin.vertices:

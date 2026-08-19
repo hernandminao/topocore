@@ -248,12 +248,12 @@ DEFAULT_ANALYSIS_CONFIG: Final[AnalysisConfig] = AnalysisConfig()
 
 
 __all__ = [
-    "DistanceConfig",
-    "VolumeConfig",
-    "ProfileConfig",
-    "VisibilityConfig",
-    "StatisticsConfig",
-    "QualityConfig",
-    "AnalysisConfig",
     "DEFAULT_ANALYSIS_CONFIG",
+    "AnalysisConfig",
+    "DistanceConfig",
+    "ProfileConfig",
+    "QualityConfig",
+    "StatisticsConfig",
+    "VisibilityConfig",
+    "VolumeConfig",
 ]

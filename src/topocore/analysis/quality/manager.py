@@ -113,9 +113,9 @@ class QualityAnalysis:
 
     __slots__ = (
         "_config",
+        "_dispatch",
         "_method",
         "_tolerance",
-        "_dispatch",
     )
 
     def __init__(
@@ -204,6 +204,7 @@ class QualityAnalysis:
             tx,
             ty,
             tz,
+            confidence_level=self._config.confidence_level,
         ).compute(observations)
 
     def registration(

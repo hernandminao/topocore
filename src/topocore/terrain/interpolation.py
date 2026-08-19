@@ -17,25 +17,13 @@ MIT
 
 from __future__ import annotations
 
-from enum import StrEnum
-
 from topocore.geometry.point3d import Point3D
 from topocore.terrain.barycentric import BarycentricInterpolator
+from topocore.terrain.enums import InterpolationMethod
 from topocore.terrain.idw import IDWInterpolator
 from topocore.terrain.linear import LinearInterpolator
 from topocore.terrain.nearest import NearestInterpolator
 from topocore.terrain.tin import TIN
-
-
-class InterpolationMethod(StrEnum):
-    """
-    Supported interpolation methods.
-    """
-
-    LINEAR = "linear"
-    BARYCENTRIC = "barycentric"
-    IDW = "idw"
-    NEAREST = "nearest"
 
 
 class TerrainInterpolator:
@@ -52,11 +40,11 @@ class TerrainInterpolator:
     """
 
     __slots__ = (
-        "_linear",
         "_barycentric",
         "_idw",
-        "_nearest",
+        "_linear",
         "_method",
+        "_nearest",
     )
 
     def __init__(

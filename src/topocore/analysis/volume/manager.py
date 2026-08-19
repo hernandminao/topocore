@@ -106,6 +106,13 @@ class VolumeAnalysis:
     ) -> VolumeResult:
         """
         Compute prismoidal volume.
+
+        .. warning::
+            Known limitation (PR19, not yet resolved): currently
+            mathematically equivalent to ``average_end_area()`` --
+            see ``topocore.analysis.volume.prismoidal``'s module
+            docstring. Do not expect different results from choosing
+            this method over ``average_end_area`` until resolved.
         """
 
         return PrismoidalVolume(sections).compute()

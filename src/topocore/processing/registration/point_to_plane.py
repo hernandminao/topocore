@@ -164,8 +164,8 @@ class PointToPlaneICP(ICPBase):
         )
 
         solution, _, _, _ = np.linalg.lstsq(system_matrix, rhs, rcond=None)
-        omega = solution[:3]
-        translation = solution[3:]
+        omega = solution[:3].astype(np.float64)
+        translation = solution[3:].astype(np.float64)
 
         rotation = self._rotation_matrix_from_omega(omega)
         return Transformation.from_rotation_translation(rotation, translation)
@@ -180,11 +180,39 @@ class PointToPlaneICP(ICPBase):
         Build the linear system A x = b for point-to-plane ICP.
 
         For each correspondence, one equation is generated using the
-        linearized small-angle formulation.
+        linearized small-angle formulation. With R(small) ~= I + [w]x
+        (w = omega, the small rotation vector) applied to a SOURCE
+        point p, matched to a TARGET point q with normal n, the
+        point-to-plane residual n . (R@p + t - q) ~= 0 linearizes
+        (via the scalar triple product identity n.(w x p) = w.(p x n))
+        to:
+
+            w . (p x n) + t . n = n . (q - p)
+
+        A real, severe bug was found and fixed here in PR19: this
+        function computed ``rhs = n . (p - q)`` -- the OPPOSITE sign
+        of the correct ``n . (q - p)``. Confirmed by directly
+        inspecting A/b/x for two independent, hand-derivable pure
+        cases: a pure +0.5 Z translation (correct answer: -0.5,
+        moving the source back down onto the target) resolved as
+        +0.5 (wrong sign, moving the source further away); a pure
+        +1 degree rotation about Y (correct answer: +1 degree,
+        matching the known rotation) resolved as -1 degree (wrong
+        sign). Negating ONLY the right-hand side (not the cross-
+        product term) fixed both cases exactly -- confirming a
+        single, uniform sign error in the linear system's right-hand
+        side, not a separate bug in the cross-product convention.
+
+        With the sign flipped, ICP applied the incremental
+        transformation in the WRONG direction on every iteration,
+        moving the source cloud further from the target rather than
+        closer -- confirmed as the root cause of point-to-plane ICP
+        diverging (shrinking correspondence counts, eventually
+        reaching zero) even for small, realistic initial offsets.
         """
         cross_terms = np.cross(target_points, normals)
         system_matrix = np.hstack((cross_terms, normals))
-        rhs = np.einsum("ij,ij->i", normals, source_points - target_points)
+        rhs = np.einsum("ij,ij->i", normals, target_points - source_points)
 
         return (system_matrix, rhs)
 

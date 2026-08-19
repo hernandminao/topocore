@@ -31,7 +31,6 @@ from __future__ import annotations
 import importlib
 from typing import Any, override
 
-from topocore.pointcloud.classification import PointClassification
 from topocore.processing.exceptions import ClassificationError
 
 from .ml import MachineLearningClassifier
@@ -80,8 +79,10 @@ class XGBoostClassifier(MachineLearningClassifier):
         Number of neighbors for geometric features.
     radius
         Radius used for neighborhood computations.
-    ground_class
-        Classification code representing ground points.
+    ground_method
+        GroundManager method used to geometrically classify ground
+        for the "height_above_ground" feature (see
+        MachineLearningClassifier's docstring).
 
     Raises
     ------
@@ -90,13 +91,13 @@ class XGBoostClassifier(MachineLearningClassifier):
     """
 
     __slots__ = (
-        "_n_estimators",
-        "_max_depth",
-        "_learning_rate",
-        "_subsample",
         "_colsample_bytree",
-        "_random_state",
+        "_learning_rate",
+        "_max_depth",
+        "_n_estimators",
         "_n_jobs",
+        "_random_state",
+        "_subsample",
     )
 
     def __init__(
@@ -112,7 +113,7 @@ class XGBoostClassifier(MachineLearningClassifier):
         feature_names: list[str] | None = None,
         k: int = 10,
         radius: float = 1.0,
-        ground_class: PointClassification = PointClassification.GROUND,
+        ground_method: str = "grid",
     ) -> None:
         """
         Initialize XGBoost classifier.
@@ -161,7 +162,7 @@ class XGBoostClassifier(MachineLearningClassifier):
             feature_names=feature_names,
             k=k,
             radius=radius,
-            ground_class=ground_class,
+            ground_method=ground_method,
         )
 
     @staticmethod

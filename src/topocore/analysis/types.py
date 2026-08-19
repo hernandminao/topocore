@@ -97,6 +97,8 @@ class VolumeResult:
     fill_volume: float
     net_volume: float
     method: str
+    valid_cells: int | None = None
+    excluded_cells: int | None = None
 
     @property
     def cubic_meters(self) -> float:
@@ -701,4 +703,16 @@ __all__ = [
     "CloudToMeshResult",
     "HausdorffResult",
     "ChamferResult",
+    # ---------------------------------------------------------------------
+    # Generic quality summary
+    #
+    # Found and fixed in PR19: QualitySummary is a real, defined class
+    # in this module, but was missing from __all__ -- meaning
+    # `from topocore.analysis.types import *` silently skipped it, and
+    # any tooling relying on __all__ to enumerate this module's public
+    # API would not see it, despite it being a legitimate exported
+    # class. Not currently used elsewhere in the codebase, so this was
+    # a pure omission, not a reachable functional bug.
+    # ---------------------------------------------------------------------
+    "QualitySummary",
 ]

@@ -32,7 +32,6 @@ from __future__ import annotations
 
 from typing import Any, override
 
-from topocore.pointcloud.classification import PointClassification
 from topocore.processing.exceptions import ClassificationError
 
 from .ml import MachineLearningClassifier
@@ -75,8 +74,10 @@ class RandomForestClassifier(MachineLearningClassifier):
         Number of neighbors for geometric features.
     radius
         Radius used for neighborhood computations.
-    ground_class
-        Classification code representing ground points.
+    ground_method
+        GroundManager method used to geometrically classify ground
+        for the "height_above_ground" feature (see
+        MachineLearningClassifier's docstring).
 
     Raises
     ------
@@ -85,13 +86,13 @@ class RandomForestClassifier(MachineLearningClassifier):
     """
 
     __slots__ = (
-        "_n_estimators",
         "_max_depth",
         "_max_features",
-        "_min_samples_split",
         "_min_samples_leaf",
-        "_random_state",
+        "_min_samples_split",
+        "_n_estimators",
         "_n_jobs",
+        "_random_state",
     )
 
     def __init__(
@@ -99,7 +100,7 @@ class RandomForestClassifier(MachineLearningClassifier):
         *,
         n_estimators: int = 100,
         max_depth: int | None = None,
-        max_features: str | int | float | None = "sqrt",
+        max_features: str | float | None = "sqrt",
         min_samples_split: int = 2,
         min_samples_leaf: int = 1,
         random_state: int | None = 42,
@@ -107,7 +108,7 @@ class RandomForestClassifier(MachineLearningClassifier):
         feature_names: list[str] | None = None,
         k: int = 10,
         radius: float = 1.0,
-        ground_class: PointClassification = PointClassification.GROUND,
+        ground_method: str = "grid",
     ) -> None:
         """
         Initialize Random Forest classifier.
@@ -161,7 +162,7 @@ class RandomForestClassifier(MachineLearningClassifier):
             feature_names=feature_names,
             k=k,
             radius=radius,
-            ground_class=ground_class,
+            ground_method=ground_method,
         )
 
     @staticmethod

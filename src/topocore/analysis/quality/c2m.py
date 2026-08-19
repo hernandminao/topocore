@@ -118,9 +118,11 @@ class CloudToMeshDistance:
         Maximum search distance (meters). Zero means unlimited.
     """
 
-    __slots__ = ("_max_distance", "_cache_tin_id", "_cache_index")
+    __slots__ = ("_cache_index", "_cache_tin_id", "_max_distance")
 
     def __init__(self, max_distance: float = 0.0) -> None:
+        if not np.isfinite(max_distance):
+            raise QualityError("Max distance must be finite.")
         if max_distance < 0:
             raise QualityError("Max distance cannot be negative.")
         self._max_distance = float(max_distance)
@@ -171,20 +173,33 @@ class CloudToMeshDistance:
         distances = self._query_distances(pointcloud, index)
 
         if self._max_distance > 0:
-            distances = np.where(distances <= self._max_distance, distances, np.inf)
+            distances = np.where(
+                distances <= self._max_distance,
+                distances,
+                np.inf,
+            )
 
-        valid_mask = np.isfinite(distances)
-        valid_distances = distances[valid_mask]
+        unmatched = ~np.isfinite(distances)
 
-        if valid_distances.size == 0:
-            raise QualityError("No valid distances computed.")
+        if np.any(unmatched):
+            unmatched_count = int(np.count_nonzero(unmatched))
+            raise QualityError(
+                "Cloud-to-Mesh correspondence incomplete: "
+                f"{unmatched_count} of {distances.size} point-cloud points "
+                "have no mesh distance within max_distance."
+            )
+
+        # Every input point must participate in the statistics.  Silently
+        # dropping points outside max_distance would make the quality result
+        # look better than the actual coverage of the correspondence.
+        std = float(np.std(distances, ddof=1)) if distances.size > 1 else 0.0
 
         return CloudToMeshResult(
-            mean=float(np.mean(valid_distances)),
-            std=(float(np.std(valid_distances, ddof=1)) if valid_distances.size > 1 else 0.0),
-            minimum=float(np.min(valid_distances)),
-            maximum=float(np.max(valid_distances)),
-            median=float(np.median(valid_distances)),
+            mean=float(np.mean(distances)),
+            std=std,
+            minimum=float(np.min(distances)),
+            maximum=float(np.max(distances)),
+            median=float(np.median(distances)),
             distances=distances,
         )
 
@@ -282,8 +297,8 @@ class CloudToMeshDistance:
             1e-6,
         )
 
-        n_cols = max(int(math.ceil(extent_x / cell_size)), 1)
-        n_rows = max(int(math.ceil(extent_y / cell_size)), 1)
+        n_cols = max(math.ceil(extent_x / cell_size), 1)
+        n_rows = max(math.ceil(extent_y / cell_size), 1)
 
         cell_min_x = np.clip(
             np.floor((tri_min_x - min_x) / cell_size).astype(np.int64),
@@ -357,8 +372,16 @@ class CloudToMeshDistance:
         n = points.shape[0]
         distances = np.full(n, np.inf, dtype=np.float64)
 
-        col = np.clip(np.floor((points[:, 0] - index.min_x) / index.cell_size).astype(np.int64), 0, index.n_cols - 1)
-        row = np.clip(np.floor((points[:, 1] - index.min_y) / index.cell_size).astype(np.int64), 0, index.n_rows - 1)
+        col = np.clip(
+            np.floor((points[:, 0] - index.min_x) / index.cell_size).astype(np.int64),
+            0,
+            index.n_cols - 1,
+        )
+        row = np.clip(
+            np.floor((points[:, 1] - index.min_y) / index.cell_size).astype(np.int64),
+            0,
+            index.n_rows - 1,
+        )
         cell_keys = row * index.n_cols + col
 
         order = np.argsort(cell_keys, kind="stable")

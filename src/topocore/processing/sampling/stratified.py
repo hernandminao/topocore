@@ -29,7 +29,7 @@ MIT
 
 from __future__ import annotations
 
-from typing import Literal, override
+from typing import ClassVar, Literal, override
 
 import numpy as np
 
@@ -72,17 +72,19 @@ class StratifiedSampler(Sampler):
 
     __slots__ = (
         "_cell_size",
-        "_samples_per_cell",
         "_method",
+        "_samples_per_cell",
+        "_seed",
     )
 
-    _SUPPORTED_METHODS = {"random", "centroid", "closest"}
+    _SUPPORTED_METHODS: ClassVar[set[str]] = {"random", "centroid", "closest"}
 
     def __init__(
         self,
         cell_size: float,
         samples_per_cell: int = 1,
         method: Literal["random", "centroid", "closest"] = "random",
+        seed: int | None = None,
     ) -> None:
         if cell_size <= 0:
             raise SamplingError(f"cell_size must be positive, got {cell_size}.")
@@ -96,6 +98,7 @@ class StratifiedSampler(Sampler):
         self._cell_size = cell_size
         self._samples_per_cell = samples_per_cell
         self._method = method
+        self._seed = seed
 
     @override
     def sample(
@@ -140,8 +143,17 @@ class StratifiedSampler(Sampler):
 
         selected_indices: list[int] = []
 
-        # Reproducible random generator
-        rng = np.random.default_rng(42)
+        # Reproducible random generator -- seed is configurable (see
+        # class docstring's `seed` parameter), matching every other
+        # sampler in this module (RandomSampler, VoxelSampler). A
+        # prior version of this file hardcoded seed=42 with no way
+        # to override it -- found and fixed in PR19 (session audit):
+        # confirmed the "random" method always returned the exact
+        # same selection, regardless of instance, call count, or
+        # global NumPy random state. `seed=None` here (the new
+        # default) means non-deterministic, like the rest of the
+        # module -- pass an explicit seed for reproducibility.
+        rng = np.random.default_rng(self._seed)
 
         for cell_idx in range(len(unique_cells)):
             mask = group_labels == cell_idx
@@ -218,8 +230,13 @@ class StratifiedSampler(Sampler):
         )
 
     @override
-    def name(self) -> str:
-        return f"stratified(cell={self._cell_size}, samples={self._samples_per_cell}, method={self._method})"
+    def name(
+        self,
+    ) -> str:
+        return (
+            f"stratified(cell={self._cell_size}, samples={self._samples_per_cell}, "
+            f"method={self._method}, seed={self._seed})"
+        )
 
 
 __all__ = [

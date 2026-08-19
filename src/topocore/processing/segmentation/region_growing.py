@@ -79,15 +79,15 @@ class RegionGrowingSegmenter(BaseRegionGrowingSegmenter):
     """
 
     __slots__ = (
-        "_k",
-        "_curvature_threshold",
-        "_normal_angle_threshold",
-        "_min_region_size",
-        "_max_region_size",
-        "_use_adaptive_k",
-        "_normals",
         "_curvature",
+        "_curvature_threshold",
+        "_k",
         "_labels",
+        "_max_region_size",
+        "_min_region_size",
+        "_normal_angle_threshold",
+        "_normals",
+        "_use_adaptive_k",
     )
 
     def __init__(
@@ -140,6 +140,7 @@ class RegionGrowingSegmenter(BaseRegionGrowingSegmenter):
         region_id = 0
 
         manager = NeighborhoodManager.from_point_cloud(cloud)
+        growth_radius = self._compute_growth_radius(cloud, manager)
 
         curvature = self._require_curvature()
         curvature_order = np.argsort(curvature)
@@ -152,11 +153,62 @@ class RegionGrowingSegmenter(BaseRegionGrowingSegmenter):
                 continue
 
             labels[idx] = region_id
-            self._grow_region(start_idx=idx, region_id=region_id, manager=manager)
+            self._grow_region(
+                start_idx=idx,
+                region_id=region_id,
+                manager=manager,
+                radius=growth_radius,
+            )
             region_id += 1
 
         self._filter_small_regions()
         return self._build_result(cloud)
+
+    def _compute_growth_radius(
+        self,
+        cloud: PointCloud,
+        manager: NeighborhoodManager,
+    ) -> float:
+        """
+        Derive a spatial growth radius from the point cloud's actual
+        density, rather than an arbitrary constant multiplied by
+        ``k`` (a neighbor COUNT for normal estimation, not a
+        distance).
+
+        A real bug in this method's earlier form (``radius=self._k
+        * 0.1``, found and fixed in PR19): for any cloud whose point
+        spacing doesn't coincidentally match that formula, region
+        growing silently produced zero regions. Confirmed directly
+        with a perfectly flat, 5.0-unit-spaced plane (which should
+        trivially form one large region -- curvature is 0
+        everywhere): 0 segments, every point marked noise, because a
+        radius of ``10*0.1 = 1.0`` never found any neighbor 5.0 units
+        away.
+
+        Uses the same mean-k-NN-distance density estimate already
+        established in ``DBSCANSegmenter._compute_eps_values()`` and
+        ``ConnectedComponentsSegmenter._compute_threshold_values()``,
+        with a modest safety margin (1.5x) so growth can bridge
+        realistically irregular spacing between neighboring points,
+        without being so large it merges genuinely separate objects.
+        """
+        n_points = len(cloud)
+
+        if n_points <= 1:
+            return 1.0  # degenerate; segment() already rejects empty clouds
+
+        k = min(self._k, n_points - 1)
+
+        if k < 1:
+            return 1.0
+
+        _, distances = manager.knn_many(k=k, include_self=False)
+        mean_distance = float(distances.mean())
+
+        if mean_distance <= 0.0:
+            return 1.0
+
+        return mean_distance * 1.5
 
     def _compute_normals(self, cloud: PointCloud) -> None:
         """Compute normals and curvature for the point cloud."""
@@ -195,6 +247,7 @@ class RegionGrowingSegmenter(BaseRegionGrowingSegmenter):
         start_idx: int,
         region_id: int,
         manager: NeighborhoodManager,
+        radius: float,
     ) -> None:
         """Grow a region from a seed point."""
         seeds: list[int] = [start_idx]
@@ -206,7 +259,7 @@ class RegionGrowingSegmenter(BaseRegionGrowingSegmenter):
         while seeds and region_size < self._max_region_size:
             current = seeds.pop()
 
-            neighbors = manager.radius(current, radius=self._k * 0.1)
+            neighbors = manager.radius(current, radius=radius)
 
             for neighbor_raw in neighbors:
                 neighbor = int(neighbor_raw)
@@ -246,17 +299,43 @@ class RegionGrowingSegmenter(BaseRegionGrowingSegmenter):
         """
         Check whether two points have consistent normals.
 
+        Compares ``abs(dot(n1, n2))``, not ``dot(n1, n2))`` directly
+        -- treating antiparallel normals (n and -n) as equally
+        "consistent" as parallel ones. A surface's true geometric
+        normal is only defined up to sign; for region growing's
+        purpose (grouping points on the same smooth surface),
+        whether two adjacent points' normals were independently
+        reported as "+n" or "-n" by PCA is irrelevant -- what matters
+        is whether they're parallel (same plane) or not.
+
+        Found and fixed in PR19: ``orient_upward=True`` (the default
+        normal orientation) flips a normal only when its Z component
+        is negative. For a perfectly VERTICAL surface, Z is exactly
+        0, so the flip never triggers either way, and each point's
+        independent local PCA can arbitrarily report either sign.
+        Confirmed directly: a single flat vertical wall's normals
+        split 30/26 between (0,-1,0) and (0,1,0), causing region
+        growing to see a spurious ~180-degree "angle" between
+        adjacent, genuinely coplanar points and incorrectly split one
+        physical wall into two regions. Using ``abs(dot(...))`` fixes
+        this without touching the shared normal-orientation logic in
+        ``topocore.processing.normals`` (other consumers may rely on
+        its existing absolute-direction semantics) -- perpendicular
+        surfaces (e.g. a real floor/wall corner) still correctly
+        separate, since ``abs(dot(...))`` for genuinely perpendicular
+        normals is still ~0 regardless of either normal's sign.
+
         Returns
         -------
         bool
-            True if the angle between normals is within the configured
-            threshold.
+            True if the angle between normals (or their antiparallel
+            counterpart) is within the configured threshold.
         """
         normals = self._require_normals()
         n1 = normals[idx1]
         n2 = normals[idx2]
 
-        dot = float(np.clip(np.dot(n1, n2), -1.0, 1.0))
+        dot = float(np.clip(np.abs(np.dot(n1, n2)), 0.0, 1.0))
         angle = float(np.arccos(dot))
         return angle <= self._normal_angle_threshold
 

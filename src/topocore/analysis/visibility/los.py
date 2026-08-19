@@ -59,10 +59,10 @@ class LineOfSight:
     """
 
     __slots__ = (
-        "_observer_height",
-        "_target_height",
         "_earth_curvature",
         "_num_samples",
+        "_observer_height",
+        "_target_height",
     )
 
     def __init__(
@@ -169,7 +169,10 @@ class LineOfSight:
             los_z = observer_z + (target_z - observer_z) * factor
 
             if self._earth_curvature:
-                los_z -= self._curvature_correction(distance * factor)
+                los_z -= self._curvature_correction(
+                    distance * factor,
+                    distance * (1.0 - factor),
+                )
 
             triangle = tin.find_triangle(x, y)
 
@@ -201,25 +204,52 @@ class LineOfSight:
 
     @staticmethod
     def _curvature_correction(
-        distance_meters: float,
+        distance_from_observer_meters: float,
+        distance_from_target_meters: float,
     ) -> float:
         """
-        Compute earth curvature correction.
+        Compute earth curvature correction (the "earth bulge") at a
+        point along the observer-target path.
 
         Parameters
         ----------
-        distance_meters
-            Distance from observer.
+        distance_from_observer_meters
+            Distance from the observer to the sample point (d1).
+        distance_from_target_meters
+            Distance from the sample point to the target (d2).
 
         Returns
         -------
         float
             Curvature correction in meters.
+
+        Notes
+        -----
+        A real, severe bug was found and fixed here in PR19: this
+        method used to take only ``distance_from_observer_meters``
+        and compute ``d1**2 / (2R)`` -- a formula that grows without
+        bound as the sample point approaches the TARGET, instead of
+        correctly returning to zero at both path endpoints (the
+        observer's and target's own given elevations are already
+        correct/complete and need no further correction at their own
+        position). The standard, correct "earth bulge" formula used
+        in radio/microwave path engineering and surveying visibility
+        studies is the PRODUCT form ``d1 * d2 / (2R)`` -- zero when
+        either d1=0 (at the observer) or d2=0 (at the target), and
+        maximal at the path's midpoint.
+
+        Confirmed the bug directly against the well-known horizon-
+        distance formula (``d = sqrt(2*R*h)``, ~4.65 km for a 1.7 m
+        eye height): the old formula reported a target at GROUND
+        level as already invisible at just 1 km, because its
+        (incorrect) correction grew largest right next to the
+        target rather than vanishing there.
         """
 
-        distance_km = distance_meters / _KM_TO_METERS
+        d1_km = distance_from_observer_meters / _KM_TO_METERS
+        d2_km = distance_from_target_meters / _KM_TO_METERS
 
-        return distance_km**2 / (2.0 * _EARTH_RADIUS_KM) * _KM_TO_METERS
+        return d1_km * d2_km / (2.0 * _EARTH_RADIUS_KM) * _KM_TO_METERS
 
     @staticmethod
     def _validate_points(

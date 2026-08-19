@@ -105,7 +105,7 @@ class CutFillVolume:
             proposed,
         )
 
-        cut, fill, net = compute_cut_fill(
+        cut, fill, net, valid_cells, excluded_cells = compute_cut_fill(
             existing,
             proposed,
             self._cell_area,
@@ -116,6 +116,8 @@ class CutFillVolume:
             fill_volume=fill,
             net_volume=net,
             method="cut_fill",
+            valid_cells=valid_cells,
+            excluded_cells=excluded_cells,
         )
 
     # ------------------------------------------------------------------

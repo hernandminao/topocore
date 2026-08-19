@@ -21,6 +21,7 @@ import laspy  # type: ignore[import-untyped]
 import numpy as np
 
 from topocore.io.base import PointCloudWriter
+from topocore.io.exceptions import MissingAttributeError, WriteError
 from topocore.pointcloud.attributes import PointAttribute
 from topocore.pointcloud.pointcloud import PointCloud
 
@@ -75,6 +76,27 @@ class LASWriter(PointCloudWriter):
 
         merged = {attribute: np.concatenate(values) for attribute, values in arrays.items()}
 
+        required = (
+            PointAttribute.X,
+            PointAttribute.Y,
+            PointAttribute.Z,
+        )
+        missing = [attribute.name for attribute in required if attribute not in merged]
+        if missing:
+            raise MissingAttributeError(f"LAS output requires X, Y and Z attributes; missing: {', '.join(missing)}.")
+
+        point_count = merged[PointAttribute.X].shape[0]
+        for attribute, values in merged.items():
+            if values.shape[0] != point_count:
+                raise WriteError(
+                    f"Attribute {attribute.name} contains {values.shape[0]} values, expected {point_count}."
+                )
+
+        if PointAttribute.COLOR in merged:
+            color = np.asarray(merged[PointAttribute.COLOR])
+            if color.ndim != 2 or color.shape != (point_count, 3):
+                raise WriteError("LAS COLOR attribute must have shape (point_count, 3).")
+
         if PointAttribute.X in merged:
             las.x = merged[PointAttribute.X]
 
@@ -108,7 +130,10 @@ class LASWriter(PointCloudWriter):
             las.green = color[:, 1]
             las.blue = color[:, 2]
 
-        las.write(self.path)
+        try:
+            las.write(self.path)
+        except Exception as exc:
+            raise WriteError(f"Unable to write LAS file '{self.path}'.") from exc
 
     def close(self) -> None:
         """

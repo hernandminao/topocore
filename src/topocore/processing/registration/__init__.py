@@ -47,10 +47,10 @@ from .point_to_plane import PointToPlaneICP
 from .point_to_point import PointToPointICP
 
 __all__ = [
-    "Transformation",
-    "RegistrationResult",
-    "Registrar",
-    "PointToPointICP",
     "PointToPlaneICP",
+    "PointToPointICP",
+    "Registrar",
     "RegistrationManager",
+    "RegistrationResult",
+    "Transformation",
 ]

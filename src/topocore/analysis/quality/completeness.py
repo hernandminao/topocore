@@ -91,17 +91,23 @@ class CompletenessAnalysis:
         if points.shape[0] == 0:
             raise QualityError("Point array must not be empty.")
 
+        if not np.isfinite(points).all():
+            raise QualityError("Point coordinates contain NaN or infinite values.")
+
         if len(reference_bbox) != 4:
             raise QualityError("Bounding box must contain four values.")
 
         min_x, min_y, max_x, max_y = reference_bbox
 
+        if not np.isfinite(np.asarray(reference_bbox, dtype=np.float64)).all():
+            raise QualityError("Bounding box contains NaN or infinite values.")
+
         if max_x <= min_x or max_y <= min_y:
             raise QualityError("Bounding box has invalid extent.")
 
-        n_cols = int(math.ceil((max_x - min_x) / self._resolution))
+        n_cols = math.ceil((max_x - min_x) / self._resolution)
 
-        n_rows = int(math.ceil((max_y - min_y) / self._resolution))
+        n_rows = math.ceil((max_y - min_y) / self._resolution)
 
         if n_cols <= 0 or n_rows <= 0:
             raise QualityError("Computed grid is empty.")

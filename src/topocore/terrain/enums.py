@@ -38,15 +38,30 @@ class TriangulationMethod(StrEnum):
 class InterpolationMethod(StrEnum):
     """
     Supported interpolation methods.
+
+    Single source of truth for this enum -- previously,
+    ``topocore.terrain.interpolation`` also declared its own
+    ``InterpolationMethod`` (same name, overlapping-but-different
+    members: ``NEAREST`` instead of ``NATURAL_NEIGHBOR``, which was
+    never implemented anywhere in the codebase). Since
+    ``TerrainInterpolator.interpolate()`` compared method values
+    with ``is`` (identity), not ``==`` (value), passing THIS enum's
+    ``LINEAR`` (a natural import path, since every other Terrain
+    enum lives here) silently fell through to NEAREST interpolation
+    instead of LINEAR -- with no error, just a wrong elevation.
+    Confirmed via a real Delaunay TIN (session audit): 7.5 (correct
+    linear) vs. 10.0 (silently NEAREST) for the same query point.
+    Consolidated here (PR19); ``interpolation.py`` now imports this
+    definition rather than declaring its own.
     """
 
     LINEAR = "linear"
 
-    NATURAL_NEIGHBOR = "natural_neighbor"
+    BARYCENTRIC = "barycentric"
 
     IDW = "idw"
 
-    BARYCENTRIC = "barycentric"
+    NEAREST = "nearest"
 
 
 class ContourSmoothing(StrEnum):
@@ -84,10 +99,10 @@ class AspectReference(StrEnum):
 
 
 __all__ = [
-    "BreaklineType",
-    "TriangulationMethod",
-    "InterpolationMethod",
-    "ContourSmoothing",
-    "SlopeMethod",
     "AspectReference",
+    "BreaklineType",
+    "ContourSmoothing",
+    "InterpolationMethod",
+    "SlopeMethod",
+    "TriangulationMethod",
 ]

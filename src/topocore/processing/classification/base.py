@@ -279,6 +279,6 @@ class MLClassifier(Classifier):
 __all__ = [
     "ClassificationResult",
     "Classifier",
-    "RuleBasedClassifier",
     "MLClassifier",
+    "RuleBasedClassifier",
 ]

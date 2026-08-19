@@ -277,22 +277,20 @@ class ASCIIParser:
         """
         Append one record to the current buffers.
 
-        Missing trailing fields are stored as empty strings.
+        Records must contain every field required by the selected
+        coordinate/attribute columns. Extra fields are allowed because
+        formats may contain attributes that TopoCore does not consume.
         """
 
-        buffers = context.buffers
+        required_columns = max(context.columns.values(), default=-1) + 1
+        if len(fields) < required_columns:
+            raise InvalidASCIIRecordError(
+                f"Invalid ASCII record: expected at least {required_columns} fields, got {len(fields)}: {line}"
+            )
 
         try:
-            for (
-                column_name,
-                column_index,
-            ) in context.columns.items():
-                value = fields[column_index] if column_index < len(fields) else ""
-
-                buffers[column_name].append(
-                    value,
-                )
-
+            for column_name, column_index in context.columns.items():
+                context.buffers[column_name].append(fields[column_index])
         except (IndexError, ValueError) as exc:
             raise InvalidASCIIRecordError(f"Invalid ASCII record: {line}") from exc
 

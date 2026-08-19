@@ -31,6 +31,7 @@ import numpy as np
 
 from topocore.io.base import PointCloudReader
 from topocore.io.common.records import PointRecordBatch
+from topocore.io.exceptions import CorruptedFileError, MissingAttributeError
 from topocore.pointcloud.chunk import Chunk
 
 from .converter import PLYConverter
@@ -133,6 +134,13 @@ class PLYReader(PointCloudReader):
             )
         ]
 
+        property_names = {p.name for p in properties}
+        missing = {"x", "y", "z"} - property_names
+        if missing:
+            raise MissingAttributeError(
+                f"PLY vertex element is missing required coordinate properties: {', '.join(sorted(missing))}."
+            )
+
         arrays: dict[str, list[str]] = {p.name: [] for p in properties}
 
         points = 0
@@ -154,6 +162,11 @@ class PLYReader(PointCloudReader):
             if not values:
                 continue
 
+            if len(values) != len(properties):
+                raise CorruptedFileError(
+                    f"Incomplete PLY vertex record: expected {len(properties)} scalar properties, got {len(values)}."
+                )
+
             for index, prop in enumerate(properties):
                 arrays[prop.name].append(values[index])
 
@@ -166,7 +179,12 @@ class PLYReader(PointCloudReader):
 
                 arrays = {p.name: [] for p in properties}
 
-        if arrays[properties[0].name]:
+        if points != total:
+            raise CorruptedFileError(
+                f"Incomplete PLY ASCII vertex data: header declares {total} vertices, read {points}."
+            )
+
+        if properties and arrays[properties[0].name]:
             yield self._flush_ascii(
                 arrays,
             )
@@ -243,8 +261,10 @@ class PLYReader(PointCloudReader):
                 count=size,
             )
 
-            if len(data) == 0:
-                break
+            if len(data) != size:
+                raise CorruptedFileError(
+                    f"Incomplete PLY binary vertex data: expected {size} records, read {len(data)}."
+                )
 
             names = data.dtype.names
             assert names is not None

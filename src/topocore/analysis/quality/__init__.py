@@ -42,6 +42,6 @@ __all__ = [
     "PrecisionAnalysis",
     "QualityAnalysis",
     "QualityMethod",
-    "RegistrationQuality",
     "RMSEAnalysis",
+    "RegistrationQuality",
 ]

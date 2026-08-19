@@ -160,22 +160,53 @@ class TransversalProfile:
     def _generate_offsets(self) -> list[float]:
         """
         Generate transversal offsets.
-        """
 
-        if self._interval >= self._width:
-            return [
-                -self._width,
-                self._width,
-            ]
+        Always includes ``offset=0.0`` (the axis/centerline itself)
+        exactly once, along with both exact endpoints (``-width``,
+        ``+width``), regardless of whether ``width`` is an exact
+        multiple of ``interval``.
+
+        Found and fixed in PR19: the previous implementation stepped
+        from ``-width`` in increments of ``interval``
+        (``-width + i*interval``), which only hits exactly 0 when
+        ``width`` happens to be an exact multiple of ``interval`` --
+        confirmed directly with ``width=10, interval=3``: the
+        generated offsets were ``[-10,-7,-4,-1,2,5,8,10]``, with the
+        two points nearest zero being -1 and +2, straddling but
+        never touching the axis. This broke the guarantee
+        ``LongitudinalProfile`` already provides for its own
+        equivalent reference point (``station=0`` is always present
+        by construction), and propagated into
+        ``CrossSectionProfile`` (which delegates to this method for
+        every vertex of an alignment). ``MultiProfile`` was
+        confirmed unaffected -- it takes explicit, caller-supplied
+        offsets (defaulting to ``(0.0,)``) rather than
+        auto-generating a grid.
+
+        Fixed by building the positive-side offsets outward from 0
+        (0, interval, 2*interval, ..., up to width, with the exact
+        ``width`` endpoint appended if not already hit), then
+        mirroring the strictly-positive values to the negative side
+        and combining -- 0 is included by construction, exactly
+        once, on both the exact-multiple and non-exact-multiple
+        paths. This also naturally subsumes the old
+        ``interval >= width`` special case (which previously
+        returned only ``[-width, width]``, missing 0 -- now handled
+        correctly by the same general logic, no separate branch
+        needed).
+        """
+        if self._width <= 0:
+            return [0.0]
 
         count = int(self._width // self._interval)
+        positive = [index * self._interval for index in range(count + 1)]
 
-        offsets = [-self._width + i * self._interval for i in range(count * 2 + 1)]
+        if abs(positive[-1] - self._width) > 1e-9:
+            positive.append(self._width)
 
-        if abs(offsets[-1] - self._width) > 1e-9:
-            offsets.append(self._width)
+        negative = [-value for value in positive if value > 1e-9]
 
-        return offsets
+        return sorted(negative + positive)
 
     def __call__(
         self,

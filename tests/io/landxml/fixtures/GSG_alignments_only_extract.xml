@@ -1,0 +1,406 @@
+<?xml version='1.0' encoding='utf-8'?>
+<LandXML xmlns:ns0="http://www.landxml.org/schema/LandXML-1.1" xmlns="http://www.landxml.org/schema/LandXML-1.2" version="1.2">
+  <ns0:Units>
+    <ns0:Imperial areaUnit="squareFoot" linearUnit="foot" volumeUnit="cubicYard" temperatureUnit="fahrenheit" pressureUnit="inchHG" diameterUnit="inch" angularUnit="decimal degrees" directionUnit="decimal degrees" />
+  </ns0:Units>
+  <ns0:Alignments name="Conway Farms">
+    <ns0:Alignment name="Conway Farms Drive" length="1627.9911759" staStart="0." desc="">
+      <ns0:CoordGeom>
+        <ns0:Line dir="269.80444676" length="129.92683494">
+          <ns0:Start>21331.41473847 20217.28854483</ns0:Start>
+          <ns0:End>21201.48866028 20216.84509917</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="ccw" chord="23.46085363" crvType="arc" delta="4.20159101" dirEnd="274.00603777" dirStart="269.80444676" external="0.21522148" length="23.46611118" midOrd="0.21507683" radius="320.00000202" tangent="11.73831631">
+          <ns0:Start>21201.48866028 20216.84509917</ns0:Start>
+          <ns0:Center>21200.39648707 20536.84323737</ns0:Center>
+          <ns0:End>21178.04077632 20217.62509332</ns0:End>
+          <ns0:PI>21189.75041233 20216.80503581</ns0:PI>
+        </ns0:Curve>
+        <ns0:Line dir="274.00603779" length="47.23937676">
+          <ns0:Start>21178.04077632 20217.62509332</ns0:Start>
+          <ns0:End>21130.91681982 20220.92531157</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="cw" chord="115.35234987" crvType="arc" delta="52.67564432" dirEnd="221.33039347" dirStart="274.00603779" external="15.05791785" length="119.51724581" midOrd="13.49481194" radius="130.00000005" tangent="64.3568142">
+          <ns0:Start>21130.91681982 20220.92531157</ns0:Start>
+          <ns0:Center>21121.83481235 20091.24294132</ns0:Center>
+          <ns0:End>21024.2160028 20177.09495373</ns0:End>
+          <ns0:PI>21066.71724902 20225.42138132</ns0:PI>
+        </ns0:Curve>
+        <ns0:Line dir="221.33039345" length="40.89717938">
+          <ns0:Start>21024.2160028 20177.09495373</ns0:Start>
+          <ns0:End>20997.20750165 20146.38469246</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="ccw" chord="257.69436663" crvType="arc" delta="48.52657149" dirEnd="269.85694445" dirStart="221.33037296" external="30.38048681" length="265.56068561" midOrd="27.69688063" radius="313.55" tangent="141.33144469">
+          <ns0:Start>20997.20750165 20146.38469246</ns0:Start>
+          <ns0:Center>20761.75836812 20353.45305803</ns0:Center>
+          <ns0:End>20762.54123595 20039.90403536</ns0:End>
+          <ns0:PI>20903.87224011 20040.25690999</ns0:PI>
+        </ns0:Curve>
+        <ns0:Line dir="269.85694444" length="648.21298232">
+          <ns0:Start>20762.54123595 20039.90403536</ns0:Start>
+          <ns0:End>20114.3302741 20038.28558505</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="ccw" chord="187.42894991" crvType="arc" delta="12.65972223" dirEnd="282.51666667" dirStart="269.85694444" external="5.21369938" length="187.81075989" midOrd="5.18191474" radius="849.99999944" tangent="94.28929742">
+          <ns0:Start>20114.3302741 20038.28558505</ns0:Start>
+          <ns0:Center>20112.20800438 20888.28293506</ns0:Center>
+          <ns0:End>19927.99294631 20058.48488045</ns0:End>
+          <ns0:PI>20020.04127057 20038.05016467</ns0:PI>
+        </ns0:Curve>
+        <ns0:Line dir="282.51666667" length="165.36">
+          <ns0:Start>19927.99294631 20058.48488045</ns0:Start>
+          <ns0:End>19766.56305642 20094.32229458</ns0:End>
+        </ns0:Line>
+      </ns0:CoordGeom>
+    </ns0:Alignment>
+    <ns0:Alignment name="Cul-de-sac NE" length="644.45182856" staStart="0." desc="">
+      <ns0:CoordGeom>
+        <ns0:Line dir="59.60465171" length="6.31560465">
+          <ns0:Start>20607.22479041 20915.46602143</ns0:Start>
+          <ns0:End>20612.6723452 20918.66148836</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="ccw" chord="188.79870201" crvType="arc" delta="56.32797694" dirEnd="115.93262861" dirStart="59.60465167" external="26.86018063" length="196.62173175" midOrd="23.67994291" radius="200.00000004" tangent="107.0772691">
+          <ns0:Start>20612.6723452 20918.66148836</ns0:Start>
+          <ns0:Center>20713.86509275 20746.1505384</ns0:Center>
+          <ns0:End>20801.32789169 20926.01231537</ns0:End>
+          <ns0:PI>20705.03235224 20972.83870365</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="cw" chord="153.37467649" crvType="arc" delta="42.30869493" dirEnd="73.62393369" dirStart="115.93262862" external="15.35475775" length="156.91553107" midOrd="14.32002586" radius="212.49999996" tangent="82.22858766">
+          <ns0:Start>20801.32789169 20926.01231537</ns0:Start>
+          <ns0:Center>20894.25711556 21117.11545332</ns0:Center>
+          <ns0:End>20954.16951557 20913.23618927</ns0:End>
+          <ns0:PI>20875.27679115 20890.05260321</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="ccw" chord="60.14608915" crvType="arc" delta="33.9520244" dirEnd="107.57595809" dirStart="73.62393369" external="4.69247582" length="61.03518515" midOrd="4.48801094" radius="102.99999996" tangent="31.44311287">
+          <ns0:Start>20954.16951557 20913.23618927</ns0:Start>
+          <ns0:Center>20983.20940827 20814.41471072</ns0:Center>
+          <ns0:End>21014.31230747 20912.60640921</ns0:End>
+          <ns0:PI>20984.33703893 20922.10128271</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="cw" chord="40.11469065" crvType="arc" delta="69.92875151" dirEnd="37.64720655" dirStart="107.57595806" external="7.70852522" length="42.71704345" midOrd="6.31720204" radius="35." tangent="24.47484682">
+          <ns0:Start>21014.31230747 20912.60640921</ns0:Start>
+          <ns0:Center>21024.88125379 20945.97252037</ns0:Center>
+          <ns0:End>21052.59378724 20924.59459975</ns0:End>
+          <ns0:PI>21037.64460631 20905.21574229</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="ccw" chord="36.56537734" crvType="arc" delta="276.66219093" dirEnd="314.30939749" dirStart="37.64720656" length="132.78831905" midOrd="48.04247538" radius="27.5">
+          <ns0:Start>21052.59378724 20924.59459975</ns0:Start>
+          <ns0:Center>21074.36792066 20907.79766212</ns0:Center>
+          <ns0:End>21055.15827246 20888.11926239</ns0:End>
+        </ns0:Curve>
+        <ns0:Curve rot="cw" chord="47.62366235" crvType="arc" delta="26.73343943" dirEnd="287.57595806" dirStart="314.30939749" external="2.86792775" length="48.05841344" midOrd="2.79023652" radius="102.99999995" tangent="24.47484682">
+          <ns0:Start>21055.15827246 20888.11926239</ns0:Start>
+          <ns0:Center>20983.20940831 20814.41471071</ns0:Center>
+          <ns0:End>21014.31230747 20912.60640921</ns0:End>
+          <ns0:PI>21037.64460631 20905.21574229</ns0:PI>
+        </ns0:Curve>
+      </ns0:CoordGeom>
+    </ns0:Alignment>
+    <ns0:Alignment name="Cul-de-sac NW" length="640.71875514" staStart="0." desc="">
+      <ns0:CoordGeom>
+        <ns0:Line dir="95.13111069" length="30.">
+          <ns0:Start>20624.87330814 20609.72927238</ns0:Start>
+          <ns0:End>20654.75308765 20607.04621884</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="ccw" chord="24.62324936" crvType="arc" delta="7.05850408" dirEnd="102.18961477" dirStart="95.13111069" external="0.38002064" length="24.63882718" midOrd="0.37929993" radius="199.99999894" tangent="12.33501804">
+          <ns0:Start>20654.75308765 20607.04621884</ns0:Start>
+          <ns0:Center>20636.86606414 20407.84768981</ns0:Center>
+          <ns0:End>20679.09558993 20603.33852522</ns0:End>
+          <ns0:PI>20667.03867496 20605.94303505</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="cw" chord="47.03105654" crvType="arc" delta="13.50464383" dirEnd="88.68497092" dirStart="102.18961475" external="1.39695109" length="47.14009976" midOrd="1.38726141" radius="199.99999969" tangent="23.67977848">
+          <ns0:Start>20679.09558993 20603.33852522</ns0:Start>
+          <ns0:Center>20721.32511579 20798.82936138</ns0:Center>
+          <ns0:End>20725.91503024 20598.88203691</ns0:End>
+          <ns0:PI>20702.24148844 20598.33859612</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="ccw" chord="102.69249283" crvType="arc" delta="29.75238607" dirEnd="118.437357" dirStart="88.68497093" external="6.93590441" length="103.85541944" midOrd="6.70343257" radius="200." tangent="53.1269097">
+          <ns0:Start>20725.91503024 20598.88203691</ns0:Start>
+          <ns0:Center>20730.50494464 20398.93471213</ns0:Center>
+          <ns0:End>20825.74447286 20574.80236767</ns0:End>
+          <ns0:PI>20779.02794758 20600.10127675</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="cw" chord="94.46530937" crvType="arc" delta="49.64970762" dirEnd="68.78764938" dirStart="118.437357" external="11.45390577" length="97.48697295" midOrd="10.39551268" radius="112.5" tangent="52.04152914">
+          <ns0:Start>20825.74447286 20574.80236767</ns0:Start>
+          <ns0:Center>20879.31670748 20673.72792391</ns0:Center>
+          <ns0:End>20920.02207989 20568.85026825</ns0:End>
+          <ns0:PI>20871.50658146 20550.02031426</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="ccw" chord="82.51664407" crvType="arc" delta="40.21948237" dirEnd="109.00713174" dirStart="68.78764937" external="7.79065356" length="84.23548686" midOrd="7.31570268" radius="119.99999995" tangent="43.93689948">
+          <ns0:Start>20920.02207989 20568.85026825</ns0:Start>
+          <ns0:Center>20963.44114379 20456.98076893</ns0:Center>
+          <ns0:End>21002.52344491 20570.43813417</ns0:End>
+          <ns0:PI>20960.98207113 20584.74776031</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="cw" chord="61.8315977" crvType="arc" delta="47.02055153" dirEnd="61.9865802" dirStart="109.00713173" external="7.01577762" length="63.60141663" midOrd="6.43338772" radius="77.5" tangent="33.71448749">
+          <ns0:Start>21002.52344491 20570.43813417</ns0:Start>
+          <ns0:Center>21027.76409772 20643.71268259</ns0:Center>
+          <ns0:End>21064.16417013 20575.29276788</ns0:End>
+          <ns0:PI>21034.3997526 20559.4578029</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="ccw" chord="42.62000576" crvType="arc" delta="258.40639868" dirEnd="320.39297887" dirStart="61.98658019" length="124.02616779" midOrd="44.88199578" radius="27.5">
+          <ns0:Start>21064.16417013 20575.29276788</ns0:Start>
+          <ns0:Center>21077.08032486 20551.01473363</ns0:Center>
+          <ns0:End>21055.8933589 20533.48297749</ns0:End>
+        </ns0:Curve>
+        <ns0:Curve rot="cw" chord="64.91557074" crvType="arc" delta="31.38584715" dirEnd="289.00713172" dirStart="320.39297887" external="4.64616587" length="65.73436454" midOrd="4.47298079" radius="119.99999998" tangent="33.71448749">
+          <ns0:Start>21055.8933589 20533.48297749</ns0:Start>
+          <ns0:Center>20963.44114381 20456.98076889</ns0:Center>
+          <ns0:End>21002.52344491 20570.43813417</ns0:End>
+          <ns0:PI>21034.3997526 20559.45780291</ns0:PI>
+        </ns0:Curve>
+      </ns0:CoordGeom>
+    </ns0:Alignment>
+    <ns0:Alignment name="Cul-de-sac SE" length="574.18174186" staStart="0." desc="">
+      <ns0:CoordGeom>
+        <ns0:Line dir="260.28531737" length="63.17066251">
+          <ns0:Start>20501.64791544 21144.38782228</ns0:Start>
+          <ns0:End>20439.38310383 21133.7282802</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="ccw" chord="33.9046741" crvType="arc" delta="5.55244313" dirEnd="265.83776049" dirStart="260.28531737" external="0.4112691" length="33.91794469" midOrd="0.4107864" radius="349.99999743" tangent="16.97225697">
+          <ns0:Start>20439.38310383 21133.7282802</ns0:Start>
+          <ns0:Center>20380.32341452 21478.70936852</ns0:Center>
+          <ns0:End>20405.7267315 21129.63248632</ns0:End>
+          <ns0:PI>20422.65422462 21130.86434811</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="cw" chord="81.62381649" crvType="arc" delta="19.78959068" dirEnd="246.04816979" dirStart="265.83776046" external="3.58617129" length="82.03095977" midOrd="3.53282678" radius="237.49999992" tangent="41.42815454">
+          <ns0:Start>20405.7267315 21129.63248632</ns0:Start>
+          <ns0:Center>20422.96469684 20892.75888603</ns0:Center>
+          <ns0:End>20326.5471871 21109.80706911</ns0:End>
+          <ns0:PI>20364.40784257 21126.6255933</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="ccw" chord="135.84366179" crvType="arc" delta="47.84536175" dirEnd="293.89353155" dirStart="246.04816979" external="15.74164752" length="139.87239835" midOrd="14.38933777" radius="167.50000005" tangent="74.30512355">
+          <ns0:Start>20326.5471871 21109.80706911</ns0:Start>
+          <ns0:Center>20258.54746968 21262.88315623</ns0:Center>
+          <ns0:End>20190.70354289 21109.73795841</ns0:End>
+          <ns0:PI>20258.64069419 21079.64153237</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="cw" chord="57.32638615" crvType="arc" delta="38.24383508" dirEnd="255.64969647" dirStart="293.89353156" external="5.10987278" length="58.40457357" midOrd="4.82792876" radius="87.5" tangent="30.33708188">
+          <ns0:Start>20190.70354289 21109.73795841</ns0:Start>
+          <ns0:Center>20155.26268561 21029.7367357</ns0:Center>
+          <ns0:End>20133.57583891 21114.50660464</ns0:End>
+          <ns0:PI>20162.96635839 21122.02564057</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="ccw" chord="41.9356028" crvType="arc" delta="260.63592767" dirEnd="156.28562414" dirStart="255.64969647" length="125.0962649" midOrd="45.29329381" radius="27.5">
+          <ns0:Start>20133.57583891 21114.50660464</ns0:Start>
+          <ns0:Center>20126.7599728 21141.14856345</ns0:Center>
+          <ns0:End>20151.93791992 21152.20844496</ns0:End>
+        </ns0:Curve>
+        <ns0:Curve rot="cw" chord="69.70062699" crvType="arc" delta="46.94255531" dirEnd="109.34306884" dirStart="156.28562415" external="7.8928157" length="71.68893807" midOrd="7.23976296" radius="87.5" tangent="37.99393751">
+          <ns0:Start>20151.93791992 21152.20844496</ns0:Start>
+          <ns0:Center>20232.04956984 21187.39897701</ns0:Center>
+          <ns0:End>20203.0674919 21104.83815605</ns0:End>
+          <ns0:PI>20167.21822707 21117.42265043</ns0:PI>
+        </ns0:Curve>
+      </ns0:CoordGeom>
+    </ns0:Alignment>
+    <ns0:Alignment name="Cul-de-sac SW" length="699.30291738" staStart="0." desc="">
+      <ns0:CoordGeom>
+        <ns0:Line dir="263.44864501" length="54.90923172">
+          <ns0:Start>20647.24823893 20790.59550989</ns0:Start>
+          <ns0:End>20592.69756499 20784.33071137</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="ccw" chord="60.55408564" crvType="arc" delta="25.44116985" dirEnd="288.88981487" dirStart="263.44864502" external="3.45978811" length="61.05442468" midOrd="3.37486933" radius="137.49999999" tangent="31.03887666">
+          <ns0:Start>20592.69756499 20784.33071137</ns0:Start>
+          <ns0:Center>20577.00967848 20920.93283513</ns0:Center>
+          <ns0:End>20532.49415893 20790.83818298</ns0:End>
+          <ns0:PI>20561.86137247 20780.78937046</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="cw" chord="90.22605574" crvType="arc" delta="53.92371754" dirEnd="234.96609732" dirStart="288.88981487" external="12.13362082" length="93.6440684" midOrd="10.8147999" radius="99.5" tangent="50.61437837">
+          <ns0:Start>20532.49415893 20790.83818298</ns0:Start>
+          <ns0:Center>20500.28111024 20696.69696197</ns0:Center>
+          <ns0:End>20443.16203685 20778.16880652</ns0:End>
+          <ns0:PI>20484.60572295 20807.22454916</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="ccw" chord="128.88011776" crvType="arc" delta="66.51819827" dirEnd="301.48429559" dirStart="234.96609732" external="23.01677894" length="136.41298473" midOrd="19.24660916" radius="117.49999999" tangent="77.06305965">
+          <ns0:Start>20443.16203685 20778.16880652</ns0:Start>
+          <ns0:Center>20375.70986475 20874.3792762</ns0:Center>
+          <ns0:End>20314.34374585 20774.17723307</ns0:End>
+          <ns0:PI>20380.0618397 20733.92990641</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="cw" chord="150.67995373" crvType="arc" delta="84.08608357" dirEnd="217.39821202" dirStart="301.48429559" external="38.98619041" length="165.10263897" midOrd="28.95278051" radius="112.49999998" tangent="101.44858739">
+          <ns0:Start>20314.34374585 20774.17723307</ns0:Start>
+          <ns0:Center>20255.58895116 20678.23910667</ns0:Center>
+          <ns0:End>20166.2151741 20746.56609965</ns0:End>
+          <ns0:PI>20227.83008005 20827.16026351</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="ccw" chord="42.69780648" crvType="arc" delta="258.14959338" dirEnd="115.54780538" dirStart="217.398212" length="123.9029101" midOrd="44.83419541" radius="27.5">
+          <ns0:Start>20166.2151741 20746.56609965</ns0:Start>
+          <ns0:Center>20144.36825081 20763.26825349</ns0:Center>
+          <ns0:End>20156.22801161 20788.07946212</ns0:End>
+        </ns0:Curve>
+        <ns0:Curve rot="cw" chord="62.66324834" crvType="arc" delta="44.63977295" dirEnd="70.90803243" dirStart="115.54780538" external="6.68167293" length="64.27665878" midOrd="6.18106836" radius="82.50000002" tangent="33.86917163">
+          <ns0:Start>20156.22801161 20788.07946212</ns0:Start>
+          <ns0:Center>20191.80729402 20862.51308804</ns0:Center>
+          <ns0:End>20218.79184127 20784.55101897</ns0:End>
+          <ns0:PI>20186.78565101 20773.4729067</ns0:PI>
+        </ns0:Curve>
+      </ns0:CoordGeom>
+    </ns0:Alignment>
+    <ns0:Alignment name="East-west Drive" length="2784.22492646" staStart="0." desc="">
+      <ns0:CoordGeom>
+        <ns0:Line dir="359.85694445" length="72.58389432">
+          <ns0:Start>20618.2871483 20039.54386238</ns0:Start>
+          <ns0:End>20618.10592172 20112.12753046</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="ccw" chord="42.20571672" crvType="arc" delta="21.62329102" dirEnd="21.48023546" dirStart="359.85694444" external="2.03305977" length="42.45723267" midOrd="1.99697122" radius="112.50000011" tangent="21.48422167">
+          <ns0:Start>20618.10592172 20112.12753046</ns0:Start>
+          <ns0:Center>20730.60557117 20112.40841909</ns0:Center>
+          <ns0:End>20625.91937787 20153.60369743</ns0:End>
+          <ns0:PI>20618.05228018 20133.61168516</ns0:PI>
+        </ns0:Curve>
+        <ns0:Line dir="21.48023549" length="59.08198873">
+          <ns0:Start>20625.91937787 20153.60369743</ns0:Start>
+          <ns0:End>20647.55403539 20208.58208397</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="cw" chord="202.85855687" crvType="arc" delta="41.31703577" dirEnd="340.16319971" dirStart="21.48023548" external="19.75669744" length="207.32151452" midOrd="18.48633589" radius="287.50000001" tangent="108.39939171">
+          <ns0:Start>20647.55403539 20208.58208397</ns0:Start>
+          <ns0:Center>20380.0226528 20313.85890637</ns0:Center>
+          <ns0:End>20650.46326766 20411.41977885</ns0:End>
+          <ns0:PI>20687.24775194 20309.45248096</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="ccw" chord="275.67519182" crvType="arc" delta="34.67830542" dirEnd="14.84150513" dirStart="340.16319971" external="22.0177627" length="279.9284065" midOrd="21.0172176" radius="462.50000005" tangent="144.39948884">
+          <ns0:Start>20650.46326766 20411.41977885</ns0:Start>
+          <ns0:Center>21085.519909 20568.36553023</ns0:Center>
+          <ns0:End>20638.44979244 20686.83308245</ns0:End>
+          <ns0:PI>20601.46243248 20547.2510364</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="cw" chord="262.21900723" crvType="arc" delta="51.82928675" dirEnd="323.01221838" dirStart="14.84150513" external="33.53860266" length="271.37751085" midOrd="30.16616583" radius="300.00000003" tangent="145.76693543">
+          <ns0:Start>20638.44979244 20686.83308245</ns0:Start>
+          <ns0:Center>20348.45836549 20763.67690011</ns0:Center>
+          <ns0:End>20588.08751437 20944.17031003</ns0:End>
+          <ns0:PI>20675.78741846 20827.73695446</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="ccw" chord="372.36634884" crvType="arc" delta="47.47640513" dirEnd="10.48862351" dirStart="323.01221838" external="42.74670745" length="383.23655878" midOrd="39.13009606" radius="462.50000003" tangent="203.39121267">
+          <ns0:Start>20588.08751437 20944.17031003</ns0:Start>
+          <ns0:Center>20957.51578554 21222.43098366</ns0:Center>
+          <ns0:End>20502.74366454 21306.62461756</ns0:End>
+          <ns0:PI>20465.7182693 21106.63185395</ns0:PI>
+        </ns0:Curve>
+        <ns0:Line dir="10.48862353" length="13.48859608">
+          <ns0:Start>20502.74366454 21306.62461756</ns0:Start>
+          <ns0:End>20505.19913248 21319.88783366</ns0:End>
+        </ns0:Line>
+        <ns0:Line dir="10.48862351" length="61.49347735">
+          <ns0:Start>20505.19913248 21319.88783366</ns0:Start>
+          <ns0:End>20516.3934229 21380.35382095</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="cw" chord="95.33909992" crvType="arc" delta="16.2395722" dirEnd="354.24905131" dirStart="10.48862351" external="3.4177203" length="95.65897637" midOrd="3.38345745" radius="337.50000008" tangent="48.15227941">
+          <ns0:Start>20516.3934229 21380.35382095</ns0:Start>
+          <ns0:Center>20184.5326859 21441.79241869</ns0:Center>
+          <ns0:End>20520.33400097 21475.61144961</ns0:End>
+          <ns0:PI>20525.15907779 21427.7015274</ns0:PI>
+        </ns0:Curve>
+        <ns0:Line dir="354.24905131" length="77.60736011">
+          <ns0:Start>20520.33400097 21475.61144961</ns0:Start>
+          <ns0:End>20512.55739145 21552.82820095</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="ccw" chord="250.44906176" crvType="arc" delta="105.3249423" dirEnd="99.5739936" dirStart="354.2490513" external="102.18274219" length="289.52705682" midOrd="61.97478415" radius="157.49999998" tangent="206.46761632">
+          <ns0:Start>20512.55739145 21552.82820095</ns0:Start>
+          <ns0:Center>20669.26467176 21568.6104154</ns0:Center>
+          <ns0:End>20695.46025896 21723.91669733</ns0:End>
+          <ns0:PI>20491.86839971 21758.25663669</ns0:PI>
+        </ns0:Curve>
+        <ns0:Line dir="99.57399359" length="83.19462745">
+          <ns0:Start>20695.46025896 21723.91669733</ns0:Start>
+          <ns0:End>20777.49612097 21710.07966802</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="cw" chord="104.39965608" crvType="arc" delta="25.39325111" dirEnd="74.18074248" dirStart="99.57399359" external="5.95303781" length="105.2590119" midOrd="5.80747109" radius="237.49999994" tangent="53.50823878">
+          <ns0:Start>20777.49612097 21710.07966802</ns0:Start>
+          <ns0:Center>20816.99740323 21944.27168042</ns0:Center>
+          <ns0:End>20881.7407677 21715.76665481</ns0:End>
+          <ns0:PI>20830.25907728 21701.18011415</ns0:PI>
+        </ns0:Curve>
+        <ns0:Line dir="74.18074249" length="75.01220355">
+          <ns0:Start>20881.7407677 21715.76665481</ns0:Start>
+          <ns0:End>20953.91199085 21736.21525453</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="ccw" chord="239.05991957" crvType="arc" delta="120.75683302" dirEnd="194.9375755" dirStart="74.18074248" external="140.68838785" length="289.79559543" midOrd="69.53796123" radius="137.5" tangent="241.83161318">
+          <ns0:Start>20953.91199085 21736.21525453</ns0:Start>
+          <ns0:Center>20991.39499134 21603.92287125</ns0:Center>
+          <ns0:End>21124.24848679 21568.4799771</ns0:End>
+          <ns0:PI>21186.58457602 21802.13943254</ns0:PI>
+        </ns0:Curve>
+        <ns0:Line dir="194.9375755" length="60.13445343">
+          <ns0:Start>21124.24848679 21568.4799771</ns0:Start>
+          <ns0:End>21108.74783903 21510.37763284</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="cw" chord="178.63312286" crvType="arc" delta="105.10767178" dirEnd="89.82990372" dirStart="194.9375755" external="72.52811236" length="206.37843095" midOrd="44.09823208" radius="112.5" tangent="146.89844234">
+          <ns0:Start>21108.74783903 21510.37763284</ns0:Start>
+          <ns0:Center>21217.4461535 21481.37890127</ns0:Center>
+          <ns0:End>21217.78013628 21368.87939702</ns0:End>
+          <ns0:PI>21070.88234127 21368.44329435</ns0:PI>
+        </ns0:Curve>
+        <ns0:Line dir="89.82990371" length="110.68803066">
+          <ns0:Start>21217.78013628 21368.87939702</ns0:Start>
+          <ns0:End>21328.46767917 21369.20800055</ns0:End>
+        </ns0:Line>
+      </ns0:CoordGeom>
+    </ns0:Alignment>
+    <ns0:Alignment name="Road South-West" length="766.46958785" staStart="0." desc="">
+      <ns0:CoordGeom>
+        <ns0:Line dir="253.67674867" length="46.15111905">
+          <ns0:Start>20634.18241714 20467.36692382</ns0:Start>
+          <ns0:End>20589.89158901 20454.39586629</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="ccw" chord="53.95364473" crvType="arc" delta="27.74876201" dirEnd="281.42551068" dirStart="253.67674867" external="3.38096636" length="54.48456684" midOrd="3.2823226" radius="112.50000009" tangent="27.78755773">
+          <ns0:Start>20589.89158901 20454.39586629</ns0:Start>
+          <ns0:Center>20558.27276799 20562.36113931</ns0:Center>
+          <ns0:End>20535.98721751 20452.09054368</ns0:End>
+          <ns0:PI>20563.22411119 20446.58600128</ns0:PI>
+        </ns0:Curve>
+        <ns0:Line dir="281.42551066" length="5.83526454">
+          <ns0:Start>20535.98721751 20452.09054368</ns0:Start>
+          <ns0:End>20530.26758999 20453.2464733</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="cw" chord="66.27785418" crvType="arc" delta="23.53395647" dirEnd="257.89155422" dirStart="281.42551069" external="3.48822849" length="66.74606682" midOrd="3.41492367" radius="162.50000006" tangent="33.85028801">
+          <ns0:Start>20530.26758999 20453.2464733</ns0:Start>
+          <ns0:Center>20498.07735037 20293.96672414</ns0:Center>
+          <ns0:End>20463.99091285 20452.85147733</ns0:End>
+          <ns0:PI>20497.08811072 20459.95200488</ns0:PI>
+        </ns0:Curve>
+        <ns0:Line dir="257.89155425" length="6.19262915">
+          <ns0:Start>20463.99091285 20452.85147733</ns0:Start>
+          <ns0:End>20457.93605529 20451.55249477</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="ccw" chord="53.27163811" crvType="arc" delta="18.86815744" dirEnd="276.75971166" dirStart="257.89155422" external="2.22797166" length="53.51311411" midOrd="2.19783799" radius="162.50000016" tangent="27.00101198">
+          <ns0:Start>20457.93605529 20451.55249477</ns0:Start>
+          <ns0:Center>20423.84961774 20610.43724806</ns0:Center>
+          <ns0:End>20404.72243801 20449.06686339</ns0:End>
+          <ns0:PI>20431.535753 20445.8886898</ns0:PI>
+        </ns0:Curve>
+        <ns0:Line dir="276.75971167" length="58.11472599">
+          <ns0:Start>20404.72243801 20449.06686339</ns0:Start>
+          <ns0:End>20347.01169537 20455.90729914</ns0:End>
+        </ns0:Line>
+        <ns0:Curve rot="cw" chord="128.6068295" crvType="arc" delta="112.1402759" dirEnd="164.61943578" dirStart="276.75971168" external="61.34469044" length="151.68432049" midOrd="34.24123381" radius="77.5" tangent="115.20242212">
+          <ns0:Start>20347.01169537 20455.90729914</ns0:Start>
+          <ns0:Center>20337.88950195 20378.94603884</ns0:Center>
+          <ns0:End>20263.1651311 20358.39078642</ns0:End>
+          <ns0:PI>20232.61010058 20469.46728336</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="ccw" chord="105.14158624" crvType="arc" delta="28.64647152" dirEnd="193.2659073" dirStart="164.61943578" external="6.81737452" length="106.24474004" midOrd="6.60545973" radius="212.50000007" tangent="54.25735681">
+          <ns0:Start>20263.1651311 20358.39078642</ns0:Start>
+          <ns0:Center>20058.27572711 20302.02961043</ns0:Center>
+          <ns0:End>20265.1052894 20253.2671024</ns0:End>
+          <ns0:PI>20277.55575903 20306.0766335</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="cw" chord="118.85529486" crvType="arc" delta="32.4797694" dirEnd="160.78613791" dirStart="193.26590731" external="8.8312861" length="120.46176968" midOrd="8.47891109" radius="212.49999994" tangent="61.89740064">
+          <ns0:Start>20265.1052894 20253.2671024</ns0:Start>
+          <ns0:Center>20471.93485156 20204.50459436</ns0:Center>
+          <ns0:End>20271.27178653 20134.57188165</ns0:End>
+          <ns0:PI>20250.90165412 20193.02139757</ns0:PI>
+        </ns0:Curve>
+        <ns0:Curve rot="ccw" chord="63.63576905" crvType="arc" delta="19.54021706" dirEnd="180.32635498" dirStart="160.78613791" external="2.75941536" length="63.94521076" midOrd="2.71939435" radius="187.49999987" tangent="32.28614457">
+          <ns0:Start>20271.27178653 20134.57188165</ns0:Start>
+          <ns0:Center>20094.21614098 20072.86654695</ns0:Center>
+          <ns0:End>20281.71309923 20071.79855856</ns0:End>
+          <ns0:PI>20281.89699911 20104.08417939</ns0:PI>
+        </ns0:Curve>
+        <ns0:Line dir="180.32635496" length="33.09606036">
+          <ns0:Start>20281.71309923 20071.79855856</ns0:Start>
+          <ns0:End>20281.52458613 20038.70303508</ns0:End>
+        </ns0:Line>
+      </ns0:CoordGeom>
+    </ns0:Alignment>
+  </ns0:Alignments>
+</LandXML>

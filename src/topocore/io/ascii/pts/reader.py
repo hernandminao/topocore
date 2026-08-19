@@ -22,6 +22,7 @@ from topocore.io.ascii.base_reader import BaseASCIIReader
 from topocore.io.ascii.converter import ASCIIConverter
 from topocore.io.ascii.format import ASCIIFormat
 from topocore.io.ascii.parser import ASCIIParser
+from topocore.io.exceptions import CorruptedFileError
 from topocore.pointcloud.chunk import Chunk
 
 
@@ -49,10 +50,21 @@ class PTSReader(BaseASCIIReader):
             encoding=self.encoding,
         ) as stream:
             #
-            # Skip point count
+            # PTS requires the first non-empty line to contain the
+            # declared point count.
             #
 
-            next(stream)
+            first_line = stream.readline()
+            if not first_line:
+                raise CorruptedFileError("PTS file is missing its point count.")
+
+            try:
+                declared_count = int(first_line.strip())
+            except ValueError as exc:
+                raise CorruptedFileError("PTS point count must be an integer.") from exc
+
+            if declared_count < 0:
+                raise CorruptedFileError("PTS point count cannot be negative.")
 
             parser = ASCIIParser(
                 stream,
@@ -65,10 +77,18 @@ class PTSReader(BaseASCIIReader):
 
             converter = ASCIIConverter()
 
+            actual_count = 0
+
             for batch in parser.iter_batches(
                 chunk_size=self.chunk_size,
             ):
+                actual_count += batch.size
                 yield converter(batch)
+
+            if actual_count != declared_count:
+                raise CorruptedFileError(
+                    f"PTS point count mismatch: header declares {declared_count}, read {actual_count} points."
+                )
 
     @property
     def format_name(self) -> str:

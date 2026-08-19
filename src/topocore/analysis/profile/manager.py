@@ -70,8 +70,8 @@ class ProfileAnalysis:
 
     __slots__ = (
         "_config",
-        "_method",
         "_interval",
+        "_method",
         "_width",
     )
 
@@ -229,7 +229,12 @@ class ProfileAnalysis:
         Generate profile using selected method.
         """
 
-        selected = ProfileMethod(method or self._method.value)
+        try:
+            selected = ProfileMethod(method or self._method.value)
+        except ValueError as exc:
+            raise ProfileError(
+                f"Unsupported profile method '{method}'. Available: {[m.value for m in ProfileMethod]}"
+            ) from exc
 
         if selected is ProfileMethod.LONGITUDINAL:
             return self.longitudinal(

@@ -154,6 +154,7 @@ class SegmentationManager:
                 eps=p.get("eps", 0.5),
                 min_samples=p.get("min_samples", 5),
                 min_points_per_tree=p.get("min_points_per_tree", 10),
+                ground_method=p.get("ground_method", "grid"),
             )
 
         if self._method == "buildings":
@@ -164,6 +165,7 @@ class SegmentationManager:
                 curvature_threshold=p.get("curvature_threshold", 0.02),
                 normal_angle_threshold=p.get("normal_angle_threshold", 10.0),
                 min_points_per_building=p.get("min_points_per_building", 100),
+                ground_method=p.get("ground_method", "grid"),
             )
 
         raise RuntimeError(f"Unexpected segmentation method: {self._method}")

@@ -30,9 +30,9 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from topocore.terrain.base import BaseDTM
-from topocore.terrain.base import BaseInterpolator
+from topocore.terrain.base import BaseDTM, BaseInterpolator
 from topocore.terrain.cell import Cell
+from topocore.terrain.exceptions import InterpolationError
 from topocore.terrain.grid import Grid
 from topocore.terrain.raster import Raster
 from topocore.terrain.tin import TIN
@@ -85,6 +85,15 @@ class DTM(BaseDTM):
         Returns
         -------
         DTM
+
+        Notes
+        -----
+        A grid cell whose query point lies outside the TIN's convex
+        hull (``InterpolationError``) is left as ``NaN`` -- the same
+        value the underlying array is pre-filled with -- rather than
+        aborting the whole DTM. This is common in practice: a
+        rectangular grid over an irregular real survey boundary
+        almost always has at least one corner outside the hull.
         """
         values = np.full(
             grid.shape,
@@ -99,13 +108,16 @@ class DTM(BaseDTM):
                     column,
                 )
 
-                values[
-                    row,
-                    column,
-                ] = interpolator.interpolate(
-                    x,
-                    y,
-                )
+                try:
+                    values[
+                        row,
+                        column,
+                    ] = interpolator.interpolate(
+                        x,
+                        y,
+                    )
+                except InterpolationError:
+                    continue
 
         raster = Raster(
             grid=grid,

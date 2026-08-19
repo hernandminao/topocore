@@ -18,7 +18,8 @@ MIT
 
 from __future__ import annotations
 
-from typing import Any, Callable, TypeAlias
+from collections.abc import Callable
+from typing import Any, TypeAlias
 
 from topocore.analysis.config import (
     DEFAULT_ANALYSIS_CONFIG,
@@ -84,10 +85,10 @@ class VisibilityAnalysis:
 
     __slots__ = (
         "_config",
+        "_dispatch",
         "_method",
         "_observer_height",
         "_target_height",
-        "_dispatch",
     )
 
     def __init__(
@@ -181,6 +182,7 @@ class VisibilityAnalysis:
             observer_height=oh,
             resolution=resolution,
             max_distance=max_distance,
+            earth_curvature=(self._config.earth_curvature_correction),
         ).compute(
             observer,
             tin,

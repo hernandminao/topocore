@@ -364,7 +364,7 @@ class Registrar(ABC):
 
 
 __all__ = [
-    "Transformation",
-    "RegistrationResult",
     "Registrar",
+    "RegistrationResult",
+    "Transformation",
 ]

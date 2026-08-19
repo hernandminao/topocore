@@ -18,7 +18,11 @@ MIT
 
 from __future__ import annotations
 
+import numpy as np
+from numpy.typing import NDArray
+
 from topocore.geometry.point3d import Point3D
+from topocore.terrain.base import BaseInterpolator
 from topocore.terrain.exceptions import InterpolationError
 from topocore.terrain.tin import TIN
 from topocore.terrain.weights import (
@@ -27,7 +31,7 @@ from topocore.terrain.weights import (
 )
 
 
-class BarycentricInterpolator:
+class BarycentricInterpolator(BaseInterpolator):
     """
     Exact barycentric interpolation over a TIN.
     """
@@ -150,6 +154,39 @@ class BarycentricInterpolator:
         w1, w2, w3 = weights
 
         return w1 * p1.z + w2 * p2.z + w3 * p3.z
+
+    def interpolate_many(
+        self,
+        x: NDArray[np.float64],
+        y: NDArray[np.float64],
+    ) -> NDArray[np.float64]:
+        """
+        Interpolate elevation for many query points.
+
+        Unlike ``NearestInterpolator``/``IDWInterpolator``, this is
+        a plain Python loop over ``interpolate()``, not a vectorized
+        NumPy computation -- a deliberate, documented decision, not
+        an oversight. ``TIN.find_triangle()`` is a brute-force
+        O(triangle_count) scan with no spatial index (see its own
+        docstring); vectorizing barycentric evaluation would still
+        need to point-locate every query point one at a time against
+        every triangle first, so there is no broadcasting shortcut
+        available here the way there is for Nearest/IDW (which only
+        ever need vertex coordinates, not triangle containment).
+        Accelerating ``find_triangle()`` itself with a spatial index
+        is explicitly deferred to PR20 (Optimization); this loop
+        will benefit automatically once that lands, without any
+        change needed here.
+        """
+        x_arr = np.asarray(x, dtype=np.float64)
+        y_arr = np.asarray(y, dtype=np.float64)
+
+        result = np.empty(x_arr.shape[0], dtype=np.float64)
+
+        for i in range(x_arr.shape[0]):
+            result[i] = self.interpolate(float(x_arr[i]), float(y_arr[i]))
+
+        return result
 
     def __call__(
         self,

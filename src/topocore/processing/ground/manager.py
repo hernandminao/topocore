@@ -45,10 +45,40 @@ from .grid import (
 )
 from .grid_adaptive import AdaptiveGridGroundClassifier, AdaptiveGridGroundExtractor
 from .pmf import PMFGroundClassifier, PMFGroundExtractor
-from .progressive_tin import ProgressiveTINGroundClassifier, ProgressiveTINGroundExtractor
+from .progressive_tin import (
+    ProgressiveTINGroundClassifier,
+    ProgressiveTINGroundExtractor,
+)
 
 _NO_GROUND_POINTS_ERROR = "No ground points found."
 _UNSUPPORTED_METHOD_ERROR = "Unsupported method: {method}. Supported: {supported}"
+
+#: (cloud_id, method, frozen_params)
+#:
+#: cloud_id is id(cloud), computed fresh on every call, never stored
+#: on the manager -- see the same fix already applied to
+#: topocore.processing.normals.manager.NormalManager and
+#: topocore.processing.features.manager.FeatureManager in this
+#: session (PR19).
+#:
+#: frozen_params is a sorted tuple of the ACTUAL resolved parameters
+#: for this call -- i.e. `_get_params()`'s output, after any
+#: per-call kwargs overrides -- not just the manager's stored
+#: attribute values, since classify() accepts **kwargs overrides
+#: that never persist to `self`.
+#:
+#: Scope: this cache covers ONLY classify() (its `BoolArray1D`
+#: result is what the cache was originally declared to hold).
+#: extract()/estimate_elevation()'s DEDICATED extractor/estimator
+#: code paths (used for grid/adaptive_grid/progressive_tin/pmf/csf,
+#: which all have their own extractor or elevation-estimator class)
+#: remain uncached -- they return different types (PointCloud,
+#: FloatArray1D) that the original cache type was never designed to
+#: hold, and extending it to cover them is a bigger design decision
+#: than fixing the classify() gap this session scoped. Only the
+#: fallback paths in extract()/estimate_elevation() (which call
+#: classify() internally) benefit indirectly.
+CacheKey = tuple[int, str, tuple[tuple[str, Any], ...]]
 
 
 class GroundManager:
@@ -69,31 +99,30 @@ class GroundManager:
     """
 
     __slots__ = (
-        "_method",
+        "_cache",
         "_cell_size",
+        "_csf_class_threshold",
+        "_csf_cloth_resolution",
+        "_csf_iterations",
+        "_csf_rigidness",
+        "_csf_slope_smooth",
+        "_csf_time_step",
         "_height_threshold",
-        "_max_distance",
         "_max_angle",
-        "_max_iterations",
-        "_min_cell_size",
         "_max_cell_size",
-        "_slope_threshold",
-        "_use_multiresolution",
+        "_max_distance",
+        "_max_iterations",
+        "_method",
+        "_min_cell_size",
+        "_pmf_exponential",
         "_pmf_initial_distance",
         "_pmf_max_distance",
-        "_pmf_slope",
-        "_pmf_max_window_size",
-        "_pmf_window_base",
-        "_pmf_exponential",
         "_pmf_max_grid_cells",
-        "_csf_cloth_resolution",
-        "_csf_rigidness",
-        "_csf_time_step",
-        "_csf_class_threshold",
-        "_csf_iterations",
-        "_csf_slope_smooth",
-        "_cache",
-        "_cloud_id",
+        "_pmf_max_window_size",
+        "_pmf_slope",
+        "_pmf_window_base",
+        "_slope_threshold",
+        "_use_multiresolution",
     )
 
     _SUPPORTED_METHODS: ClassVar[dict[str, type[GroundClassifier]]] = {
@@ -178,8 +207,7 @@ class GroundManager:
         self._csf_class_threshold = csf_class_threshold
         self._csf_iterations = csf_iterations
         self._csf_slope_smooth = csf_slope_smooth
-        self._cache: LRUCache[tuple[str, int], BoolArray1D] = LRUCache(maxsize=cache_size)
-        self._cloud_id = 0
+        self._cache: LRUCache[CacheKey, BoolArray1D] = LRUCache(maxsize=cache_size)
 
     @property
     def method(self) -> str:
@@ -241,8 +269,21 @@ class GroundManager:
         BoolArray1D
             Boolean mask where True = ground.
         """
-        classifier = self._get_classifier(**kwargs)
-        return classifier.classify(cloud)
+        classifier_class = self._SUPPORTED_METHODS[self._method]
+        params = self._get_params(classifier_class, **kwargs)
+
+        cache_key = self._cache_key(id(cloud), self._method, params)
+        cached = self._cache.get(cache_key)
+
+        if cached is not None:
+            return cached
+
+        classifier = classifier_class(**params)
+        mask = classifier.classify(cloud)
+
+        self._cache.set(cache_key, mask)
+
+        return mask
 
     def extract(
         self,
@@ -308,9 +349,25 @@ class GroundManager:
         """Clear the cache."""
         self._cache.clear()
 
-    def _get_classifier(self, **kwargs: Any) -> GroundClassifier:
-        classifier_class = self._SUPPORTED_METHODS[self._method]
-        return classifier_class(**self._get_params(classifier_class, **kwargs))
+    def _cache_key(
+        self,
+        cloud_id: int,
+        method: str,
+        params: dict[str, Any],
+    ) -> CacheKey:
+        """
+        Generate a cache key from the ACTUAL resolved parameters for
+        this call -- ``params`` is ``_get_params()``'s output, after
+        any per-call ``**kwargs`` overrides, not just the manager's
+        stored attribute values (``classify(cloud, cell_size=2.0)``
+        must not collide with a call using the manager's own default
+        ``cell_size``).
+        """
+        return (
+            cloud_id,
+            method,
+            tuple(sorted(params.items())),
+        )
 
     def _get_params(self, target_class: type, **kwargs: Any) -> dict[str, Any]:
         """

@@ -24,7 +24,9 @@ MIT
 
 from __future__ import annotations
 
-from typing import Any, Protocol, TypeAlias
+from typing import Any, ClassVar, Protocol, TypeAlias
+
+import numpy as np
 
 from topocore.pointcloud.pointcloud import PointCloud
 from topocore.processing.cache import LRUCache
@@ -45,12 +47,29 @@ from .base import (
 from .pca import PCANormalEstimator
 from .weighted_pca import WeightedPCANormalEstimator
 
+#: id(cloud) is computed fresh on every call (never stored on the
+#: manager) -- see PR19 session notes: an earlier version of
+#: topocore.processing.features.manager.FeatureManager stored
+#: id(cloud) once, at construction, and silently returned stale
+#: results for every other cloud. This module's cache was actually
+#: never wired up at all before PR19 (a related but different bug:
+#: harmless but wasteful, not silently wrong) -- being wired up now,
+#: this key is designed from the start to avoid the features/manager.py
+#: mistake.
+#:
+#: The viewpoint component is the actual (x, y, z) tuple, not merely
+#: whether a viewpoint was given -- two DIFFERENT viewpoints must not
+#: collide into the same cache entry. Likewise sigma (used only by
+#: weighted_pca) is included explicitly; omitting it would let two
+#: different sigma values silently share a cache entry, the same
+#: category of bug as the viewpoint-identity mistake this replaces.
 CacheKey: TypeAlias = tuple[
     int,
     str,
     int,
     bool,
-    bool,
+    tuple[float, float, float] | None,
+    float | None,
 ]
 
 
@@ -101,17 +120,18 @@ class NormalManager:
     """
 
     __slots__ = (
-        "_method",
+        "_cache",
         "_k",
+        "_method",
         "_orient_upward",
         "_viewpoint",
-        "_cache",
-        "_cloud_id",
     )
 
-    _SUPPORTED_METHODS: dict[
-        str,
-        NormalEstimatorFactory,
+    _SUPPORTED_METHODS: ClassVar[
+        dict[
+            str,
+            NormalEstimatorFactory,
+        ]
     ] = {
         "pca": _create_pca,
         "weighted_pca": _create_weighted_pca,
@@ -137,9 +157,7 @@ class NormalManager:
         self._orient_upward: bool = orient_upward
         self._viewpoint: Vector3D | None = viewpoint
 
-        self._cache: LRUCache[CacheKey, Any] = LRUCache(maxsize=cache_size)
-
-        self._cloud_id: int = 0
+        self._cache: LRUCache[CacheKey, tuple[FloatArray2D, FloatArray1D]] = LRUCache(maxsize=cache_size)
 
     @property
     def method(
@@ -224,12 +242,13 @@ class NormalManager:
         """
         Estimate normals.
         """
-        estimator = self._get_estimator(**kwargs)
-
-        return estimator.estimate(
+        normals, _ = self._estimate_both_cached(
             cloud,
-            manager=manager,
+            manager,
+            **kwargs,
         )
+
+        return normals
 
     def estimate_at(
         self,
@@ -242,13 +261,19 @@ class NormalManager:
         """
         Estimate normals for selected points.
         """
-        estimator = self._get_estimator(**kwargs)
-
-        return estimator.estimate_at(
+        normals, _ = self._estimate_both_cached(
             cloud,
-            indices,
-            manager=manager,
+            manager,
+            **kwargs,
         )
+
+        if indices is not None:
+            return normals[indices].astype(
+                np.float64,
+                copy=False,
+            )
+
+        return normals
 
     def estimate_curvature(
         self,
@@ -260,15 +285,16 @@ class NormalManager:
         """
         Estimate curvature.
         """
-        estimator = self._get_estimator(**kwargs)
+        estimator, _ = self._get_estimator(**kwargs)
 
         if isinstance(
             estimator,
             NormalAndCurvatureEstimator,
         ):
-            _, curvature = estimator.estimate_both(
+            _, curvature = self._estimate_both_cached(
                 cloud,
-                manager=manager,
+                manager,
+                **kwargs,
             )
             return curvature
 
@@ -293,34 +319,11 @@ class NormalManager:
         """
         Estimate normals and curvature.
         """
-        estimator = self._get_estimator(**kwargs)
-
-        if isinstance(
-            estimator,
-            NormalAndCurvatureEstimator,
-        ):
-            return estimator.estimate_both(
-                cloud,
-                manager=manager,
-            )
-
-        normals = estimator.estimate(
+        return self._estimate_both_cached(
             cloud,
-            manager=manager,
+            manager,
+            **kwargs,
         )
-
-        pca = PCANormalEstimator(
-            k=self._k,
-            orient_upward=self._orient_upward,
-            viewpoint=self._viewpoint,
-        )
-
-        _, curvature = pca.estimate_both(
-            cloud,
-            manager=manager,
-        )
-
-        return normals, curvature
 
     def clear_cache(
         self,
@@ -328,12 +331,84 @@ class NormalManager:
         """Clear cache."""
         self._cache.clear()
 
+    def _estimate_both_cached(
+        self,
+        cloud: PointCloud,
+        manager: NeighborhoodManager | None,
+        **kwargs: Any,
+    ) -> tuple[FloatArray2D, FloatArray1D]:
+        """
+        Shared, cached (normals, curvature) computation used by
+        ``estimate()``/``estimate_at()``/``estimate_curvature()``/
+        ``estimate_both()`` alike, so calling more than one of them
+        with the same cloud and parameters computes the underlying
+        PCA only once.
+
+        Note: if ``manager`` (an explicitly-provided
+        ``NeighborhoodManager``) is given, it is NOT itself part of
+        the cache key -- only ``id(cloud)`` and the resolved
+        estimation parameters are. Passing a different, differently
+        configured ``NeighborhoodManager`` for the same cloud and
+        parameters is an advanced, rare override this cache does not
+        specially detect; ``clear_cache()`` is available if that
+        matters for a specific workflow.
+        """
+        estimator, params = self._get_estimator(**kwargs)
+
+        cache_key = self._cache_key(
+            id(cloud),
+            self._method,
+            params,
+        )
+
+        cached = self._cache.get(cache_key)
+
+        if cached is not None:
+            return cached
+
+        if isinstance(
+            estimator,
+            NormalAndCurvatureEstimator,
+        ):
+            result = estimator.estimate_both(
+                cloud,
+                manager=manager,
+            )
+        else:
+            normals = estimator.estimate(
+                cloud,
+                manager=manager,
+            )
+
+            pca = PCANormalEstimator(
+                k=params["k"],
+                orient_upward=params["orient_upward"],
+                viewpoint=params["viewpoint"],
+            )
+
+            _, curvature = pca.estimate_both(
+                cloud,
+                manager=manager,
+            )
+
+            result = (normals, curvature)
+
+        self._cache.set(
+            cache_key,
+            result,
+        )
+
+        return result
+
     def _get_estimator(
         self,
         **kwargs: Any,
-    ) -> NormalEstimator:
+    ) -> tuple[NormalEstimator, dict[str, Any]]:
         """
-        Create current estimator.
+        Create the current estimator, along with the resolved
+        parameters used to build it (needed by ``_cache_key()`` --
+        the actual per-call values, after ``kwargs`` overrides, not
+        just the manager's stored defaults).
         """
 
         params: dict[str, Any] = {
@@ -356,25 +431,31 @@ class NormalManager:
 
         factory = self._SUPPORTED_METHODS[self._method]
 
-        return factory(**params)
+        return factory(**params), params
 
     def _cache_key(
         self,
         cloud_id: int,
         method: str,
-        k: int,
-        orient_upward: bool,
-        viewpoint: Vector3D | None,
+        params: dict[str, Any],
     ) -> CacheKey:
         """
-        Generate cache key.
+        Generate cache key from the actual resolved parameters.
         """
+        viewpoint = params["viewpoint"]
+        viewpoint_key = (
+            (float(viewpoint[0]), float(viewpoint[1]), float(viewpoint[2])) if viewpoint is not None else None
+        )
+
+        sigma = params.get("sigma")
+
         return (
             cloud_id,
             method,
-            k,
-            orient_upward,
-            viewpoint is not None,
+            int(params["k"]),
+            bool(params["orient_upward"]),
+            viewpoint_key,
+            float(sigma) if sigma is not None else None,
         )
 
     def __call__(

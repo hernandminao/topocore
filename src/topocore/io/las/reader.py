@@ -81,8 +81,11 @@ class LASReader(BaseLASReader):
 
         assert self._reader is not None
 
-        for points in self._reader.chunk_iterator(self._chunk_size):
-            yield LASConverter.from_las_points(points)
+        try:
+            for points in self._reader.chunk_iterator(self._chunk_size):
+                yield LASConverter.from_las_points(points)
+        except Exception as exc:
+            raise PointCloudIOError(f"Unable to read point data from '{self.path}'.") from exc
 
 
 __all__ = [

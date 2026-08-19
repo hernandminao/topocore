@@ -12,7 +12,7 @@ computation, caching, and retrieval. The manager handles:
 
 Author
 ------
-Hernán Mina
+HernÃ¡n Mina
 
 License
 -------
@@ -30,6 +30,23 @@ from topocore.processing.exceptions import PointDescriptorError
 from .base import FeatureComputer
 
 CacheKey: TypeAlias = tuple[int, str, frozenset[str]]
+#: The int component is id(cloud), computed fresh on every call
+#: (never stored/frozen on the manager) -- this is the fix for a
+#: real bug found in PR19: an earlier version stored id(cloud) once,
+#: at construction, so reusing one FeatureManager across multiple
+#: different clouds silently returned the FIRST cloud's cached
+#: results for every subsequent cloud. Matches the pattern already
+#: used (and already correct) in
+#: topocore.processing.filters.manager.FilterManager.
+#:
+#: Known, pre-existing, accepted limitation shared with that same
+#: module: id() is a memory address, reusable after garbage
+#: collection -- a sufficiently long-lived manager could theoretically
+#: see a coincidental collision between a cloud that's since been
+#: freed and a new one allocated at the same address. Not addressed
+#: here (would be a caching-strategy redesign, e.g. content hashing,
+#: not a bug fix); LRUCache's bounded size limits how long a stale
+#: entry can linger.
 
 
 class FeatureManager:
@@ -52,9 +69,8 @@ class FeatureManager:
     """
 
     __slots__ = (
-        "_computers",
         "_cache",
-        "_cloud_id",
+        "_computers",
     )
 
     def __init__(
@@ -64,7 +80,6 @@ class FeatureManager:
     ) -> None:
         self._computers: dict[str, FeatureComputer] = {}
         self._cache: LRUCache[CacheKey, Any] = LRUCache(maxsize=cache_size)
-        self._cloud_id: int = id(cloud) if cloud is not None else 0
 
         if cloud is not None:
             self._compute_features(cloud)
@@ -110,7 +125,7 @@ class FeatureManager:
             raise PointDescriptorError(f"Feature '{name}' is not registered.")
 
         cache_key: CacheKey = (
-            self._cloud_id,
+            id(cloud),
             name,
             frozenset(kwargs.keys()),
         )
@@ -190,7 +205,7 @@ class FeatureManager:
         """
         for name, computer in self._computers.items():
             cache_key: CacheKey = (
-                self._cloud_id,
+                id(cloud),
                 name,
                 frozenset[str](),
             )

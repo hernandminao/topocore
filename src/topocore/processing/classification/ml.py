@@ -36,14 +36,101 @@ import numpy as np
 from numpy.typing import NDArray
 
 from topocore.pointcloud.attributes import PointAttribute
-from topocore.pointcloud.classification import PointClassification
 from topocore.pointcloud.pointcloud import PointCloud
 from topocore.processing.classification.base import (
     ClassificationResult,
     Classifier,
 )
 from topocore.processing.exceptions import ClassificationError, ProcessingError
-from topocore.processing.features import FeatureManager
+from topocore.processing.features import (
+    DensityFeatureComputer,
+    FeatureManager,
+    HeightFeatureComputer,
+    PCAFeatureComputer,
+)
+from topocore.processing.features.base import ScalarFeatureComputer
+from topocore.processing.ground import GroundManager
+from topocore.processing.neighbors import NeighborhoodManager
+from topocore.processing.types import FloatArray1D
+
+
+class _GroundRelativeHeightFeatureComputer(ScalarFeatureComputer):
+    """
+    Height of each point above its geometrically nearest ground
+    point, for RAW (not-yet-classified) point clouds -- classifies
+    ground on the fly via ``GroundManager`` (a grid/density
+    heuristic, no pre-existing classification attribute required),
+    rather than
+    ``topocore.processing.features.geometric.RelativeHeightFeatureComputer``,
+    which requires the cloud to already carry a ``CLASSIFICATION``
+    attribute identifying ground points.
+
+    Found and fixed in PR19: ``MachineLearningClassifier`` originally
+    registered ``RelativeHeightFeatureComputer`` for
+    "height_above_ground" -- but ML classifiers are meant to operate
+    on RAW clouds with no classification yet (predicting it is the
+    whole point); confirmed directly that ``fit()`` failed with
+    ``PointDescriptorError: Point cloud has no classification
+    attribute`` on an ordinary unclassified training cloud. This
+    mirrors the exact same "ground-relative height needs geometric
+    ground detection, not a pre-existing label" fix already applied
+    to ``topocore.processing.segmentation.specific`` (TreeSegmenter/
+    BuildingSegmenter) elsewhere in this session -- see that
+    module's ``_compute_relative_height`` for the identical
+    per-point nearest-ground-point pattern. Kept as a separate local
+    implementation here (not a shared import) since consolidating
+    all three now-similar implementations into one shared utility is
+    a genuine architectural decision, not part of this bug fix's
+    scope.
+    """
+
+    __slots__ = ("_ground_method",)
+
+    def __init__(self, ground_method: str = "grid") -> None:
+        self._ground_method = ground_method
+
+    def compute(self, cloud: PointCloud) -> FloatArray1D:
+        points = np.column_stack(
+            [
+                np.concatenate([chunk[PointAttribute.X] for chunk in cloud]),
+                np.concatenate([chunk[PointAttribute.Y] for chunk in cloud]),
+                np.concatenate([chunk[PointAttribute.Z] for chunk in cloud]),
+            ]
+        ).astype(np.float64, copy=False)
+
+        ground_mask = GroundManager(method=self._ground_method).classify(cloud)
+        ground_indices = np.flatnonzero(ground_mask)
+
+        if ground_indices.size == 0:
+            raise ProcessingError("No ground points found for relative height computation.")
+
+        ground_points = points[ground_indices]
+        manager = NeighborhoodManager.from_array(ground_points)
+
+        relative_height: FloatArray1D = np.empty(points.shape[0], dtype=np.float64)
+
+        for index in range(points.shape[0]):
+            indices, _ = manager.query_point(
+                points[index, 0],
+                points[index, 1],
+                points[index, 2],
+                k=1,
+            )
+            relative_height[index] = points[index, 2] - ground_points[indices[0], 2]
+
+        return relative_height
+
+    def name(self) -> str:
+        return "height_above_ground"
+
+    def requires_neighbors(self) -> bool:
+        return False
+
+    def default_k(self) -> int | None:
+        return None
+
+    def default_radius(self) -> float | None:
+        return None
 
 
 class SklearnModel(Protocol):
@@ -98,13 +185,13 @@ class MachineLearningClassifier(Classifier):
     )
 
     __slots__ = (
-        "_model",
-        "_trained",
         "_feature_manager",
         "_feature_names",
+        "_ground_method",
         "_k",
+        "_model",
         "_radius",
-        "_ground_class",
+        "_trained",
     )
 
     def __init__(
@@ -114,7 +201,7 @@ class MachineLearningClassifier(Classifier):
         feature_names: list[str] | None = None,
         k: int = 10,
         radius: float = 1.0,
-        ground_class: PointClassification = PointClassification.GROUND,
+        ground_method: str = "grid",
     ) -> None:
         """
         Initialize the machine learning classifier.
@@ -130,8 +217,20 @@ class MachineLearningClassifier(Classifier):
             Number of neighbors for neighborhood-based features.
         radius
             Search radius for density computation.
-        ground_class
-            Classification value representing ground points.
+        ground_method
+            GroundManager method used to geometrically classify
+            ground for the "height_above_ground" feature -- the
+            input cloud is not expected to already carry a
+            classification (predicting one is this classifier's own
+            job), so ground is detected from raw geometry, not read
+            from an existing attribute. Replaces a prior
+            ground_class parameter (found and removed in PR19, see
+            _GroundRelativeHeightFeatureComputer's docstring): that
+            parameter named which classification VALUE identified
+            pre-existing ground labels, which never applied here in
+            the first place, since the "height_above_ground" feature
+            raised unconditionally on any real (unclassified)
+            training cloud.
         """
         if k < 3:
             raise ValueError("k must be at least 3.")
@@ -144,12 +243,59 @@ class MachineLearningClassifier(Classifier):
 
         self._k = k
         self._radius = radius
-        self._ground_class = ground_class
+        self._ground_method = ground_method
 
         self._feature_names = list(feature_names) if feature_names is not None else list(self._DEFAULT_FEATURES)
         self._validate_features()
 
         self._feature_manager = FeatureManager()
+        self._register_feature_computers()
+
+    def _register_feature_computers(self) -> None:
+        """
+        Register a ``FeatureComputer`` with ``self._feature_manager``
+        for every configured feature name that needs one (radiometric
+        features -- intensity/return_number/number_of_returns -- are
+        read directly from the cloud's own attributes in
+        ``_add_radiometric_features``, not through the manager).
+
+        Found and fixed in PR19: this registration never happened at
+        all -- ``FeatureManager()`` was created with zero computers
+        registered, and every ML classifier (RandomForest,
+        GradientBoost, XGBoost, LightGBM -- all subclass this same
+        base) failed immediately on the very first ``fit()`` or
+        ``classify()`` call with ``ProcessingError: Feature
+        'height_above_ground' was not computed``. Confirmed directly
+        with a real ``RandomForestClassifier``.
+
+        "curvature" maps to ``PCAFeatures.surface_variation`` (not a
+        literal "curvature" accessor), matching the same mapping
+        already used in ``topocore.processing.classification.rules.
+        RuleBasedClassifier`` (``curvature=pca["surface_variation"]``).
+        """
+        pca_accessors = {
+            "curvature": "surface_variation",
+            "planarity": "planarity",
+            "linearity": "linearity",
+            "sphericity": "sphericity",
+            "verticality": "verticality",
+        }
+
+        if "height" in self._feature_names:
+            self._feature_manager.register("height", HeightFeatureComputer())
+
+        if "height_above_ground" in self._feature_names:
+            self._feature_manager.register(
+                "height_above_ground",
+                _GroundRelativeHeightFeatureComputer(ground_method=self._ground_method),
+            )
+
+        if "density" in self._feature_names:
+            self._feature_manager.register("density", DensityFeatureComputer(radius=self._radius))
+
+        for name, pca_feature_name in pca_accessors.items():
+            if name in self._feature_names:
+                self._feature_manager.register(name, PCAFeatureComputer(feature_name=pca_feature_name, k=self._k))
 
     def _validate_features(self) -> None:
         """Validate configured feature names."""

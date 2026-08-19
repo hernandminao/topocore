@@ -39,14 +39,14 @@ from .rules import RuleBasedClassifier
 from .xgboost import XGBoostClassifier
 
 __all__ = [
+    "ClassificationManager",
     "ClassificationResult",
     "Classifier",
-    "MLClassifier",
-    "RuleBasedClassifier",
-    "MachineLearningClassifier",
-    "RandomForestClassifier",
     "GradientBoostClassifier",
     "LightGBMClassifier",
+    "MLClassifier",
+    "MachineLearningClassifier",
+    "RandomForestClassifier",
+    "RuleBasedClassifier",
     "XGBoostClassifier",
-    "ClassificationManager",
 ]

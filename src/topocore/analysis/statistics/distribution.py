@@ -84,6 +84,27 @@ class DistributionStatistics:
         ------
         StatisticsError
             If insufficient finite values exist.
+
+        Notes
+        -----
+        A real bug was found and fixed here in PR19: skewness and
+        kurtosis mixed SAMPLE standard deviation (``ddof=1``, Bessel's
+        correction) in the denominator with POPULATION-style moments
+        (dividing by N, not N-1) in the numerator -- a non-standard
+        hybrid matching neither scipy.stats.skew/kurtosis(bias=True)
+        (fully population-based) nor bias=False (fully sample-based).
+        For large samples the discrepancy is small (~0.3% at n=1000),
+        but for small samples -- common in terrain statistics, e.g. a
+        handful of survey points -- it becomes severe: confirmed
+        directly with n=6, kurtosis differed by 1676% and FLIPPED SIGN
+        (-0.88 here vs +0.056 with scipy's population formula),
+        which would have reported a qualitatively wrong distribution
+        shape (platykurtic vs leptokurtic). No other code in this
+        repository reads ``DistributionStats.skewness``/``.kurtosis``
+        (confirmed by search), so there was no existing convention to
+        preserve; fixed to use population statistics consistently
+        throughout (``ddof=0``), matching
+        ``scipy.stats.skew/kurtosis(bias=True)`` exactly.
         """
         valid = self._finite_values(values)
 
@@ -100,7 +121,7 @@ class DistributionStatistics:
         cumulative = np.cumsum(counts) / total
 
         mean = float(np.mean(valid))
-        std = float(np.std(valid, ddof=1))
+        std = float(np.std(valid, ddof=0))
 
         if std <= _STD_EPSILON:
             skewness = 0.0

@@ -66,11 +66,11 @@ class ICPBase(Registrar):
     """
 
     __slots__ = (
-        "_max_iterations",
-        "_tolerance",
         "_max_correspondence_distance",
-        "_use_adaptive_distance",
+        "_max_iterations",
         "_source_transformed",
+        "_tolerance",
+        "_use_adaptive_distance",
     )
 
     def __init__(
@@ -187,7 +187,25 @@ class ICPBase(Registrar):
                     abs(previous_error),
                 )
 
-                if relative_change < self._tolerance:
+                # Converged if EITHER the relative change is small, OR
+                # the RMSE itself is already below tolerance. The
+                # relative-only check alone is a real bug (found and
+                # fixed in PR19): once RMSE reaches the floating-point
+                # noise floor (e.g. a near-perfect alignment converges
+                # to RMSE ~1e-14), further iterations only move it by
+                # rounding noise (~1e-16) -- but relative_change
+                # divides that noise by an already-tiny previous_error,
+                # producing values like 1e-3 to 1e-4 that never drop
+                # below a typical tolerance (1e-6), so `converged`
+                # stayed False and every max_iterations budget was
+                # burned even on a perfect fit. Confirmed directly: a
+                # synthetic registration with a known, exactly
+                # recoverable transformation reached RMSE ~2e-14 by
+                # iteration 35 of 50, yet relative_change fluctuated
+                # between 1e-4 and 1e-3 for the remaining iterations,
+                # never triggering convergence despite the transformation
+                # itself already being correct to machine precision.
+                if relative_change < self._tolerance or error < self._tolerance:
                     converged = True
                     break
 

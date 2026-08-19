@@ -35,16 +35,12 @@ from topocore.pointcloud.pointcloud import PointCloud
 from topocore.processing._shared import build_cloud_from_mask, flatten_attributes
 from topocore.processing.exceptions import SegmentationError
 from topocore.processing.features import PCAFeatures
+from topocore.processing.ground import GroundManager
+from topocore.processing.neighbors import NeighborhoodManager
 
 from .base import SegmentationResult, Segmenter
 from .dbscan import DBSCANSegmenter
 from .region_growing import RegionGrowingSegmenter
-
-
-def _get_z_values(cloud: PointCloud) -> NDArray[np.float64]:
-    """Extract concatenated Z coordinates from a point cloud."""
-    z_values = [chunk[PointAttribute.Z] for chunk in cloud]
-    return np.concatenate(z_values) if z_values else np.array([], dtype=np.float64)
 
 
 def _extract_points(cloud: PointCloud) -> NDArray[np.float64]:
@@ -59,18 +55,78 @@ def _extract_points(cloud: PointCloud) -> NDArray[np.float64]:
     return np.column_stack((np.concatenate(xs), np.concatenate(ys), np.concatenate(zs)))
 
 
-def _filter_cloud_by_height(
+def _compute_relative_height(
+    points: NDArray[np.float64],
+    ground_mask: NDArray[np.bool_],
+) -> NDArray[np.float64]:
+    """
+    Height of each point above its geometrically NEAREST ground
+    point (real (x, y, z) proximity, one query per point) -- not a
+    single shared reference for the whole cloud. Mirrors the pattern
+    already fixed in this same session for
+    ``topocore.processing.features.geometric.RelativeHeightFeatureComputer``
+    and already used correctly in
+    ``topocore.processing.ground.manager.GroundManager.
+    _nearest_ground_elevation()``.
+    """
+    ground_indices = np.flatnonzero(ground_mask)
+
+    if ground_indices.size == 0:
+        raise SegmentationError("No ground points found for relative height computation.")
+
+    ground_points = points[ground_indices]
+    manager = NeighborhoodManager.from_array(ground_points)
+
+    relative_height = np.empty(points.shape[0], dtype=np.float64)
+
+    for index in range(points.shape[0]):
+        indices, _ = manager.query_point(
+            points[index, 0],
+            points[index, 1],
+            points[index, 2],
+            k=1,
+        )
+        nearest_ground_z = ground_points[indices[0], 2]
+        relative_height[index] = points[index, 2] - nearest_ground_z
+
+    return relative_height
+
+
+def _filter_cloud_by_relative_height(
     cloud: PointCloud,
     min_height: float,
     max_height: float,
+    ground_method: str,
 ) -> tuple[PointCloud, NDArray[np.int64]]:
     """
-    Filter a cloud by Z range and return:
+    Filter a cloud by height ABOVE GROUND (not absolute Z) and
+    return:
     - filtered cloud
     - indices in the original cloud corresponding to filtered points
+
+    Found and fixed in PR19: an earlier version of this function
+    (then named ``_filter_cloud_by_height``) filtered by raw,
+    absolute Z -- despite every caller's own docstring describing
+    ``min_height``/``max_height`` as "above ground", and
+    ``TreeSegmenter``'s own class docstring explicitly listing
+    "1. Ground classification to separate trees from ground" as the
+    first step of its algorithm, a step that was never actually
+    implemented. Confirmed directly: a realistic point cloud at
+    ~1500m absolute elevation (ordinary real-world survey data, not
+    ground-normalized) with a genuine 1-10m tall tree cluster raised
+    ``SegmentationError: No points found above minimum height`` --
+    the default ``min_height=0.5, max_height=50.0`` range never
+    matches raw elevations in the thousands. Fixed by classifying
+    ground first (``GroundManager``, already audited and cache-fixed
+    elsewhere in this session) and filtering on each point's height
+    above its own nearest ground point, not a single absolute range.
     """
-    z = _get_z_values(cloud)
-    mask = (z >= min_height) & (z <= max_height)
+    points = _extract_points(cloud)
+
+    ground_mask = GroundManager(method=ground_method).classify(cloud)
+    relative_height = _compute_relative_height(points, ground_mask)
+
+    mask = (relative_height >= min_height) & (relative_height <= max_height)
 
     flattened = flatten_attributes(cloud)
     filtered_cloud = build_cloud_from_mask(flattened, mask)
@@ -118,11 +174,12 @@ class TreeSegmenter(Segmenter):
     """
 
     __slots__ = (
-        "_min_height",
-        "_max_height",
         "_eps",
-        "_min_samples",
+        "_ground_method",
+        "_max_height",
+        "_min_height",
         "_min_points_per_tree",
+        "_min_samples",
     )
 
     def __init__(
@@ -132,6 +189,7 @@ class TreeSegmenter(Segmenter):
         eps: float = 0.5,
         min_samples: int = 5,
         min_points_per_tree: int = 10,
+        ground_method: str = "grid",
     ) -> None:
         if min_height < 0:
             raise SegmentationError(f"min_height must be >= 0, got {min_height}.")
@@ -149,6 +207,7 @@ class TreeSegmenter(Segmenter):
         self._eps = eps
         self._min_samples = min_samples
         self._min_points_per_tree = min_points_per_tree
+        self._ground_method = ground_method
 
     @override
     def segment(self, cloud: PointCloud) -> SegmentationResult:
@@ -156,10 +215,11 @@ class TreeSegmenter(Segmenter):
         if cloud.is_empty:
             raise SegmentationError("Cannot segment an empty point cloud.")
 
-        filtered_cloud, filtered_to_original = _filter_cloud_by_height(
+        filtered_cloud, filtered_to_original = _filter_cloud_by_relative_height(
             cloud,
             self._min_height,
             self._max_height,
+            self._ground_method,
         )
 
         if filtered_cloud.is_empty:
@@ -255,12 +315,13 @@ class BuildingSegmenter(Segmenter):
     """
 
     __slots__ = (
-        "_min_height",
-        "_max_height",
-        "_k",
         "_curvature_threshold",
-        "_normal_angle_threshold",
+        "_ground_method",
+        "_k",
+        "_max_height",
+        "_min_height",
         "_min_points_per_building",
+        "_normal_angle_threshold",
     )
 
     def __init__(
@@ -271,6 +332,7 @@ class BuildingSegmenter(Segmenter):
         curvature_threshold: float = 0.02,
         normal_angle_threshold: float = 10.0,
         min_points_per_building: int = 100,
+        ground_method: str = "grid",
     ) -> None:
         if min_height < 0:
             raise SegmentationError(f"min_height must be >= 0, got {min_height}.")
@@ -291,6 +353,7 @@ class BuildingSegmenter(Segmenter):
         self._curvature_threshold = curvature_threshold
         self._normal_angle_threshold = normal_angle_threshold
         self._min_points_per_building = min_points_per_building
+        self._ground_method = ground_method
 
     @override
     def segment(self, cloud: PointCloud) -> SegmentationResult:
@@ -298,10 +361,11 @@ class BuildingSegmenter(Segmenter):
         if cloud.is_empty:
             raise SegmentationError("Cannot segment an empty point cloud.")
 
-        filtered_cloud, filtered_to_original = _filter_cloud_by_height(
+        filtered_cloud, filtered_to_original = _filter_cloud_by_relative_height(
             cloud,
             self._min_height,
             self._max_height,
+            self._ground_method,
         )
 
         if filtered_cloud.is_empty:
@@ -365,6 +429,6 @@ class BuildingSegmenter(Segmenter):
 
 
 __all__ = [
-    "TreeSegmenter",
     "BuildingSegmenter",
+    "TreeSegmenter",
 ]

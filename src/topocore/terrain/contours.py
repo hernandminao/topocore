@@ -56,6 +56,22 @@ def _node_key(point: Point3D) -> _NodeKey:
     )
 
 
+def _classify(z: float, level: float) -> int:
+    """
+    Classify a vertex elevation relative to a contour level.
+
+    Returns
+    -------
+    int
+        ``0`` if ``z`` is within ``EPSILON`` of ``level`` (ON),
+        ``1`` if above, ``-1`` if below.
+    """
+    if abs(z - level) <= EPSILON:
+        return 0
+
+    return 1 if z > level else -1
+
+
 def _triangle_segment(
     triangle: tuple[Point3D, Point3D, Point3D],
     level: float,
@@ -63,12 +79,75 @@ def _triangle_segment(
     """
     Intersect a single triangle with a horizontal plane.
 
+    Handles the degenerate case where one or two vertices sit
+    exactly at ``level`` (within ``EPSILON``) explicitly, rather
+    than treating it as "no crossing" -- a flat plateau/pad at
+    exactly the requested contour elevation, or a slope's toe
+    exactly matching it, are both real, common terrain shapes (not
+    edge cases confined to synthetic geometry), and both used to
+    silently disappear from contour output entirely. See the PR19
+    session notes for the concrete construction-pad reproduction
+    that motivated this fix.
+
     Returns
     -------
     tuple or None
         The two intersection points, or ``None`` if the triangle
-        does not cross ``level``.
+        does not cross ``level`` (including the case where it lies
+        fully on one side, or is fully coplanar with ``level`` --
+        that triangle's own boundary is supplied by its neighbors,
+        each of which has exactly one off-level vertex).
     """
+    classes = [_classify(triangle[i].z, level) for i in range(3)]
+    on_indices = [i for i in range(3) if classes[i] == 0]
+
+    if len(on_indices) == 2:
+        # The edge between the two ON vertices IS the contour
+        # segment for this triangle -- no interpolation needed, and
+        # none would be numerically meaningful (both endpoints are
+        # already at `level`). z is normalized to exactly `level`
+        # (not left as the vertex's own z, which may differ from
+        # `level` by up to EPSILON) so this segment's endpoints weld
+        # correctly, via `_node_key`, against interpolated points
+        # from neighboring triangles that use `level` exactly.
+        i, j = on_indices
+        return (
+            Point3D(triangle[i].x, triangle[i].y, level),
+            Point3D(triangle[j].x, triangle[j].y, level),
+        )
+
+    if len(on_indices) == 3:
+        # Fully coplanar with `level` -- this triangle contributes
+        # no line of its own; its perimeter is supplied by whichever
+        # neighboring, non-coplanar triangles share its edges (each
+        # via the two-ON-vertices case above).
+        return None
+
+    if len(on_indices) == 1:
+        on_index = on_indices[0]
+        other_indices = [i for i in range(3) if i != on_index]
+        other_classes = (classes[other_indices[0]], classes[other_indices[1]])
+
+        if other_classes[0] == other_classes[1]:
+            # The other two vertices are on the same side -- the
+            # contour only touches this triangle at the single ON
+            # vertex, not a real line through its interior. (Neither
+            # can be ON here: that would mean 2+ ON vertices, a case
+            # already handled above, before this branch is reached.)
+            return None
+
+        start, end = triangle[other_indices[0]], triangle[other_indices[1]]
+        z0, z1 = start.z, end.z
+        t = (level - z0) / (z1 - z0)
+
+        crossing = Point3D(
+            start.x + t * (end.x - start.x),
+            start.y + t * (end.y - start.y),
+            level,
+        )
+
+        return Point3D(triangle[on_index].x, triangle[on_index].y, level), crossing
+
     crossings: list[Point3D] = []
 
     for i in range(3):
@@ -77,9 +156,6 @@ def _triangle_segment(
 
         z0 = start.z
         z1 = end.z
-
-        if z0 == z1:
-            continue
 
         if (z0 - level) * (z1 - level) >= 0.0:
             continue

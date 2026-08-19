@@ -37,7 +37,7 @@ class E57Reader(BaseE57Reader):
         self,
         path: str | Path,
         *,
-        chunk_size: int,
+        chunk_size: int = 1_000_000,
     ) -> None:
         super().__init__(
             path,

@@ -52,13 +52,13 @@ class DistanceAnalysis:
 
     __slots__ = (
         "_config",
-        "_method",
         "_euclidean_2d",
         "_euclidean_3d",
-        "_horizontal",
-        "_vertical",
-        "_slope",
         "_geodesic",
+        "_horizontal",
+        "_method",
+        "_slope",
+        "_vertical",
     )
 
     def __init__(
@@ -125,7 +125,28 @@ class DistanceAnalysis:
                 return self._euclidean_2d.compute(*args)
 
             if len(args) == 6:
-                return self._euclidean_3d.compute(*args)
+                # EuclideanDistance.compute()'s own parameter order is
+                # (x1, y1, x2, y2, z1, z2) -- NOT the natural
+                # point-grouped (x1, y1, z1, x2, y2, z2) order every
+                # OTHER method in this module expects and exposes
+                # (SlopeDistance.compute(), GeodesicDistance.compute()).
+                #
+                # A real, severe bug was found and fixed here in
+                # PR19: this branch used to forward `*args` straight
+                # through (`self._euclidean_3d.compute(*args)`),
+                # silently reinterpreting the caller's natural
+                # (x1,y1,z1,x2,y2,z2) as EuclideanDistance's own
+                # (x1,y1,x2,y2,z1,z2) -- confirmed directly:
+                # compute(0,0,0,3,4,12) (expected distance 13.0, the
+                # 3-4-12 right triangle) silently returned 8.544
+                # instead, with no error. Confirmed the correct
+                # reordering pattern by cross-referencing
+                # SlopeDistance._compute(), which already explicitly
+                # reorders before delegating to the same
+                # EuclideanDistance engine -- this branch now matches
+                # that same, already-correct pattern.
+                x1, y1, z1, x2, y2, z2 = args
+                return self._euclidean_3d.compute(x1, y1, x2, y2, z1, z2)
 
             raise DistanceError("Euclidean requires 4 or 6 coordinates.")
 

@@ -153,6 +153,7 @@ class SamplingManager:
             return sampler_factory(
                 voxel_size=params.get("voxel_size", 1.0),
                 method=params.get("method", "centroid"),
+                seed=params.get("seed"),
             )
 
         if self._method == "stratified":
@@ -160,6 +161,7 @@ class SamplingManager:
                 cell_size=params.get("cell_size", 1.0),
                 samples_per_cell=params.get("samples_per_cell", 1),
                 method=params.get("method", "random"),
+                seed=params.get("seed"),
             )
 
         if self._method == "density":

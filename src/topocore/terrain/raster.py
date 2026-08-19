@@ -19,8 +19,8 @@ MIT
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from collections.abc import Iterator
+from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
@@ -228,6 +228,14 @@ class Raster:
         """
         GDAL affine transform.
 
+        Origin Y uses ``grid.actual_max_y`` (the real top edge of
+        the generated raster), not the grid's nominal ``max_y`` --
+        see the PR19 Grid bounds fix in ``grid.py``. Using the
+        nominal value here would misalign any GDAL/GeoTIFF export
+        whenever ``height`` is not an exact multiple of
+        ``resolution``, since the raster's actual top row would sit
+        at a different Y than the transform claims.
+
         Returns
         -------
         tuple
@@ -238,7 +246,7 @@ class Raster:
             self.grid.min_x,
             self.grid.resolution,
             0.0,
-            self.grid.max_y,
+            self.grid.actual_max_y,
             0.0,
             -self.grid.resolution,
         )

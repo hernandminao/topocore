@@ -50,8 +50,8 @@ class GridVolume:
     """
 
     __slots__ = (
-        "_resolution",
         "_cell_area",
+        "_resolution",
     )
 
     def __init__(
@@ -117,7 +117,7 @@ class GridVolume:
             proposed,
         )
 
-        cut, fill, net = compute_cut_fill(
+        cut, fill, net, valid_cells, excluded_cells = compute_cut_fill(
             existing,
             proposed,
             self._cell_area,
@@ -128,6 +128,8 @@ class GridVolume:
             fill_volume=fill,
             net_volume=net,
             method="grid_volume",
+            valid_cells=valid_cells,
+            excluded_cells=excluded_cells,
         )
 
     # ------------------------------------------------------------------

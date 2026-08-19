@@ -30,7 +30,6 @@ from __future__ import annotations
 
 from typing import Any, override
 
-from topocore.pointcloud.classification import PointClassification
 from topocore.processing.exceptions import ClassificationError
 
 from .ml import MachineLearningClassifier
@@ -75,8 +74,10 @@ class GradientBoostClassifier(MachineLearningClassifier):
         Number of neighbors for geometric features.
     radius
         Radius used for neighborhood computations.
-    ground_class
-        Classification code representing ground points.
+    ground_method
+        GroundManager method used to geometrically classify ground
+        for the "height_above_ground" feature (see
+        MachineLearningClassifier's docstring).
 
     Raises
     ------
@@ -85,11 +86,11 @@ class GradientBoostClassifier(MachineLearningClassifier):
     """
 
     __slots__ = (
-        "_max_iter",
-        "_max_depth",
-        "_learning_rate",
-        "_max_leaf_nodes",
         "_l2_regularization",
+        "_learning_rate",
+        "_max_depth",
+        "_max_iter",
+        "_max_leaf_nodes",
         "_random_state",
     )
 
@@ -105,7 +106,7 @@ class GradientBoostClassifier(MachineLearningClassifier):
         feature_names: list[str] | None = None,
         k: int = 10,
         radius: float = 1.0,
-        ground_class: PointClassification = PointClassification.GROUND,
+        ground_method: str = "grid",
     ) -> None:
         """
         Initialize Gradient Boost classifier.
@@ -151,7 +152,7 @@ class GradientBoostClassifier(MachineLearningClassifier):
             feature_names=feature_names,
             k=k,
             radius=radius,
-            ground_class=ground_class,
+            ground_method=ground_method,
         )
 
     @staticmethod

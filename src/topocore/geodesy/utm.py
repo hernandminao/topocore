@@ -6,7 +6,7 @@ UTM zone resolution utilities.
 
 Author
 ------
-Hernán Mina
+HernÃ¡n Mina
 
 License
 -------
@@ -49,7 +49,7 @@ class UTMZone:
         """
         validate_lat_lon(latitude, longitude)
 
-        zone_number = int((longitude + 180.0) / 6.0) + 1
+        zone_number = min(int((longitude + 180.0) / 6.0) + 1, 60)
 
         # Norway special case
         if 56.0 <= latitude < 64.0 and 3.0 <= longitude < 12.0:

@@ -125,13 +125,22 @@ class Grid:
         float,
     ]:
         """
-        Grid bounds.
+        Grid bounds -- the actual spatial extent the grid's cells
+        occupy, i.e. ``(min_x, min_y, actual_max_x, actual_max_y)``,
+        not necessarily the ``(min_x, min_y, max_x, max_y)`` the
+        grid was constructed with. ``columns``/``rows`` round up to
+        guarantee full coverage (a deliberate, correct choice, kept
+        as-is -- see PR19 session notes); this property is what was
+        actually inconsistent with that choice before this fix, not
+        the rounding itself. Reduced to the original nominal
+        ``max_x``/``max_y`` only when ``width``/``height`` are exact
+        multiples of ``resolution``.
         """
         return (
             self.min_x,
             self.min_y,
-            self.max_x,
-            self.max_y,
+            self.actual_max_x,
+            self.actual_max_y,
         )
 
     @property
@@ -142,6 +151,30 @@ class Grid:
         Total number of cells.
         """
         return self.rows * self.columns
+
+    @property
+    def actual_max_x(self) -> float:
+        """
+        X coordinate of the last generated column.
+
+        ``columns`` rounds up (``math.ceil``) to guarantee full
+        coverage of the requested ``[min_x, max_x]`` extent -- when
+        ``width`` is not an exact multiple of ``resolution``, the
+        last column's own coordinate can exceed the nominal
+        ``max_x`` the grid was constructed with. This is the
+        spatial domain the grid's cells actually occupy, which
+        ``bounds``/``contains()`` describe -- not ``max_x`` itself,
+        which remains the original requested value (see class
+        docstring's note on PR19's Grid bounds fix).
+        """
+        return self.x(self.columns - 1)
+
+    @property
+    def actual_max_y(self) -> float:
+        """
+        Y coordinate of the last generated row. See ``actual_max_x``.
+        """
+        return self.y(self.rows - 1)
 
     def x(
         self,
@@ -225,9 +258,12 @@ class Grid:
         y: float,
     ) -> bool:
         """
-        Return whether a coordinate lies inside the grid.
+        Return whether a coordinate lies inside the grid's actual
+        generated extent (see ``bounds``/``actual_max_x``/
+        ``actual_max_y`` -- not necessarily within the nominal
+        ``max_x``/``max_y`` the grid was constructed with).
         """
-        return self.min_x <= x <= self.max_x and self.min_y <= y <= self.max_y
+        return self.min_x <= x <= self.actual_max_x and self.min_y <= y <= self.actual_max_y
 
     def row(
         self,
@@ -236,10 +272,8 @@ class Grid:
         """
         Compute the row index.
         """
-        return int(
-            round(
-                (y - self.min_y) / self.resolution,
-            )
+        return round(
+            (y - self.min_y) / self.resolution,
         )
 
     def column(
@@ -249,10 +283,8 @@ class Grid:
         """
         Compute the column index.
         """
-        return int(
-            round(
-                (x - self.min_x) / self.resolution,
-            )
+        return round(
+            (x - self.min_x) / self.resolution,
         )
 
     def index(

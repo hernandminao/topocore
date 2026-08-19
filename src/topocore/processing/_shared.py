@@ -34,7 +34,6 @@ from topocore.core.types import FloatArray3D
 from topocore.pointcloud.attributes import PointAttribute
 from topocore.pointcloud.chunk import Chunk
 from topocore.pointcloud.pointcloud import PointCloud
-from topocore.processing.cache import LRUCache
 from topocore.processing.exceptions import ProcessingError
 from topocore.processing.neighbors import NeighborhoodManager
 from topocore.processing.types import FloatArray2D
@@ -66,25 +65,46 @@ class PCAComputation:
     eigenvectors: NDArray[np.float64]
 
 
-_PCA_CACHE: LRUCache[tuple[int, int], PCAComputation] = LRUCache(maxsize=16)
-
-
 def compute_pca(
     manager: NeighborhoodManager,
     *,
     k: int,
 ) -> PCAComputation:
     """
-    Compute the neighborhood PCA once.
+    Compute the neighborhood PCA.
+
+    Not cached: a real, severe bug was found and fixed here in
+    PR19. This function used to cache its result keyed by
+    ``(id(manager), k)`` -- but ``manager`` (``NeighborhoodManager``)
+    is an internal, EPHEMERAL object, freshly constructed on every
+    ``PCANormalEstimator.estimate()`` call and immediately eligible
+    for garbage collection once that call returns. Since Python's
+    allocator readily reuses freed memory addresses, ``id(manager)``
+    for one point cloud's manager was frequently REUSED for the very
+    next point cloud's manager shortly after -- causing a genuine,
+    non-deterministic cache collision where computing normals for a
+    SECOND, completely different point cloud would silently return
+    the FIRST cloud's stale ``PCAComputation`` (wrong neighbors,
+    wrong covariance, wrong eigenvalues/eigenvectors -- the entire
+    result, not just a numeric approximation).
+
+    Confirmed directly, with a definitive trace: calling
+    ``estimate()`` on a flat plane then immediately on a tilted
+    plane occasionally returned the FLAT plane's normal for the
+    TILTED plane's own points -- reproducible in a tight loop (~1 in
+    10-30 attempts), traced to
+    ``compute_pca called: manager_id=X was_cache_hit=True`` where X
+    was identical to the immediately-preceding, already-freed flat
+    plane's manager id. This was NOT a caching bug in
+    ``NormalManager`` (which correctly keys by ``id(cloud)``, the
+    caller-owned, stable-lifetime object) -- it was a SEPARATE, lower-
+    level cache that could never legitimately hit under normal usage
+    in the first place (a fresh ``NeighborhoodManager`` is
+    constructed per call), so removing it costs no genuine
+    performance benefit while eliminating a serious correctness bug.
     """
     if k < 3:
         raise ProcessingError(f"k must be at least 3 for PCA, got {k}.")
-
-    cache_key = (id(manager), k)
-    cached = _PCA_CACHE.get(cache_key)
-
-    if cached is not None:
-        return cached
 
     points = manager.search.points
 
@@ -160,7 +180,6 @@ def compute_pca(
         eigenvectors=eigenvectors,
     )
 
-    _PCA_CACHE.set(cache_key, result)
     return result
 
 
@@ -250,9 +269,8 @@ def build_cloud(
 
     point_count = _validate_flattened_attributes(flattened)
 
-    if indices.size > 0:
-        if np.any(indices < 0) or np.any(indices >= point_count):
-            raise ProcessingError("Indices contain out-of-range values.")
+    if indices.size > 0 and (np.any(indices < 0) or np.any(indices >= point_count)):
+        raise ProcessingError("Indices contain out-of-range values.")
 
     attributes = list(flattened.keys())
 
@@ -335,11 +353,11 @@ def concatenate_clouds(
 
 
 __all__ = [
-    "flatten_attributes",
+    "PCAComputation",
     "build_cloud",
     "build_cloud_from_mask",
-    "extract_attribute",
-    "concatenate_clouds",
-    "PCAComputation",
     "compute_pca",
+    "concatenate_clouds",
+    "extract_attribute",
+    "flatten_attributes",
 ]

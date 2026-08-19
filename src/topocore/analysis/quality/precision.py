@@ -44,6 +44,7 @@ class PrecisionAnalysis:
     """
 
     __slots__ = (
+        "_confidence_level",
         "_tol_x",
         "_tol_y",
         "_tol_z",
@@ -54,6 +55,7 @@ class PrecisionAnalysis:
         tolerance_x: float = 0.02,
         tolerance_y: float = 0.02,
         tolerance_z: float = 0.04,
+        confidence_level: float = 0.95,
     ) -> None:
 
         if tolerance_x <= 0:
@@ -65,9 +67,13 @@ class PrecisionAnalysis:
         if tolerance_z <= 0:
             raise QualityError("Tolerance Z must be positive.")
 
+        if not 0.0 < confidence_level < 1.0:
+            raise QualityError("Confidence level must be between 0 and 1.")
+
         self._tol_x = float(tolerance_x)
         self._tol_y = float(tolerance_y)
         self._tol_z = float(tolerance_z)
+        self._confidence_level = float(confidence_level)
 
     # ------------------------------------------------------------------
     # Properties
@@ -84,6 +90,11 @@ class PrecisionAnalysis:
     @property
     def tolerance_z(self) -> float:
         return self._tol_z
+
+    @property
+    def confidence_level(self) -> float:
+        """Confidence level used for statistical intervals."""
+        return self._confidence_level
 
     # ------------------------------------------------------------------
     # Computation
@@ -159,14 +170,22 @@ class PrecisionAnalysis:
         else:
             std_z = 0.0
 
-        # Confidence interval 95%
+        # Confidence interval for the estimated mean deviation.
+        #
+        # The margin of error is:
+        #
+        #   t_(1-alpha/2, n-1) * s / sqrt(n)
+        #
+        # Using ``s`` directly would produce a confidence interval
+        # for an individual observation scale, not for the estimated
+        # mean represented by this result.
         count = data.shape[0]
-
         degrees_of_freedom = count - 1
+        alpha = 1.0 - self._confidence_level
 
         t_value = float(
             t.ppf(
-                0.975,
+                1.0 - alpha / 2.0,
                 degrees_of_freedom,
             )
         )
@@ -176,28 +195,17 @@ class PrecisionAnalysis:
         else:
             deviation = math.sqrt(std_x**2 + std_y**2)
 
-        confidence_margin = t_value * deviation
+        confidence_margin = t_value * deviation / math.sqrt(count)
 
         confidence_interval = (
             -confidence_margin,
             confidence_margin,
         )
 
-        # Tolerance evaluation internally
-        # (reserved for future QualityReport integration)
-        if dimensions == 3:
-            _within_tolerance = std_x <= self._tol_x and std_y <= self._tol_y and std_z <= self._tol_z
-        else:
-            _within_tolerance = std_x <= self._tol_x and std_y <= self._tol_y
-
-        # Avoid unused-variable warnings while keeping
-        # evaluation ready for future result expansion.
-        _ = _within_tolerance
-
         return PrecisionResult(
             std_dev=deviation,
             confidence_interval=confidence_interval,
-            confidence_level=0.95,
+            confidence_level=self._confidence_level,
             count=count,
         )
 

@@ -50,6 +50,9 @@ class CloudToCloudDistance:
         max_distance: float = 0.0,
     ) -> None:
 
+        if not np.isfinite(max_distance):
+            raise QualityError("Max distance must be finite.")
+
         if max_distance < 0:
             raise QualityError("Max distance cannot be negative.")
 
@@ -101,19 +104,27 @@ class CloudToCloudDistance:
                 compared,
             )
 
-        valid = distances[np.isfinite(distances)]
+        unmatched = ~np.isfinite(distances)
 
-        if valid.size == 0:
-            raise QualityError("No valid nearest-neighbor distances found.")
+        if np.any(unmatched):
+            unmatched_count = int(np.count_nonzero(unmatched))
+            raise QualityError(
+                "Cloud-to-Cloud correspondence incomplete: "
+                f"{unmatched_count} of {distances.size} reference points "
+                "have no nearest neighbor within max_distance."
+            )
 
-        std = float(np.std(valid, ddof=1)) if valid.size > 1 else 0.0
+        # At this point every reference point has a finite correspondence.
+        # Do not silently discard unmatched points: doing so would bias
+        # quality statistics toward the matched subset.
+        std = float(np.std(distances, ddof=1)) if distances.size > 1 else 0.0
 
         return CloudToCloudResult(
-            mean=float(np.mean(valid)),
+            mean=float(np.mean(distances)),
             std=std,
-            minimum=float(np.min(valid)),
-            maximum=float(np.max(valid)),
-            median=float(np.median(valid)),
+            minimum=float(np.min(distances)),
+            maximum=float(np.max(distances)),
+            median=float(np.median(distances)),
             distances=distances,
         )
 
@@ -131,6 +142,9 @@ class CloudToCloudDistance:
 
         if cloud.shape[0] == 0:
             raise QualityError(f"{name} cloud must not be empty.")
+
+        if not np.isfinite(cloud).all():
+            raise QualityError(f"{name} cloud contains NaN or infinite coordinates.")
 
     def _compute_kdtree(
         self,

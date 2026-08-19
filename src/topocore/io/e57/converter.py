@@ -19,6 +19,7 @@ from typing import Final
 
 import numpy as np
 
+from topocore.io.exceptions import CorruptedFileError, MissingAttributeError
 from topocore.pointcloud.attributes import PointAttribute
 from topocore.pointcloud.chunk import Chunk
 
@@ -50,14 +51,34 @@ class E57Converter:
         Convert one E57 scan slice into a Chunk.
         """
 
+        required = set(E57_ATTRIBUTE_MAPPING) - {"intensity"}
+        missing = required - scan.keys()
+        if missing:
+            raise MissingAttributeError(
+                f"E57 scan is missing required coordinate fields: {', '.join(sorted(missing))}."
+            )
+
+        if not scan:
+            raise CorruptedFileError("E57 scan contains no point data.")
+
+        sizes = {name: np.asarray(values).shape[0] for name, values in scan.items()}
+        size = next(iter(sizes.values()))
+        inconsistent = {name: field_size for name, field_size in sizes.items() if field_size != size}
+        if inconsistent:
+            raise CorruptedFileError(
+                "E57 scan arrays have inconsistent lengths: "
+                + ", ".join(f"{name}={field_size}" for name, field_size in sizes.items() if field_size != size)
+            )
+
         attributes = [attribute for name, attribute in E57_ATTRIBUTE_MAPPING.items() if name in scan]
 
         has_color = all(field in scan for field in _COLOR_FIELDS)
 
+        if any(field in scan for field in _COLOR_FIELDS) and not has_color:
+            raise CorruptedFileError("E57 color data must contain colorRed, colorGreen and colorBlue.")
+
         if has_color:
             attributes.append(PointAttribute.COLOR)
-
-        size = len(next(iter(scan.values())))
 
         chunk = Chunk(
             size=size,

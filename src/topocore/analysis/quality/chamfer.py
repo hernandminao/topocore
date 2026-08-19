@@ -82,6 +82,12 @@ class ChamferDistance:
         if set_b.shape[0] == 0:
             raise QualityError("Set B must not be empty.")
 
+        if not np.isfinite(set_a).all():
+            raise QualityError("Set A contains NaN or infinite coordinates.")
+
+        if not np.isfinite(set_b).all():
+            raise QualityError("Set B contains NaN or infinite coordinates.")
+
         if set_a.shape[1] != set_b.shape[1]:
             raise QualityError("Point sets must have the same dimensionality.")
 

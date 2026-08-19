@@ -41,6 +41,9 @@ class RegistrationQuality:
         self,
         tolerance: float = 0.05,
     ) -> None:
+        if not np.isfinite(tolerance):
+            raise QualityError("Tolerance must be finite.")
+
         if tolerance <= 0.0:
             raise QualityError("Tolerance must be positive.")
 
@@ -97,20 +100,21 @@ class RegistrationQuality:
         else:
             raise QualityError(f"Unsupported residual shape {residuals.shape}. Expected (n,) or (n, 3).")
 
-        valid = distances[np.isfinite(distances)]
+        if not np.isfinite(residuals).all():
+            raise QualityError("Residuals contain NaN or infinite values.")
 
-        if valid.size == 0:
-            raise QualityError("No finite residual values.")
+        # Registration quality must be computed over every supplied
+        # residual.  Silently removing invalid values can hide failures
+        # and artificially increase the fitness score.
+        fitness = float(np.count_nonzero(distances <= self._tolerance) / distances.size)
 
-        fitness = float(np.count_nonzero(valid <= self._tolerance) / valid.size)
-
-        rmse = float(np.sqrt(np.mean(valid * valid)))
+        rmse = float(np.sqrt(np.mean(distances * distances)))
 
         return RegistrationQualityResult(
             fitness=fitness,
             rmse=rmse,
-            mean_distance=float(np.mean(valid)),
-            max_distance=float(np.max(valid)),
+            mean_distance=float(np.mean(distances)),
+            max_distance=float(np.max(distances)),
         )
 
     def __call__(

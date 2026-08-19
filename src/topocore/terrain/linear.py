@@ -20,12 +20,16 @@ MIT
 
 from __future__ import annotations
 
+import numpy as np
+from numpy.typing import NDArray
+
 from topocore.geometry.point3d import Point3D
 from topocore.terrain.barycentric import BarycentricInterpolator
+from topocore.terrain.base import BaseInterpolator
 from topocore.terrain.tin import TIN
 
 
-class LinearInterpolator:
+class LinearInterpolator(BaseInterpolator):
     """
     Linear interpolator over a TIN.
 
@@ -113,6 +117,19 @@ class LinearInterpolator:
             x,
             y,
         )
+
+    def interpolate_many(
+        self,
+        x: NDArray[np.float64],
+        y: NDArray[np.float64],
+    ) -> NDArray[np.float64]:
+        """
+        Vectorized interpolation -- delegates directly to the
+        wrapped ``BarycentricInterpolator`` (linear and barycentric
+        interpolation are mathematically identical on a TIN, see
+        class docstring).
+        """
+        return self._interpolator.interpolate_many(x, y)
 
     def interpolate_point(
         self,

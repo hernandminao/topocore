@@ -139,6 +139,8 @@ module = [
     "ezdxf.*",
     "yaml",
     "yaml.*",
+    "pye57",
+    "pye57.*",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"

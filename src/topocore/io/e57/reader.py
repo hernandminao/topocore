@@ -19,7 +19,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import numpy as np
-import pye57  # type: ignore[import-not-found]
+import pye57  # type: ignore[import-untyped]
 
 from topocore.io.exceptions import PointCloudIOError
 from topocore.pointcloud.chunk import Chunk

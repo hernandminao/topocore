@@ -33,7 +33,7 @@ action needed from TopoCore's own code.
 from __future__ import annotations
 
 import numpy as np
-import pye57  # type: ignore[import-not-found]
+import pye57  # type: ignore[import-untyped]
 import pytest
 
 from topocore.io.e57.reader import E57Reader

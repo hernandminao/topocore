@@ -57,9 +57,7 @@ def _cloud(n: int) -> PointCloud:
     zs = rng.uniform(0, 1, n)
 
     cloud = PointCloud()
-    chunk = Chunk(
-        size=n, attributes=[PointAttribute.X, PointAttribute.Y, PointAttribute.Z]
-    )
+    chunk = Chunk(size=n, attributes=[PointAttribute.X, PointAttribute.Y, PointAttribute.Z])
     chunk[PointAttribute.X][:] = xs
     chunk[PointAttribute.Y][:] = ys
     chunk[PointAttribute.Z][:] = zs
@@ -158,9 +156,7 @@ def test_ground_method_parameter_is_accepted() -> None:
     cloud = _cloud(100)
     labels = np.random.default_rng(4).integers(0, 2, 100)
 
-    classifier = RandomForestClassifier(
-        feature_names=["height_above_ground"], ground_method="grid"
-    )
+    classifier = RandomForestClassifier(feature_names=["height_above_ground"], ground_method="grid")
     classifier.fit(cloud, labels)  # must not raise
 
 

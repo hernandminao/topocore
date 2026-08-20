@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib
+import os
+import tempfile
 from pathlib import Path
 
 from topocore.dxf._ezdxf_compat import is_available, require_ezdxf
@@ -34,6 +36,23 @@ class DXFExporter:
 
         self._context = context or ExportContext()
         options = self._context.options
+
+        if options.units is not DrawingUnits.METERS:
+            raise DXFExportError(
+                f"DXFExportOptions.units={options.units.value!r} is not supported yet: "
+                "DXFExporter only sets the DXF file's $INSUNITS header variable (a "
+                "metadata label telling CAD software how to interpret the drawing) -- "
+                "it does NOT convert the actual coordinate values. TopoCore's feature "
+                "geometries are always in meters (the standard working unit throughout "
+                "this codebase), so declaring any other unit here would silently "
+                "mislabel unconverted meter coordinates as that unit, causing CAD "
+                "software to display/measure the geometry at the wrong scale (e.g. "
+                "~3.28x wrong for feet) with no error or warning. Confirmed directly "
+                "with a real exported file in PR19. Use "
+                "DXFExportOptions.units=DrawingUnits.METERS until real coordinate "
+                "conversion is implemented."
+            )
+
         self._validator = DXFValidator()
         self._mapper = GeometryMapper(options.tolerance, non_planar_polygon_mode=options.non_planar_polygon_mode)
 
@@ -99,12 +118,40 @@ class DXFExporter:
             report.entity_count += len(entities)
             self._tally(report, decision.representation, len(entities))
 
-        try:
-            doc.saveas(str(path))
-        except (OSError, ezdxf.DXFError) as exc:
-            raise DXFExportError(f"Failed to save DXF file to '{path}': {exc}") from exc
+        final_path = Path(path)
 
-        report.output_path = Path(path)
+        try:
+            final_path.parent.mkdir(parents=True, exist_ok=True)
+
+            with tempfile.NamedTemporaryFile(
+                prefix=f".{final_path.stem}.",
+                suffix=final_path.suffix or ".dxf",
+                dir=final_path.parent,
+                delete=False,
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+
+            try:
+                doc.saveas(str(temporary_path))
+
+                if not temporary_path.exists():
+                    raise DXFExportError(f"DXF writer did not create the temporary file for '{final_path}'.")
+
+                if temporary_path.stat().st_size == 0:
+                    raise DXFExportError(f"DXF writer produced an empty file for '{final_path}'.")
+
+                os.replace(temporary_path, final_path)
+
+            finally:
+                if temporary_path.exists():
+                    temporary_path.unlink()
+
+        except DXFExportError:
+            raise
+        except (OSError, ezdxf.DXFError) as exc:
+            raise DXFExportError(f"Failed to save DXF file to '{final_path}': {exc}") from exc
+
+        report.output_path = final_path
         report.dxf_version = options.dxf_version
         report.units = options.units
         report.layer_count = len(LAYER_STYLES)
@@ -146,7 +193,34 @@ class DXFExporter:
                 interval=extra.get("interval"),
                 every=index_contour_every,
             )
-        return layer_for(feature.feature_type)
+
+        try:
+            return layer_for(feature.feature_type)
+        except KeyError as exc:
+            # Found and fixed in PR19: layer_for() raises a raw,
+            # unwrapped KeyError for any FeatureType not present in
+            # LAYER_BY_FEATURE_TYPE -- confirmed that 63 of 84
+            # FeatureType values (75%) are NOT covered, meaning
+            # exporting any feature of one of those types (without
+            # an explicit cad_layer attribute) crashed the ENTIRE
+            # export with a raw KeyError, bypassing options.strict
+            # entirely: the strict=False "skip bad features instead
+            # of crashing" contract only ever caught
+            # (DXFGeometryError, DXFExportError) here, so this
+            # specific, very common failure mode was NEVER
+            # catchable/skippable, regardless of strict mode. Wrapped
+            # into DXFExportError (already one of the caught types in
+            # export()'s own try/except) so it now correctly
+            # participates in that same strict/skip contract, rather
+            # than silently bypassing it. This does not invent a
+            # layer/color mapping for the 63 uncovered types -- that
+            # remains a separate, deliberate design decision (which
+            # types get which layer/color) out of scope for this fix.
+            raise DXFExportError(
+                f"No DXF layer mapping defined for feature type "
+                f"'{feature.feature_type.value}', and no explicit "
+                f"'cad_layer' attribute was set on feature {feature.feature_id}."
+            ) from exc
 
     @staticmethod
     def _tally(report: _ReportBuilder, representation: DXFRepresentation, count: int) -> None:

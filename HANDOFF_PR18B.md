@@ -2794,3 +2794,123 @@ silencioso).
 
 **1171/1171 tests en todo el sandbox, estable en 4 corridas consecutivas,
 `ruff`/`mypy` limpios en todo lo tocado durante PR19.**
+
+# Sincronización completa del repositorio + `export` (dxf/gpkg)
+
+## Sincronización con el repo real actualizado
+
+Hernán subió un volcado fresco de su repositorio real. Se comparó archivo
+por archivo (no solo texto, sino confirmando que los fixes críticos de
+esta sesión seguían presentes: `_PCA_CACHE` ausente, signo de
+`point_to_plane.py`, convergencia de `icp.py`, precisión de
+`las/writer.py`) y se sincronizó el árbol `topocore/` completo como fuente
+de verdad.
+
+**Dos fixes de esta sesión se reaplicaron** (no estaban aún reflejados en
+el repo real):
+- `LRUCache.__getstate__`/`__setstate__` (serialización sin el lock) --
+  reaplicado idéntico, con la misma documentación.
+- Docstring desactualizado de `VolumeAnalysis.prismoidal()` (seguía
+  advirtiendo sobre una limitación ya resuelta) -- actualizado.
+
+**Confirmado que el hallazgo de `PrismoidalVolume` (documentado, no
+corregido, en el cierre anterior de `analysis/volume`) fue resuelto de
+forma independiente en el repo real**: ahora implementa genuinamente la
+regla compuesta de Simpson 1/3 (exige ≥3 secciones, conteo impar,
+espaciado uniforme, áreas intermedias realmente medidas). Verificado
+numéricamente contra una integral analítica exacta (perfil de área
+cuadrático, donde Simpson's es exacta): coincidencia perfecta
+(`366.6667`), y ahora genuinamente distinto de `average_end_area`
+(`400.0000`). Test suite reescrito para reflejar el comportamiento
+corregido.
+
+**1205/1205 tests en todo el sandbox tras la sincronización completa,
+estable en 4 corridas consecutivas.**
+
+## `dxf/` -- CERRADO. 2 bugs reales corregidos
+
+### Bug real (CRÍTICO): `DXFExportOptions.units` etiquetaba sin convertir
+
+`doc.units = ...` solo configuraba la variable de encabezado `$INSUNITS`
+(metadato para que el software CAD interprete el dibujo) -- **sin
+ninguna conversión numérica de coordenadas**. Confirmado con archivo DXF
+real (`ezdxf`): datos en metros (estándar de todo TopoCore) exportados
+con `units=FEET` quedaban con las coordenadas sin cambiar pero
+etiquetadas como pies -- cualquier CAD interpretaría la geometría a
+~3.28x la escala equivocada, sin error ni aviso.
+
+**Corregido** (decisión de Hernán: falla ruidosa, no silenciosa):
+`DXFExporter.__init__()` ahora rechaza explícitamente cualquier `units`
+distinto de `METERS` hasta que exista conversión real.
+
+### Bug real (alcance amplio): 63 de 84 `FeatureType` rompían la exportación con `KeyError` crudo
+
+`layer_for()` lanzaba `KeyError` crudo para cualquier tipo sin mapeo en
+`LAYER_BY_FEATURE_TYPE` -- confirmado que cubre solo 21 de 84 tipos
+(75% sin cubrir). Peor: ese `KeyError` **no era capturado** por el
+`except (DXFGeometryError, DXFExportError)` del exportador, rompiendo
+silenciosamente el contrato `strict=False` ("saltar features
+problemáticos, no crashear") para la mayoría de los tipos posibles.
+
+**Corregido** (decisión de Hernán: envolver sin inventar mapeos de capa
+nuevos): el `KeyError` ahora se envuelve en `DXFExportError`, participando
+correctamente en el contrato estricto/no-estricto ya existente.
+
+### Resto de `dxf/` -- verificado exhaustivamente con `ezdxf` real, sin bugs adicionales
+
+Las 4 representaciones (POINT/LWPOLYLINE/POLYLINE3D/3DFACE) verificadas
+vértice por vértice contra archivos reales escritos y releídos con
+`ezdxf`. XDATA verificado con ciclo completo de codificación/decodificación
+(incluida la distinción crítica `bool` vs `int`, ya que `bool` es subclase
+de `int` en Python). Contornos mayor/menor verificados con casos límite
+exactos.
+
+**Tests**: `tests/dxf/` -- `test_exporter.py` (9, incluye ambos bugs),
+`test_xdata.py` (4), `test_mapping_layers.py` (8) = 21 tests.
+
+## `gpkg/` -- verificado exhaustivamente, SIN BUGS ENCONTRADOS
+
+Se instalaron `shapely`, `geopandas`, `fiona` (herramientas GIS
+completamente independientes de TopoCore) para validar contra la
+especificación OGC real, no solo consistencia interna del propio código
+-- la verificación más rigurosa posible sin depender de mocks.
+
+Confirmado: coordenadas exactas a nivel de milímetro, separación correcta
+por tabla (categoría + familia de geometría), `MESH→MultiPolygon` con
+conteo de triángulos exacto, CRS correctamente resuelto vía `pyproj` y
+legible de forma independiente por `geopandas`, atributos promovidos
+(`survey_code`/`survey_name`/`cad_layer`) + resto serializado como JSON,
+comportamiento `strict`/no-`strict` correcto, encabezado GPB (formato
+binario GeoPackage) verificado byte a byte contra la especificación OGC.
+
+**Nota positiva**: `geometry_family()` ya implementa el mismo patrón
+"envolver `KeyError` en excepción de dominio" que tuve que corregir en
+`dxf/layers.py` -- confirmando que el mismo tipo de disciplina defensiva
+ya existía en este módulo antes de esta auditoría.
+
+**Tests**: `tests/gpkg/` -- `test_exporter.py` (8), `test_geometry.py`
+(4) = 12 tests.
+
+**Estado final: 1205/1205 tests en todo el sandbox, estable en 4 corridas
+consecutivas, `ruff`/`mypy` limpios en todo lo tocado (incluidos stubs de
+`shapely` instalados para verificación completa).**
+
+## Estado formal de PR19 actualizado
+
+```
+PR19 -- QA / Regression / Deep Audit
+
+geodesy        ✅
+terrain        ✅
+processing     ✅
+analysis       ✅
+io             ✅
+export (dxf+gpkg)  ✅ CERRADO
+workflow           ⏳ siguiente y último bloque
+```
+
+**Bugs reales totales encontrados y corregidos en PR19: 34**
+(32 anteriores + 2 en `dxf/`: unidades sin convertir, `KeyError` crudo en
+`layer_for()`). `gpkg/` auditado exhaustivamente sin bugs encontrados.
+
+Con esto, queda únicamente `workflow` para cerrar formalmente todo PR19.

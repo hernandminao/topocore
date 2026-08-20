@@ -105,14 +105,25 @@ class VolumeAnalysis:
         sections: list[tuple[float, float]],
     ) -> VolumeResult:
         """
-        Compute prismoidal volume.
+        Compute prismoidal volume using the composite Simpson's 1/3
+        rule.
 
-        .. warning::
-            Known limitation (PR19, not yet resolved): currently
-            mathematically equivalent to ``average_end_area()`` --
-            see ``topocore.analysis.volume.prismoidal``'s module
-            docstring. Do not expect different results from choosing
-            this method over ``average_end_area`` until resolved.
+        Requires an odd number of sections (at least 3), uniformly
+        spaced, with genuinely measured intermediate areas -- not
+        synthesized from the endpoints. See
+        ``topocore.analysis.volume.prismoidal`` for the full
+        contract.
+
+        .. note::
+            The PR19 finding that this method used to be
+            mathematically equivalent to ``average_end_area()`` (the
+            middle-section area was approximated as the average of
+            the endpoints, defeating Simpson's rule) has since been
+            resolved: ``PrismoidalVolume`` now requires real,
+            measured intermediate sections and gives genuinely
+            different (more accurate for curved cross-section
+            variation) results. Confirmed directly against an exact
+            analytic integral of a quadratic area profile.
         """
 
         return PrismoidalVolume(sections).compute()

@@ -342,12 +342,35 @@ class GeoPackageExporter:
     def _split_attributes(
         feature: Feature,
     ) -> tuple[str | None, str | None, str | None, str | None]:
+        """Split promoted attributes from the JSON attribute payload.
+
+        Raises
+        ------
+        GPKGExportError
+            If an attribute cannot be serialized as JSON.
+        """
         attrs = feature.attributes
+
         survey_code = attrs.get("survey_code")
         survey_name = attrs.get("survey_name")
         cad_layer = attrs.get("cad_layer")
-        rest = {k: v for k, v in attrs.items() if k not in _PROMOTED_ATTRIBUTE_KEYS}
-        attributes_json = json.dumps(rest, ensure_ascii=False, separators=(",", ":")) if rest else None
+
+        rest = {key: value for key, value in attrs.items() if key not in _PROMOTED_ATTRIBUTE_KEYS}
+
+        if not rest:
+            return survey_code, survey_name, cad_layer, None
+
+        try:
+            attributes_json = json.dumps(
+                rest,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise GPKGExportError(
+                f"Feature {feature.feature_id} contains attributes that cannot be serialized as JSON."
+            ) from exc
+
         return survey_code, survey_name, cad_layer, attributes_json
 
 

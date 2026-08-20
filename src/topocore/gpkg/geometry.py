@@ -89,10 +89,23 @@ def geometry_family(geometry_type: GeometryType) -> GeometryFamily:
         raise GPKGGeometryError(f"No GeoPackage mapping for geometry_type={geometry_type!r}.") from exc
 
 
+def _validate_vertices(vertices: np.ndarray) -> None:
+    """Validate the common vertex representation."""
+    if vertices.ndim != 2 or vertices.shape[1] != 3:
+        raise GPKGGeometryError("Geometry vertices must have shape (n, 3).")
+
+    if vertices.shape[0] == 0:
+        raise GPKGGeometryError("Geometry must contain at least one vertex.")
+
+    if not np.isfinite(vertices).all():
+        raise GPKGGeometryError("Geometry vertices contain NaN or infinite coordinates.")
+
+
 def _to_shapely(
     geometry: FeatureGeometry,
 ) -> Point | LineString | Polygon | MultiPolygon:
     vertices = geometry.vertices
+    _validate_vertices(vertices)
 
     if geometry.geometry_type == GeometryType.POINT:
         x, y, z = vertices[0]
@@ -112,16 +125,49 @@ def _to_shapely(
         return Polygon(coords)
 
     if geometry.geometry_type == GeometryType.MESH:
-        if geometry.faces is None or geometry.faces.size == 0:
-            raise GPKGGeometryError("MESH geometry has no faces to triangulate into a MultiPolygon.")
-        polygons: list[Polygon] = []
-        for face in geometry.faces:
-            tri = vertices[face]
-            coords = [(float(v[0]), float(v[1]), float(v[2])) for v in tri]
-            polygons.append(Polygon(coords))
-        return MultiPolygon(polygons)
+        faces = geometry.faces
 
-    raise GPKGGeometryError(f"No GeoPackage mapping for geometry_type={geometry.geometry_type!r}.")
+        if faces is None or faces.size == 0:
+            raise GPKGGeometryError("MESH geometry has no faces to triangulate into a MultiPolygon.")
+
+        if faces.ndim != 2 or faces.shape[1] != 3:
+            raise GPKGGeometryError("MESH faces must have shape (n, 3).")
+
+        if not np.issubdtype(faces.dtype, np.integer):
+            raise GPKGGeometryError("MESH face indices must be integers.")
+
+        if np.any(faces < 0) or np.any(faces >= vertices.shape[0]):
+            raise GPKGGeometryError("MESH contains face indices outside the vertex array.")
+
+        polygons: list[Polygon] = []
+
+        for face in faces:
+            tri = vertices[face]
+
+            edge_a = tri[1] - tri[0]
+            edge_b = tri[2] - tri[0]
+            cross = np.cross(edge_a, edge_b)
+
+            if float(np.dot(cross, cross)) <= 0.0:
+                raise GPKGGeometryError("MESH contains a degenerate triangular face.")
+
+            coords = [
+                (
+                    float(vertex[0]),
+                    float(vertex[1]),
+                    float(vertex[2]),
+                )
+                for vertex in tri
+            ]
+
+            polygon = Polygon(coords)
+
+            if polygon.is_empty or not polygon.is_valid:
+                raise GPKGGeometryError("MESH contains a face that cannot produce a valid polygon.")
+
+            polygons.append(polygon)
+
+        return MultiPolygon(polygons)
 
 
 def build_gpb(geometry: FeatureGeometry, srs_id: int) -> bytes:

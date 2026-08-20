@@ -23,7 +23,7 @@ MIT
 from __future__ import annotations
 
 from threading import RLock
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from .base import Cache
 
@@ -54,10 +54,10 @@ class LRUCache(Cache[K, V]):
     """
 
     __slots__ = (
-        "_maxsize",
         "_cache",
-        "_lock",
         "_hits",
+        "_lock",
+        "_maxsize",
         "_misses",
     )
 
@@ -70,6 +70,38 @@ class LRUCache(Cache[K, V]):
         self._lock = RLock()
         self._hits: int = 0
         self._misses: int = 0
+
+    def __getstate__(self) -> dict[str, Any]:
+        """
+        Support pickling (e.g. ``joblib.dump`` on an object that
+        holds an ``LRUCache``, such as a trained ML classifier's
+        internal ``FeatureManager``) -- ``threading.RLock`` is not
+        picklable by design, so it is deliberately excluded here and
+        recreated fresh in ``__setstate__``, rather than attempting
+        to (impossibly) serialize lock state across processes.
+
+        Found and fixed in PR19: this was never reachable before a
+        separate bug (``MachineLearningClassifier`` never registering
+        any feature computers -- see that module's own PR19 notes)
+        made every ``fit()`` call fail immediately; once that was
+        fixed, the very next real call (``save()``, which pickles the
+        whole classifier including its ``FeatureManager``'s
+        ``LRUCache``) failed with ``TypeError: cannot pickle
+        '_thread.RLock' object``.
+        """
+        return {
+            "_maxsize": self._maxsize,
+            "_cache": self._cache,
+            "_hits": self._hits,
+            "_misses": self._misses,
+        }
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self._maxsize = state["_maxsize"]
+        self._cache = state["_cache"]
+        self._hits = state["_hits"]
+        self._misses = state["_misses"]
+        self._lock = RLock()
 
     def get(
         self,

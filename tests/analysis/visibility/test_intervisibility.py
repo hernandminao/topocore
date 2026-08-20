@@ -74,9 +74,9 @@ def test_wall_blocks_pairs_whose_path_crosses_it() -> None:
     pts = [(0.0, 0.0), (10.0, 0.0), (0.0, 10.0)]
     result = iv.compute(pts, surface)
 
-    assert result.visibility_matrix[0, 1] == False
-    assert result.visibility_matrix[1, 2] == False
-    assert result.visibility_matrix[0, 2] == True
+    assert not result.visibility_matrix[0, 1]
+    assert not result.visibility_matrix[1, 2]
+    assert result.visibility_matrix[0, 2]
 
 
 def test_rejects_fewer_than_two_points() -> None:

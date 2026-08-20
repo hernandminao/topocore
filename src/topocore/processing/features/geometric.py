@@ -78,17 +78,20 @@ class RelativeHeightFeatureComputer(FeatureComputer):
     """
     Compute relative height (height above ground).
 
-    This feature requires the point cloud to have a ground
-    classification. The relative height is computed as:
-    Z - ground_Z, where ground_Z is the elevation of the
-    nearest ground point.
+    The relative height is computed as:
+
+        Z - ground_Z
+
+    where ``ground_Z`` is obtained from the nearest classified ground
+    point for each input point.
 
     Parameters
     ----------
     ground_class
-        The classification code for ground points (default: 2).
+        Classification code for ground points (default: 2).
     k
-        Number of ground neighbors to consider.
+        Number of nearest ground points to consider. When ``k > 1``,
+        their elevations are averaged.
     """
 
     __slots__ = ("_ground_class", "_k")
@@ -98,6 +101,9 @@ class RelativeHeightFeatureComputer(FeatureComputer):
         ground_class: int = 2,
         k: int = 1,
     ) -> None:
+        if k < 1:
+            raise PointDescriptorError(f"k must be at least 1, got {k}.")
+
         self._ground_class = ground_class
         self._k = k
 
@@ -105,46 +111,73 @@ class RelativeHeightFeatureComputer(FeatureComputer):
         self,
         cloud: PointCloud,
     ) -> FloatArray1D:
+        if PointAttribute.X not in cloud.attributes:
+            raise PointDescriptorError("Point cloud has no X coordinate.")
+
+        if PointAttribute.Y not in cloud.attributes:
+            raise PointDescriptorError("Point cloud has no Y coordinate.")
+
         if PointAttribute.Z not in cloud.attributes:
             raise PointDescriptorError("Point cloud has no Z coordinate.")
 
         if PointAttribute.CLASSIFICATION not in cloud.attributes:
             raise PointDescriptorError("Point cloud has no classification attribute.")
 
-        # Extract all points
+        x_values: list[FloatArray1D] = []
+        y_values: list[FloatArray1D] = []
         z_values: list[FloatArray1D] = []
         classifications: list[IntArray1D] = []
-        for chunk in cloud:
-            z_values.append(cast(FloatArray1D, chunk[PointAttribute.Z]))
-            classifications.append(cast(IntArray1D, chunk[PointAttribute.CLASSIFICATION]))
 
+        for chunk in cloud:
+            x_values.append(cast(FloatArray1D, chunk[PointAttribute.X]))
+            y_values.append(cast(FloatArray1D, chunk[PointAttribute.Y]))
+            z_values.append(cast(FloatArray1D, chunk[PointAttribute.Z]))
+            classifications.append(
+                cast(
+                    IntArray1D,
+                    chunk[PointAttribute.CLASSIFICATION],
+                )
+            )
+
+        x: FloatArray1D = np.concatenate(x_values)
+        y: FloatArray1D = np.concatenate(y_values)
         z: FloatArray1D = np.concatenate(z_values)
         cls: IntArray1D = np.concatenate(classifications)
 
-        # Find ground points
         ground_mask = cls == self._ground_class
 
         if not ground_mask.any():
             raise PointDescriptorError("No ground points found for relative height computation.")
 
-        # Build index from ground points
-        ground_points: FloatArray2D = np.stack(
-            [
+        # Ground points must preserve their real XYZ coordinates.
+        ground_points: FloatArray2D = np.column_stack(
+            (
+                x[ground_mask],
+                y[ground_mask],
                 z[ground_mask],
-                np.zeros_like(z[ground_mask]),
-                np.zeros_like(z[ground_mask]),
-            ],
-            axis=1,
+            )
         )
 
-        # For each point, find the nearest ground point
         manager = NeighborhoodManager.from_array(ground_points)
-        indices, _ = manager.query_point(0.0, 0.0, z[0], k=self._k)
 
-        ground_z: FloatArray1D = ground_points[indices, 0]
+        ground_z = np.empty_like(z)
 
-        result: FloatArray1D = z - ground_z
-        return result
+        # Each point requires its own spatial query. Reusing a single
+        # query would assign the same ground elevation to every point.
+        for index in range(len(z)):
+            indices, _ = manager.query_point(
+                float(x[index]),
+                float(y[index]),
+                float(z[index]),
+                k=self._k,
+            )
+
+            if self._k == 1:
+                ground_z[index] = ground_points[indices[0], 2]
+            else:
+                ground_z[index] = np.mean(ground_points[indices, 2])
+
+        return z - ground_z
 
     def name(self) -> str:
         return "relative_height"

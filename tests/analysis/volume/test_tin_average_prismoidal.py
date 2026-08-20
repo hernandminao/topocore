@@ -117,22 +117,22 @@ def test_average_end_area_rejects_fewer_than_two_sections() -> None:
 # ----------------------------------------------------------------------
 
 
-def test_prismoidal_currently_equals_average_end_area() -> None:
-    """
-    Documents the known, deliberately-deferred limitation: given
-    identical (station, area) input, PrismoidalVolume and
-    AverageEndAreaVolume produce bit-for-bit identical results,
-    since the middle-section area is approximated as the average of
-    the two endpoints rather than genuinely measured. This test
-    exists so a future fix (accepting real triples) shows up as an
-    intentional, visible change here, not a silent behavior shift.
-    """
-    sections = [(0.0, 10.0), (20.0, 30.0)]
+def test_prismoidal_uses_measured_middle_section() -> None:
+    """Use the measured middle section in Simpson's 1/3 rule."""
+    sections = [
+        (0.0, 10.0),
+        (10.0, 30.0),
+        (20.0, 10.0),
+    ]
 
-    prismoidal_result = PrismoidalVolume(sections).compute()
-    average_result = AverageEndAreaVolume(sections).compute()
+    result = PrismoidalVolume(sections).compute()
 
-    assert prismoidal_result.cut_volume == average_result.cut_volume
+    expected = 10.0 / 3.0 * (10.0 + 4.0 * 30.0 + 10.0)
+
+    assert result.cut_volume == pytest.approx(expected)
+    assert result.fill_volume == pytest.approx(0.0)
+    assert result.net_volume == pytest.approx(expected)
+    assert result.method == "prismoidal"
 
 
 def test_prismoidal_rejects_out_of_order_stations() -> None:
@@ -145,6 +145,25 @@ def test_prismoidal_rejects_negative_area() -> None:
         PrismoidalVolume([(0.0, -1.0), (10.0, 5.0)])
 
 
-def test_prismoidal_rejects_fewer_than_two_sections() -> None:
+def test_prismoidal_rejects_fewer_than_three_sections() -> None:
+    """Reject fewer than three sections."""
     with pytest.raises(VolumeError):
-        PrismoidalVolume([(0.0, 5.0)])
+        PrismoidalVolume(
+            [
+                (0.0, 5.0),
+                (10.0, 5.0),
+            ]
+        )
+
+
+def test_prismoidal_rejects_even_number_of_sections() -> None:
+    """Reject an even number of sections."""
+    with pytest.raises(VolumeError):
+        PrismoidalVolume(
+            [
+                (0.0, 5.0),
+                (10.0, 10.0),
+                (20.0, 5.0),
+                (30.0, 10.0),
+            ]
+        )

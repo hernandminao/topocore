@@ -4,15 +4,14 @@ Regression suite for topocore.terrain.breaklines -- PR19.
 
 from __future__ import annotations
 
+import pytest
+
 from topocore.geometry.point3d import Point3D
-from topocore.terrain.algorithms.delaunay import DelaunayTriangulator
 from topocore.terrain.breaklines import BreaklineEnforcer, apply_breaklines
 from topocore.terrain.enums import BreaklineType
 from topocore.terrain.exceptions import BreaklineError
 from topocore.terrain.models import Breakline
 from topocore.terrain.tin import TIN
-
-import pytest
 
 
 def _edges_of(tin: TIN) -> set[frozenset[int]]:

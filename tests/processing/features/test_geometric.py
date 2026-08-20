@@ -85,23 +85,33 @@ def test_relative_height_simple_case() -> None:
         zs=[0.0, 1.0, 2.0, 5.0, 10.0],
         cls=[2, 2, 2, 6, 6],
     )
-    result = RelativeHeightFeatureComputer(ground_class=2, k=1).compute(cloud)
 
-    # Nearest ground point is by REAL 3D distance (including Z, not
-    # just X) -- for (0.5, 0, 5.0) and (0.5, 0, 10.0), the query
-    # point's own large Z pulls the nearest match toward the ground
-    # point with the highest Z among the 3 candidates (2, 0, 2.0):
-    # dist((0.5,0,5),(0,0,0))=5.02, ((1,0,1))=4.03, ((2,0,2))=3.35 -> nearest.
-    np.testing.assert_allclose(result, [0.0, 0.0, 0.0, 3.0, 8.0])
-    assert not np.array_equal(result, [0.0, 1.0, 2.0, 5.0, 10.0])  # NOT the pre-fix (raw Z) output
+    result = RelativeHeightFeatureComputer(
+        ground_class=2,
+        k=1,
+    ).compute(cloud)
+
+    # Nearest ground point is determined using the complete XYZ
+    # distance. For both non-ground points, (2, 0, 2) is nearest.
+    np.testing.assert_allclose(
+        result,
+        [0.0, 0.0, 0.0, 3.0, 8.0],
+    )
+
+    # Regression guard: the old implementation returned raw Z.
+    assert not np.array_equal(
+        result,
+        [0.0, 1.0, 2.0, 5.0, 10.0],
+    )
 
 
 def test_relative_height_uses_real_geometric_proximity() -> None:
     """
-    The exact reproduction that exposed the bug: two ground clusters
-    at DIFFERENT locations and DIFFERENT elevations. Each non-ground
-    point must use the GEOMETRICALLY nearest cluster's elevation, not
-    a single shared value for the whole cloud.
+    Each point must query its own nearest ground point.
+
+    Two ground clusters exist at different locations and elevations.
+    The two non-ground points are deliberately placed close to
+    different clusters.
     """
     cloud = _cloud(
         xs=[0.0, 0.0, 10.0, 10.0, 0.1, 10.1],
@@ -109,10 +119,17 @@ def test_relative_height_uses_real_geometric_proximity() -> None:
         zs=[0.0, 0.0, 5.0, 5.0, 3.0, 3.0],
         cls=[2, 2, 2, 2, 6, 6],
     )
-    result = RelativeHeightFeatureComputer(ground_class=2, k=1).compute(cloud)
 
-    assert result[4] == pytest.approx(3.0)  # near x=0 cluster (ground z=0): 3.0 - 0.0
-    assert result[5] == pytest.approx(-2.0)  # near x=10 cluster (ground z=5): 3.0 - 5.0
+    result = RelativeHeightFeatureComputer(
+        ground_class=2,
+        k=1,
+    ).compute(cloud)
+
+    # (0.1, 0, 3) -> ground elevation 0
+    assert result[4] == pytest.approx(3.0)
+
+    # (10.1, 0, 3) -> ground elevation 5
+    assert result[5] == pytest.approx(-2.0)
 
 
 def test_relative_height_ground_points_are_zero_relative_to_themselves() -> None:
@@ -122,8 +139,40 @@ def test_relative_height_ground_points_are_zero_relative_to_themselves() -> None
         zs=[1.0, 2.0, 3.0],
         cls=[2, 2, 2],
     )
-    result = RelativeHeightFeatureComputer(ground_class=2, k=1).compute(cloud)
-    np.testing.assert_allclose(result, [0.0, 0.0, 0.0])
+
+    result = RelativeHeightFeatureComputer(
+        ground_class=2,
+        k=1,
+    ).compute(cloud)
+
+    np.testing.assert_allclose(
+        result,
+        [0.0, 0.0, 0.0],
+    )
+
+
+def test_relative_height_averages_multiple_ground_neighbors() -> None:
+    cloud = _cloud(
+        xs=[0.0, 1.0, 0.5],
+        ys=[0.0, 0.0, 0.0],
+        zs=[0.0, 2.0, 10.0],
+        cls=[2, 2, 6],
+    )
+
+    result = RelativeHeightFeatureComputer(
+        ground_class=2,
+        k=2,
+    ).compute(cloud)
+
+    expected_ground = 1.0
+    expected_height = 10.0 - expected_ground
+
+    assert result[2] == pytest.approx(expected_height)
+
+
+def test_relative_height_rejects_invalid_k() -> None:
+    with pytest.raises(PointDescriptorError):
+        RelativeHeightFeatureComputer(k=0)
 
 
 def test_relative_height_rejects_no_ground_points() -> None:

@@ -155,7 +155,8 @@ class PrismoidalVolume:
         for index in range(0, len(self._sections) - 2, 2):
             station1, area1 = self._sections[index]
             station2, area2 = self._sections[index + 1]
-            station3, area3 = self._sections[index + 2]
+            # before station3, area3 = self._sections[index + 2]
+            _, area3 = self._sections[index + 2]
 
             spacing = station2 - station1
 
@@ -165,7 +166,7 @@ class PrismoidalVolume:
 
             # station3 is intentionally part of the panel validation
             # and documents the three-section Simpson interval.
-            _ = station3
+            # _ = station3
 
             volumes.append(volume)
 

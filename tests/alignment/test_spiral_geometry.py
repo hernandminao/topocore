@@ -139,24 +139,24 @@ def test_exit_spiral_lL_matches_end() -> None:
 # ----------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("l", [0.0, 10.0, 25.0, 40.0, 50.0])
-def test_entry_spiral_matches_independent_fresnel_reference(l: float) -> None:
+@pytest.mark.parametrize("length", [0.0, 10.0, 25.0, 40.0, 50.0])
+def test_entry_spiral_matches_independent_fresnel_reference(length: float) -> None:
     spiral = _entry_ccw()
-    point = evaluate_spiral(spiral, l)
+    point = evaluate_spiral(spiral, length)
 
-    expected_u, expected_v = _REFERENCE_UV[l]
+    expected_u, expected_v = _REFERENCE_UV[length]
 
     # Axis-aligned construction: global (x, y) == local (u, v).
     assert point.x == pytest.approx(expected_u, abs=1e-6)
     assert point.y == pytest.approx(expected_v, abs=1e-6)
 
 
-@pytest.mark.parametrize("l", [0.0, 10.0, 25.0, 40.0, 50.0])
-def test_clockwise_spiral_mirrors_v_against_reference(l: float) -> None:
+@pytest.mark.parametrize("length", [0.0, 10.0, 25.0, 40.0, 50.0])
+def test_clockwise_spiral_mirrors_v_against_reference(length: float) -> None:
     spiral = _entry_cw()
-    point = evaluate_spiral(spiral, l)
+    point = evaluate_spiral(spiral, length)
 
-    expected_u, expected_v = _REFERENCE_UV[l]
+    expected_u, expected_v = _REFERENCE_UV[length]
 
     assert point.x == pytest.approx(expected_u, abs=1e-6)
     assert point.y == pytest.approx(-expected_v, abs=1e-6)
@@ -206,10 +206,10 @@ def test_curvature_varies_linearly_along_entry_spiral() -> None:
     spiral = _entry_ccw()
 
     samples = [0.0, 12.5, 25.0, 37.5, 50.0]
-    curvatures = [abs(curvature_at(spiral, l)) for l in samples]
+    curvatures = [abs(curvature_at(spiral, length)) for length in samples]
 
-    for l, k in zip(samples, curvatures, strict=True):
-        assert k == pytest.approx(l / (R * L), abs=1e-9)
+    for length, k in zip(samples, curvatures, strict=True):
+        assert k == pytest.approx(length / (R * L), abs=1e-9)
 
 
 def test_curvature_matches_finite_difference_estimate() -> None:
@@ -274,9 +274,9 @@ def test_rotated_translated_spiral_is_consistent_with_axis_aligned_reference() -
         clockwise=reference.clockwise,
     )
 
-    for l in [0.0, 10.0, 25.0, 40.0, 50.0]:
-        reference_point = evaluate_spiral(reference, l)
-        rotated_point = evaluate_spiral(rotated, l)
+    for length in [0.0, 10.0, 25.0, 40.0, 50.0]:
+        reference_point = evaluate_spiral(reference, length)
+        rotated_point = evaluate_spiral(rotated, length)
         expected_point = rotate_translate(reference_point)
 
         assert rotated_point.x == pytest.approx(expected_point.x, abs=1e-6)

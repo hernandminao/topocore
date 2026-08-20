@@ -29,7 +29,10 @@ def test_default_method_is_cut_fill() -> None:
         ("cut_fill", (np.full((5, 5), 10.0), np.full((5, 5), 8.0), 1.0)),
         ("grid_volume", (np.full((5, 5), 10.0), np.full((5, 5), 8.0), 1.0)),
         ("average_end_area", ([(0.0, 20.0), (10.0, 20.0)],)),
-        ("prismoidal", ([(0.0, 20.0), (10.0, 20.0)],)),
+        (
+            "prismoidal",
+            ([(0.0, 20.0), (5.0, 20.0), (10.0, 20.0)],),
+        ),
     ],
 )
 def test_compute_dispatches_to_each_method(method: str, args: tuple) -> None:  # type: ignore[type-arg]

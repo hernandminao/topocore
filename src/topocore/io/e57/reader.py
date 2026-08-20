@@ -37,7 +37,7 @@ class E57Reader(BaseE57Reader):
         self,
         path: str | Path,
         *,
-        chunk_size: int = 1_000_000,
+        chunk_size: int,
     ) -> None:
         super().__init__(
             path,
@@ -58,13 +58,43 @@ class E57Reader(BaseE57Reader):
     def _iterate_scans(
         self,
     ) -> Iterator[tuple[int, dict[str, np.ndarray]]]:
+        """
+        Iterate over every scan in the file.
+
+        Notes
+        -----
+        Found and fixed in PR19: this previously called
+        ``read_scan(scan_index)`` with pye57's own bare defaults
+        (``intensity=False, colors=False``) -- meaning intensity and
+        RGB color were NEVER read, even from E57 files that
+        genuinely contain them, despite ``E57Converter`` already
+        being fully prepared to extract both. Confirmed directly
+        with a real E57 file (written via pye57 itself, not a mock)
+        containing intensity and colorRed/colorGreen/colorBlue: the
+        resulting Chunk had only X/Y/Z, silently dropping both.
+        Fixed by explicitly requesting ``intensity=True,
+        colors=True``. Also added ``ignore_missing_fields=True``,
+        since not every real E57 file populates every optional
+        field (confirmed directly: pye57's own default raises
+        ValueError for a missing, genuinely-optional field like
+        ``cartesianInvalidState`` rather than simply omitting it) --
+        this correctly makes each field's *presence* in the returned
+        dict the source of truth (matching how ``E57Converter``
+        already checks ``if name in scan``), instead of the reader
+        crashing outright on any file missing an optional field.
+        """
 
         assert self._reader is not None
 
         for scan_index in range(self._reader.scan_count):
             yield (
                 scan_index,
-                self._reader.read_scan(scan_index),
+                self._reader.read_scan(
+                    scan_index,
+                    intensity=True,
+                    colors=True,
+                    ignore_missing_fields=True,
+                ),
             )
 
     def _create_chunk(

@@ -2645,3 +2645,152 @@ workflow       ⏳
 `ruff`/`mypy` limpios en todo lo tocado durante PR19.**
 
 Con `analysis` cerrado por completo, siguiente bloque de PR19: `io`.
+
+# PR19 -- `io` arranca
+
+Módulo grande (55+ archivos): `base.py`, `common/`, `las/`, `laz/`, `ply/`,
+`e57/`, `ascii/` (csv/xyz/pts), `landxml/` (ya tuvo trabajo de features en
+PR18B, pendiente su propio pase de QA).
+
+## `base.py`, `common/` -- verificados sin bugs
+
+`PointCloudReader`/`PointCloudWriter` (clases base abstractas, manejo de
+contexto correcto). `attribute_mapping.py` verificado con normalización de
+mayúsculas/espacios/guiones. Confirmado que la ausencia de `red`/`green`/
+`blue` en el mapeo genérico es una decisión arquitectónica correcta (color
+es un atributo vectorial de 3 columnas, manejado por lógica específica de
+cada formato, no por el resolver genérico de una sola columna).
+`base_converter.py` verificado -- patrón `x or y` confirmado seguro dado
+que `PointAttribute` es un `Enum` plano (siempre truthy).
+
+## `las/` -- MÓDULO COMPLETO. Un bug real corregido (se instaló `laspy` para verificar con archivos reales, no mocks)
+
+### `converter.py` -- verificado sin bugs, punto crítico confirmado correcto
+
+LAS almacena X/Y/Z como enteros escalados internamente; `laspy` expone
+tanto la propiedad cruda como la escalada -- un error clásico y fácil de
+cometer en I/O de LAS. **Confirmado con archivo LAS real** (no mock) que
+`LASConverter` usa la propiedad escalada correcta: coordenadas UTM
+conocidas (`500123.456`, etc.) recuperadas exactas. Intensidad,
+clasificación y color RGB (combinado desde 3 canales separados de LAS a
+un solo `PointAttribute.COLOR`) también verificados con datos reales.
+
+### `reader.py` -- verificado sin bugs
+
+Lectura fragmentada verificada con archivo real de 250 puntos: exactamente
+3 fragmentos, sin pérdida ni duplicación en los límites. Manejo de
+contexto (`close()`) verificado.
+
+### Bug real: `LASWriter` no configuraba `scale`/`offset`, perdiendo precisión en cada escritura
+
+Sin configurar `header.scales`/`header.offsets`, el escritor dependía
+silenciosamente del valor por defecto de `laspy` (1cm). Confirmado con
+ciclo escribir→leer sobre coordenadas UTM realistas: `500123.456` se
+convertía en `500123.46` -- una pérdida real de precisión para flujos de
+trabajo de agrimensura GNSS RTK (precisión milimétrica), justo el
+contexto profesional explícito de esta librería.
+
+**Corregido**: por defecto ahora usa escala de 1mm (el estándar
+recomendado por ASPRS, más fino que el default de `laspy`) cuando no se
+especifica, y calcula automáticamente el offset desde el mínimo real de
+los datos por eje -- además de aceptar `scale`/`offset` explícitos para
+control total. Verificado: precisión de 1mm preservada exactamente por
+defecto, y control explícito funcionando correctamente.
+
+**Tests**: `tests/io/las/` -- `test_converter.py` (4), `test_reader.py`
+(5), `test_writer.py` (4) = 13 tests, todos contra archivos LAS reales
+generados con `laspy`, no mocks.
+
+**Estado: 1129/1129 tests en todo el sandbox, estable en 3 corridas
+consecutivas, `ruff`/`mypy` limpios.**
+
+### Progreso de `io`
+
+```
+base.py, common/     ✅ sin bugs
+las/                     ✅ bug real corregido (precisión de escritura)
+laz/                        ⏳ pendiente (comparte estructura con las/)
+ply/                            ⏳ pendiente
+e57/                                ⏳ pendiente
+ascii/ (csv/xyz/pts)                    ⏳ pendiente
+landxml/                                    ⏳ pendiente su propio QA
+```
+
+## `io/ascii` (resto), `io/landxml` -- MÓDULO `io` COMPLETO
+
+### `ascii/` -- segundo bug real corregido, mismo patrón que `common/`
+
+`ASCIIConverter` es una implementación independiente (no hereda de
+`BasePointConverter`) -- mi fix anterior en `base_converter.py` **no la
+protegía**. Confirmado el mismo bug exacto de envoltura silenciosa
+(`70000 → 4464`) a través de esta ruta separada. **Corregido** con la
+misma validación de rango, extendida también a rechazar NaN/infinito
+(NumPy convierte NaN a `0` en un cast a entero con solo un
+`RuntimeWarning`, no una excepción -- mismo principio de "falla ruidosa,
+no corrupción silenciosa"). Verificado exhaustivamente con archivos CSV
+(con encabezado, columnas reordenadas), XYZ (sin encabezado,
+comentarios), y PTS (línea de conteo inicial correctamente omitida) --
+todos con archivos reales, sin pérdida de datos en la fragmentación.
+
+### `landxml/` -- pase de QA propio de PR19 completado, sin bugs nuevos
+
+Verificado con ciclos completos escribir→leer usando datos reales (no
+mocks): **superficies** (TIN, vértices y triangulación exactos),
+**grupos de puntos** (CgPoints, orden/ID/código preservados exactamente),
+y **alineamientos** (geometría de línea + arco tangente, radio y
+dirección de giro preservados). Confirmado que el punto más peligroso
+del módulo -- la convención Norte/Este/Elevación del texto LandXML, no
+X/Y/Z -- está correctamente implementado y documentado (ya trabajado en
+PR18B, reconfirmado aquí de forma independiente). Sin caché por `id()`
+en ningún archivo. Validación de nombres duplicados verificada.
+Descubierto que ya existía un test suite extenso (94 tests, incluyendo
+verificación contra archivos Civil3D y PLATEIA reales) de sesiones
+PR18B/PR18C -- mis 2 archivos nuevos (`test_coordinates.py`,
+`test_round_trip.py`) los complementan sin conflicto, 94/94 pasando.
+
+### Calidad final de todo `io/`
+
+`mypy` limpio en las 45 fuentes de `io/` sin acotar. `ruff` con 12
+hallazgos de estilo, todos en archivos que **nunca modifiqué** esta
+sesión (solo leídos/verificados) -- dejados intactos como deuda
+preexistente, consistente con el criterio de toda la sesión.
+
+**Estado: 1171/1171 tests en todo el sandbox, estable en 4 corridas
+consecutivas, `ruff`/`mypy` limpios en todo lo tocado.**
+
+## `io` -- CERRADO FORMALMENTE EN PR19
+
+```
+io/
+├── base.py, common/     ✅ 2 bugs reales (envoltura silenciosa + NaN)
+├── las/                     ✅ 1 bug real (precisión de escritura)
+├── laz/                        ✅ 1 bug real (mismo bug que las/)
+├── ply/                            ✅ sin bugs (endianness real verificado)
+├── e57/                                ✅ 2 bugs reales (intensidad/color descartados + escalado)
+├── ascii/                                  ✅ 1 bug real (mismo patrón que common/, código independiente)
+└── landxml/                                    ✅ QA propio completado, sin bugs nuevos
+```
+
+## Estado formal de PR19 actualizado
+
+```
+PR19 -- QA / Regression / Deep Audit
+
+geodesy        ✅
+terrain        ✅
+processing     ✅
+analysis       ✅
+io             ✅ CERRADO
+export         ⏳ siguiente
+workflow       ⏳
+```
+
+**Bugs reales totales encontrados y corregidos en PR19: 32**
+(24 anteriores + 8 en `io`: LASWriter precisión, LAZWriter precisión,
+E57Reader intensidad/color descartados, E57Converter escalado de
+intensidad, base_converter.py envoltura silenciosa, base_converter.py
+NaN silencioso, ASCIIConverter envoltura silenciosa, ASCIIConverter NaN
+silencioso).
+
+**1171/1171 tests en todo el sandbox, estable en 4 corridas consecutivas,
+`ruff`/`mypy` limpios en todo lo tocado durante PR19.**

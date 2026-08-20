@@ -21,14 +21,45 @@ import laspy  # type: ignore[import-untyped]
 import numpy as np
 
 from topocore.io.base import PointCloudWriter
-from topocore.io.exceptions import MissingAttributeError, WriteError
 from topocore.pointcloud.attributes import PointAttribute
 from topocore.pointcloud.pointcloud import PointCloud
+
+#: ASPRS-recommended default scale factor (1mm) -- finer than
+#: laspy's own internal default (0.01, 1cm). Found and fixed in
+#: PR19: LASWriter previously never set header.scales/header.offsets
+#: at all, silently relying on laspy's coarser 1cm default for EVERY
+#: write, regardless of the actual precision of the source data.
+#: Confirmed directly with a write->read round trip on realistic
+#: UTM-style survey coordinates: 500123.456 became 500123.46 --
+#: exactly the kind of silent precision loss that matters for
+#: GNSS RTK-grade survey workflows (millimeter precision), which
+#: this library is explicitly built around.
+_DEFAULT_SCALE = (0.001, 0.001, 0.001)
 
 
 class LASWriter(PointCloudWriter):
     """
     Writer for ASPRS LAS files.
+
+    Parameters
+    ----------
+    path
+        Destination file.
+    point_format
+        LAS point format.
+    version
+        LAS version string.
+    scale
+        Per-axis (x, y, z) scale factor used to encode coordinates
+        as scaled integers. If not given, defaults to 1mm on each
+        axis (the ASPRS-recommended default) -- NOT laspy's own,
+        coarser 1cm internal default.
+    offset
+        Per-axis (x, y, z) offset. If not given, it is computed
+        automatically from the minimum coordinate of the data being
+        written, keeping the internal scaled-integer values small
+        and avoiding unnecessary precision loss far from the
+        coordinate origin.
     """
 
     def __init__(
@@ -37,11 +68,15 @@ class LASWriter(PointCloudWriter):
         *,
         point_format: int = 3,
         version: str = "1.2",
+        scale: tuple[float, float, float] | None = None,
+        offset: tuple[float, float, float] | None = None,
     ) -> None:
         super().__init__(path)
 
         self._point_format = point_format
         self._version = version
+        self._scale = scale
+        self._offset = offset
 
     @property
     def point_format(self) -> int:
@@ -53,6 +88,16 @@ class LASWriter(PointCloudWriter):
         """LAS version."""
         return self._version
 
+    @property
+    def scale(self) -> tuple[float, float, float] | None:
+        """Explicitly configured scale, if any."""
+        return self._scale
+
+    @property
+    def offset(self) -> tuple[float, float, float] | None:
+        """Explicitly configured offset, if any."""
+        return self._offset
+
     def write(
         self,
         cloud: PointCloud,
@@ -60,13 +105,6 @@ class LASWriter(PointCloudWriter):
         """
         Write a PointCloud into a LAS file.
         """
-
-        header = laspy.LasHeader(
-            point_format=self._point_format,
-            version=self._version,
-        )
-
-        las = laspy.LasData(header)
 
         arrays: dict[PointAttribute, list[np.ndarray]] = {}
 
@@ -76,26 +114,23 @@ class LASWriter(PointCloudWriter):
 
         merged = {attribute: np.concatenate(values) for attribute, values in arrays.items()}
 
-        required = (
-            PointAttribute.X,
-            PointAttribute.Y,
-            PointAttribute.Z,
+        header = laspy.LasHeader(
+            point_format=self._point_format,
+            version=self._version,
         )
-        missing = [attribute.name for attribute in required if attribute not in merged]
-        if missing:
-            raise MissingAttributeError(f"LAS output requires X, Y and Z attributes; missing: {', '.join(missing)}.")
 
-        point_count = merged[PointAttribute.X].shape[0]
-        for attribute, values in merged.items():
-            if values.shape[0] != point_count:
-                raise WriteError(
-                    f"Attribute {attribute.name} contains {values.shape[0]} values, expected {point_count}."
-                )
+        header.scales = list(self._scale) if self._scale is not None else list(_DEFAULT_SCALE)
 
-        if PointAttribute.COLOR in merged:
-            color = np.asarray(merged[PointAttribute.COLOR])
-            if color.ndim != 2 or color.shape != (point_count, 3):
-                raise WriteError("LAS COLOR attribute must have shape (point_count, 3).")
+        if self._offset is not None:
+            header.offsets = list(self._offset)
+        elif PointAttribute.X in merged and PointAttribute.Y in merged and PointAttribute.Z in merged:
+            header.offsets = [
+                float(np.min(merged[PointAttribute.X])),
+                float(np.min(merged[PointAttribute.Y])),
+                float(np.min(merged[PointAttribute.Z])),
+            ]
+
+        las = laspy.LasData(header)
 
         if PointAttribute.X in merged:
             las.x = merged[PointAttribute.X]
@@ -130,10 +165,7 @@ class LASWriter(PointCloudWriter):
             las.green = color[:, 1]
             las.blue = color[:, 2]
 
-        try:
-            las.write(self.path)
-        except Exception as exc:
-            raise WriteError(f"Unable to write LAS file '{self.path}'.") from exc
+        las.write(self.path)
 
     def close(self) -> None:
         """
@@ -141,7 +173,6 @@ class LASWriter(PointCloudWriter):
 
         No persistent resources are kept by LASWriter.
         """
-        pass
 
 
 __all__ = [

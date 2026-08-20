@@ -20,8 +20,7 @@ from typing import Final
 #: XML namespace for LandXML 1.2, the version this subsystem reads
 #: and writes. Older (1.0/0.88) and newer (2.0) namespaces are not
 #: recognized on read -- see ``reader.py``.
-# XML namespace identifier (not a network URL); S5332 does not apply.
-LANDXML_1_2_NAMESPACE: Final[str] = "http://www.landxml.org/schema/LandXML-1.2"  # NOSONAR
+LANDXML_1_2_NAMESPACE: Final[str] = "http://www.landxml.org/schema/LandXML-1.2"
 
 #: ``version`` attribute written on the root ``<LandXML>`` element.
 LANDXML_VERSION: Final[str] = "1.2"

@@ -73,6 +73,7 @@ dev = [
     "scipy-stubs>=1.16.0",
     "types-pyyaml",
     "types-shapely",
+    "pye57",
 ]
 
 [build-system]

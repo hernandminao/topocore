@@ -55,6 +55,12 @@ logger = logging.getLogger(__name__)
 
 _V = WorkflowValidator
 
+#: Default chunk_size supplied to E57Reader when the caller doesn't
+#: give one -- E57Reader.chunk_size has no built-in default (unlike
+#: every other point-cloud reader), confirmed directly. Matches the
+#: default already used by LASReader/LAZReader/PLYReader/ASCII readers.
+_DEFAULT_CHUNK_SIZE = 1_000_000
+
 
 class Workflow:
     """Mutable orchestrator representing one execution. See module docstring."""
@@ -272,9 +278,18 @@ class Workflow:
         --------
         ArtifactType.POINT_CLOUD
 
-        Covers both LAS and LAZ: both produce `PointCloud` through
-        the same `PointCloudReader.read()` base contract, selected
-        here by file extension.
+        Supports LAS, LAZ, PLY, E57, XYZ, CSV, and PTS -- selected by
+        file extension (case-insensitive). All produce `PointCloud`
+        through the same `PointCloudReader.read()` base contract.
+        `**reader_kwargs` are passed straight through to whichever
+        reader class is selected (e.g. `chunk_size` for most formats,
+        `has_header` for CSV specifically) -- unrecognized kwargs for
+        a given format raise the same `TypeError` they always would
+        constructing that reader directly.
+
+        Found and fixed in PR19: this previously only distinguished
+        ".laz" from everything else, silently routing PLY/E57/XYZ/CSV/
+        PTS files (and any unrecognized extension) to `LASReader`.
         """
         _V.require_absent(
             WorkflowStage.READ_POINT_CLOUD,
@@ -286,18 +301,76 @@ class Workflow:
         def work() -> Any:
             from topocore.io.base import PointCloudReader
 
-            suffix = Path(path).suffix.lower()
-            reader_class: type[PointCloudReader]
-            if suffix == ".laz":
-                from topocore.io.laz import LAZReader
+            input_path = Path(path)
 
-                reader_class = LAZReader
-            else:
+            if not input_path.exists():
+                raise WorkflowExecutionError(f"Point-cloud file does not exist: '{input_path}'.")
+
+            if not input_path.is_file():
+                raise WorkflowExecutionError(f"Point-cloud path is not a file: '{input_path}'.")
+
+            suffix = input_path.suffix.lower()
+            reader_class: type[PointCloudReader]
+            reader_kwargs_final = dict(reader_kwargs)
+
+            # Found and fixed in PR19: this previously only
+            # distinguished ".laz" from everything else (defaulting
+            # unconditionally to LASReader) -- confirmed directly
+            # that ANY non-LAZ format (.ply, .e57, .xyz, .csv, .pts,
+            # or an unrecognized extension) silently got routed to
+            # LASReader, which would fail or misparse rather than use
+            # the correct, already-existing reader for that format.
+            #
+            # Import paths verified against the real package
+            # structure, not assumed: topocore.io.ply/__init__.py,
+            # topocore.io.ascii.csv/__init__.py, and
+            # topocore.io.ascii.pts/__init__.py do NOT re-export their
+            # Reader classes (unlike las/laz/e57/ascii.xyz, which do)
+            # -- those three must be imported from their `.reader`
+            # submodule directly, confirmed by direct import testing.
+            if suffix == ".las":
                 from topocore.io.las import LASReader
 
                 reader_class = LASReader
+            elif suffix == ".laz":
+                from topocore.io.laz import LAZReader
 
-            with reader_class(path, **reader_kwargs) as reader:
+                reader_class = LAZReader
+            elif suffix == ".ply":
+                from topocore.io.ply.reader import PLYReader
+
+                reader_class = PLYReader
+            elif suffix == ".e57":
+                from topocore.io.e57 import E57Reader
+
+                reader_class = E57Reader
+                # E57Reader.chunk_size is a REQUIRED keyword argument
+                # (no default) -- confirmed directly, unlike every
+                # other reader here, which all have a sensible
+                # built-in default. Supplying one here keeps
+                # read_point_cloud()'s own contract uniform across
+                # formats: the caller shouldn't need to know which
+                # one format has no built-in default.
+                reader_kwargs_final.setdefault("chunk_size", _DEFAULT_CHUNK_SIZE)
+            elif suffix == ".xyz":
+                from topocore.io.ascii.xyz import XYZReader
+
+                reader_class = XYZReader
+            elif suffix == ".csv":
+                from topocore.io.ascii.csv.reader import CSVReader
+
+                reader_class = CSVReader
+            elif suffix == ".pts":
+                from topocore.io.ascii.pts.reader import PTSReader
+
+                reader_class = PTSReader
+            else:
+                raise WorkflowExecutionError(
+                    f"Unsupported point-cloud format: '{suffix or '<none>'}'. "
+                    "Supported formats: LAS, LAZ, PLY, E57, XYZ, CSV, PTS."
+                )
+
+            with reader_class(input_path, **reader_kwargs_final) as reader:
                 return reader.read()
 
         self._execute_stage(
@@ -329,6 +402,7 @@ class Workflow:
         counts are cheaper to derive from `.point_count`).
         """
         _V.require(WorkflowStage.CLASSIFY_GROUND, self._store, ArtifactType.POINT_CLOUD)
+        _V.require_current(WorkflowStage.CLASSIFY_GROUND, self._store, self._history, ArtifactType.POINT_CLOUD)
         cloud = self._store.get(ArtifactType.POINT_CLOUD)
         dep = self._dependency(ArtifactType.POINT_CLOUD, required=True)
 
@@ -369,6 +443,7 @@ class Workflow:
         not the binary ground/non-ground split `GroundManager` performs.
         """
         _V.require(WorkflowStage.CLASSIFY_POINTS, self._store, ArtifactType.POINT_CLOUD)
+        _V.require_current(WorkflowStage.CLASSIFY_POINTS, self._store, self._history, ArtifactType.POINT_CLOUD)
         cloud = self._store.get(ArtifactType.POINT_CLOUD)
         dep = self._dependency(ArtifactType.POINT_CLOUD, required=True)
 
@@ -401,6 +476,7 @@ class Workflow:
         ArtifactType.TIN
         """
         _V.require(WorkflowStage.BUILD_TIN, self._store, ArtifactType.GROUND_CLOUD)
+        _V.require_current(WorkflowStage.BUILD_TIN, self._store, self._history, ArtifactType.GROUND_CLOUD)
         ground_cloud = self._store.get(ArtifactType.GROUND_CLOUD)
         dep = self._dependency(ArtifactType.GROUND_CLOUD, required=True)
 
@@ -447,6 +523,7 @@ class Workflow:
         `GeoPackageExporter` directly either -- Workflow always does.
         """
         _V.require(WorkflowStage.BUILD_DTM, self._store, ArtifactType.TIN)
+        _V.require_current(WorkflowStage.BUILD_DTM, self._store, self._history, ArtifactType.TIN)
         tin = self._store.get(ArtifactType.TIN)
         dep = self._dependency(ArtifactType.TIN, required=True)
 
@@ -504,6 +581,7 @@ class Workflow:
         `ContourGenerator` has no dependency on `DTM` at all).
         """
         _V.require(WorkflowStage.EXTRACT_CONTOURS, self._store, ArtifactType.TIN)
+        _V.require_current(WorkflowStage.EXTRACT_CONTOURS, self._store, self._history, ArtifactType.TIN)
         tin = self._store.get(ArtifactType.TIN)
         dep = self._dependency(ArtifactType.TIN, required=True)
 
@@ -541,6 +619,12 @@ class Workflow:
         _V.require(
             WorkflowStage.BUILD_FEATURES_FROM_SURVEY,
             self._store,
+            ArtifactType.SURVEY_POINT_SET,
+        )
+        _V.require_current(
+            WorkflowStage.BUILD_FEATURES_FROM_SURVEY,
+            self._store,
+            self._history,
             ArtifactType.SURVEY_POINT_SET,
         )
         survey_points = self._store.get(ArtifactType.SURVEY_POINT_SET)
@@ -582,6 +666,7 @@ class Workflow:
         ArtifactType.FEATURE_COLLECTION
         """
         _V.require(WorkflowStage.DETECT_FEATURES, self._store, ArtifactType.POINT_CLOUD)
+        _V.require_current(WorkflowStage.DETECT_FEATURES, self._store, self._history, ArtifactType.POINT_CLOUD)
         cloud = self._store.get(ArtifactType.POINT_CLOUD)
 
         dependencies = [self._dependency(ArtifactType.POINT_CLOUD, required=True)]
@@ -593,6 +678,7 @@ class Workflow:
         )
         for artifact_type in optional_types:
             if self._store.has(artifact_type):
+                _V.require_current(WorkflowStage.DETECT_FEATURES, self._store, self._history, artifact_type)
                 dependencies.append(self._dependency(artifact_type, required=False))
 
         tin = self._store.get_or_none(ArtifactType.TIN)
@@ -630,6 +716,7 @@ class Workflow:
         same FeatureCollection.
         """
         _V.require(WorkflowStage.EXPORT_DXF, self._store, ArtifactType.FEATURE_COLLECTION)
+        _V.require_current(WorkflowStage.EXPORT_DXF, self._store, self._history, ArtifactType.FEATURE_COLLECTION)
         features = self._store.get(ArtifactType.FEATURE_COLLECTION)
         dep = self._dependency(ArtifactType.FEATURE_COLLECTION, required=True)
 
@@ -652,6 +739,7 @@ class Workflow:
         same FeatureCollection.
         """
         _V.require(WorkflowStage.EXPORT_GPKG, self._store, ArtifactType.FEATURE_COLLECTION)
+        _V.require_current(WorkflowStage.EXPORT_GPKG, self._store, self._history, ArtifactType.FEATURE_COLLECTION)
         features = self._store.get(ArtifactType.FEATURE_COLLECTION)
         dep = self._dependency(ArtifactType.FEATURE_COLLECTION, required=True)
 

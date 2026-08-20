@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from topocore.workflow.artifacts import ArtifactType
 from topocore.workflow.exceptions import (
+    StaleArtifactError,
     WorkflowError,
     WorkflowExecutionError,
     WorkflowStateError,
@@ -49,6 +50,7 @@ __all__ = [
     "StageMetrics",
     "StageResult",
     "StageStatus",
+    "StaleArtifactError",
     "Workflow",
     "WorkflowError",
     "WorkflowExecutionError",

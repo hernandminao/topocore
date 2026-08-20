@@ -52,10 +52,11 @@ class WorkflowStage(StrEnum):
     the artifact it reads or produces -- never after an algorithm
     variant or input origin.
 
-    READ_POINT_CLOUD covers both LAS and LAZ: both produce
-    `PointCloud` through the same `PointCloudReader` base contract
-    (see the Fase 1 audit), so the state they lead to -- not which
-    format was on disk -- is what the engine tracks.
+    READ_POINT_CLOUD covers LAS, LAZ, PLY, E57, XYZ, CSV and PTS: all
+    produce `PointCloud` through the same `PointCloudReader` base
+    contract (see the Fase 1 audit and PR19's reader-dispatch fix),
+    so the state they lead to -- not which format was on disk -- is
+    what the engine tracks.
 
     CLASSIFY_GROUND and CLASSIFY_POINTS are two distinct stages, not
     one: they wrap genuinely different algorithms with different

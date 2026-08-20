@@ -36,6 +36,33 @@ class WorkflowStateError(WorkflowError):
     """
 
 
+class StaleArtifactError(WorkflowStateError):
+    """
+    Raised when a stage's required artifact -- or any artifact it
+    was transitively built from -- no longer matches the version
+    that was actually consumed to produce it.
+
+    A `WorkflowStateError` subtype, not `WorkflowValidationError`:
+    this is a precondition failure about pipeline progress/
+    consistency (the same category as a missing artifact), never
+    about a stage call's own parameters -- see
+    `WorkflowValidationError`'s own docstring, which explicitly
+    reserves that class for parameter validation, "never used for
+    missing artifacts."
+
+    Example
+    -------
+    ``POINT_CLOUD v1 -> TIN v1 -> DTM v1``, then ``POINT_CLOUD`` is
+    re-read (now v2) without rebuilding ``TIN``/``DTM``. ``TIN v1``
+    (and anything built from it) no longer reflects the current
+    ``POINT_CLOUD`` -- calling `build_dtm()` again (or any stage
+    consuming `TIN`) raises this, even though `TIN`'s own version
+    number (v1) hasn't changed, because the check walks back
+    transitively through `WorkflowResult`'s history, not just the
+    artifact's immediate recorded dependency.
+    """
+
+
 class WorkflowValidationError(WorkflowError):
     """
     Raised when a stage's own parameters are invalid, independent of
@@ -56,6 +83,7 @@ class WorkflowExecutionError(WorkflowError):
 
 
 __all__ = [
+    "StaleArtifactError",
     "WorkflowError",
     "WorkflowExecutionError",
     "WorkflowStateError",

@@ -61,6 +61,7 @@ from enum import StrEnum
 import numpy as np
 
 from topocore.features._code_utils import base_code as _base_code
+from topocore.features.exceptions import GeometryError
 from topocore.features.feature_codes import (
     CATALOG_TO_MODEL_GEOMETRY,
     FeatureCodeDefinition,
@@ -344,7 +345,38 @@ def _build_legacy(
 
         closed = _is_closed_run(definition, run, closure_tolerance)
         line_feature = _LineFeature(code=base_code, definition=definition, points=tuple(run), closed=closed)
-        collection.add(_line_feature_to_feature(line_feature, next_id))
+
+        # Found and fixed in PR19: this only checked `len(run) < 2`,
+        # a LINE-sized minimum -- but POLYGON geometry actually
+        # requires >= 3 vertices (see FeatureGeometry._MIN_VERTICES).
+        # A run of exactly 2 points for a POLYGON-type code (a
+        # plausible field-survey scenario -- a missed corner shot,
+        # or a truncated file) passed this check, then raised an
+        # UNCAUGHT GeometryError inside FeatureGeometry's own
+        # validation, crashing the ENTIRE build_features() call for
+        # the whole survey instead of reporting just this one run as
+        # INSUFFICIENT_POINTS and skipping it -- confirmed directly
+        # with a 2-point run against a POLYGON-type code. Fixed by
+        # catching GeometryError around construction and reporting it
+        # the same way as the already-existing INSUFFICIENT_POINTS
+        # case, rather than duplicating _MIN_VERTICES' per-geometry
+        # values here (more robust to any future FeatureGeometry
+        # validation change too, not just this specific threshold).
+        try:
+            feature = _line_feature_to_feature(line_feature, next_id)
+        except GeometryError:
+            unmatched.extend(run)
+            diagnostics.append(
+                BuildDiagnostic(
+                    code=base_code,
+                    reason=BuildDiagnosticReason.INSUFFICIENT_POINTS,
+                    point_count=len(run),
+                    point_ids=tuple(p.id for p in run),
+                )
+            )
+            continue
+
+        collection.add(feature)
         next_id += 1
 
     return FeatureBuildResult(
@@ -441,7 +473,26 @@ def _build_with_grammar(
             points=figure.points,
             closed=closed,
         )
-        collection.add(_line_feature_to_feature(line_feature, next_id))
+
+        # Same fix as _build_legacy -- see its comment for the full
+        # explanation. A figure of exactly 2 points for a
+        # POLYGON-type code passes this function's own `< 2` check
+        # but fails FeatureGeometry's real >= 3 requirement.
+        try:
+            feature = _line_feature_to_feature(line_feature, next_id)
+        except GeometryError:
+            unmatched.extend(figure.points)
+            diagnostics.append(
+                BuildDiagnostic(
+                    code=figure.base_code,
+                    reason=BuildDiagnosticReason.INSUFFICIENT_POINTS,
+                    point_count=len(figure.points),
+                    point_ids=tuple(p.id for p in figure.points),
+                )
+            )
+            continue
+
+        collection.add(feature)
         next_id += 1
 
     return FeatureBuildResult(
@@ -483,7 +534,15 @@ def build_features(
         interleaved with other figures in the file; codes without
         the grammar separator still use the same consecutive-run
         rule as legacy mode.
+
+    Raises
+    ------
+    ValueError
+        If `closure_tolerance` is negative.
     """
+    if closure_tolerance < 0:
+        raise ValueError(f"closure_tolerance must be non-negative; got {closure_tolerance}.")
+
     if use_field_code_grammar:
         return _build_with_grammar(points, registry, closure_tolerance=closure_tolerance)
     return _build_legacy(points, registry, closure_tolerance=closure_tolerance)

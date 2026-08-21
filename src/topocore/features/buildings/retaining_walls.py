@@ -61,9 +61,15 @@ class RetainingWallDetector(BaseFeatureDetector):
     feature_type = FeatureType.RETAINING_WALL
     geometry_type = GeometryType.POLYGON
     version = "1.0"
-    required_inputs = frozenset({ContextField.POINT_CLOUD, ContextField.CLASSIFICATION, ContextField.PCA_FEATURES})
+    required_inputs = frozenset(
+        {
+            ContextField.POINT_CLOUD,
+            ContextField.CLASSIFICATION,
+            ContextField.PCA_FEATURES,
+        }
+    )
 
-    __slots__ = ("_min_verticality", "_eps", "_min_points", "_min_height")
+    __slots__ = ("_eps", "_min_height", "_min_points", "_min_verticality")
 
     def __init__(
         self,
@@ -116,14 +122,26 @@ class RetainingWallDetector(BaseFeatureDetector):
         )
 
         result = FeatureCollection()
+        local_id = 0
 
-        for local_id, local_idx in enumerate(clusters, start=1):
+        # Found and fixed in PR19: confirmed reachable here (unlike
+        # WallDetector) since min_height is an ACTIVE, default-on
+        # filter (0.4m) -- a real cluster shorter than that mid-
+        # sequence caused a gap in the surviving features' feature_id
+        # (verified directly: [1, 3] instead of [1, 2] for 2 kept
+        # clusters out of 3). Fixed to only increment local_id on
+        # successful addition, matching the established correct
+        # pattern used elsewhere (ClusterDetectorBase's own template
+        # method, terrain detectors, etc.).
+        for local_idx in clusters:
             cluster_xyz = xyz[candidate_idx[local_idx]]
 
             height = float(cluster_xyz[:, 2].max() - cluster_xyz[:, 2].min())
 
             if height < self._min_height:
                 continue
+
+            local_id += 1
 
             mean_verticality = float(np.mean(verticality[candidate_idx[local_idx]]))
 

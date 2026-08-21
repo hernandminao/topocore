@@ -123,12 +123,29 @@ class WallDetector(ClusterDetectorBase):
         )
 
         result = FeatureCollection()
+        local_id = 0
 
-        for local_id, local_idx in enumerate(clusters, start=1):
+        # Found and fixed in PR19: local_id previously came directly
+        # from enumerate(clusters, start=1), so a cluster rejected by
+        # _passes_filters() mid-sequence (continue) still consumed a
+        # local_id value, leaving gaps in the surviving features'
+        # feature_id (e.g. [1, 3] instead of [1, 2] for 2 features).
+        # Not reachable through WallDetector's own constructor today
+        # (it never sets the optional height/extent/elongation bounds
+        # ClusterFilterConfig supports, so _passes_filters() is
+        # currently always a no-op here), but this is the same
+        # shared _passes_filters() used by ClusterDetectorBase's own
+        # correctly-incrementing template method elsewhere -- fixed
+        # to match that established, correct pattern (increment only
+        # on success) rather than leaving a latent trap for the next
+        # person who adds a height/extent parameter to this detector.
+        for local_idx in clusters:
             cluster_xyz = xyz[candidate_idx[local_idx]]
 
             if not self._passes_filters(cluster_xyz):
                 continue
+
+            local_id += 1
 
             result.add(
                 Feature(

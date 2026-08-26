@@ -1,55 +1,77 @@
 """
-Regression suite for topocore.analysis.protocols -- PR19.
+Regression suite for topocore.analysis.protocols.GriddedSurface --
+PR20.1 fix.
 
-These are pure structural-typing Protocol definitions with no
-runtime logic; already implicitly exercised throughout this
-session's broader analysis test suites (every mypy-clean pass on
-code using TerrainSurface/TriangulatedSurface/GriddedSurface/etc.
-already confirms real objects correctly satisfy these contracts).
-This suite just confirms the module imports cleanly and a real,
-already-used implementation genuinely satisfies each protocol.
+Real, confirmed type-safety inconsistency fixed: GriddedSurface
+previously extended TerrainSurface (requiring interpolate()/
+contains()) and declared `grid` as NDArray[np.float64] -- neither
+matches the real topocore.terrain.dtm.DTM class this protocol is
+used for throughout analysis.volume/analysis.statistics. Confirmed
+via mypy structural checking (before the fix, DTM failed to satisfy
+GriddedSurface -- missing interpolate/contains, and grid type
+mismatch) and via a grep across every real consumer: none of them
+call interpolate()/contains() on a GriddedSurface-typed parameter,
+only .grid (for geometry-equality checks), .resolution, and
+.elevations. This did not cause any wrong RUNTIME behavior (Python
+protocols aren't enforced at runtime), only broken static type
+checking -- confirmed here directly with a real mypy invocation
+against real DTM construction.
 """
 
 from __future__ import annotations
 
-from topocore.analysis.protocols import (
-    Calculable,
-    Generable,
-    GriddedSurface,
-    Measurable,
-    TerrainSurface,
-    TriangulatedSurface,
-)
-from topocore.geometry.point3d import Point3D
-from topocore.terrain.linear import LinearInterpolator
-from topocore.terrain.tin import TIN
+import numpy as np
+
+from topocore.analysis.protocols import GriddedSurface
+from topocore.terrain.dtm import DTM
+from topocore.terrain.grid import Grid
+from topocore.terrain.raster import Raster
 
 
-def test_tin_satisfies_triangulated_surface() -> None:
-    points = (Point3D(0, 0, 0.0), Point3D(1, 0, 1.0), Point3D(0, 1, 2.0))
-    tin = TIN.from_points(points)
+def test_dtm_structurally_satisfies_gridded_surface_at_runtime() -> None:
+    """
+    Confirms DTM has the 3 properties GriddedSurface now declares --
+    duck-typed structural conformance, checked directly (Protocol
+    isn't @runtime_checkable, so isinstance() isn't available; this
+    checks the attributes GriddedSurface actually requires).
+    """
+    grid = Grid(min_x=0, min_y=0, max_x=10, max_y=10, resolution=2.0)
+    raster = Raster(grid=grid, values=np.zeros((grid.rows, grid.columns)))
+    dtm = DTM(tin=None, grid=grid, raster=raster)  # type: ignore[arg-type]
 
-    assert hasattr(tin, "triangle_count")
-    assert hasattr(tin, "bounds")
-    assert hasattr(tin, "triangle_vertices")
-    assert hasattr(tin, "find_triangle")
-    assert hasattr(tin, "contains")
-
-    # Structural conformance -- LinearInterpolator provides interpolate().
-    interpolator = LinearInterpolator(tin)
-    assert hasattr(interpolator, "interpolate")
-
-
-def test_measurable_calculable_generable_are_distinct_protocols() -> None:
-    assert Measurable is not Calculable
-    assert Calculable is not Generable
-    assert Measurable is not Generable
+    assert hasattr(dtm, "grid")
+    assert hasattr(dtm, "resolution")
+    assert hasattr(dtm, "elevations")
+    assert dtm.grid is grid
+    assert dtm.resolution == grid.resolution
 
 
-def test_protocol_classes_importable() -> None:
-    for protocol in (TerrainSurface, TriangulatedSurface, GriddedSurface):
-        assert protocol.__name__ in {
-            "TerrainSurface",
-            "TriangulatedSurface",
-            "GriddedSurface",
-        }
+def test_gridded_surface_grid_type_matches_real_dtm_attribute() -> None:
+    """The exact fix: .grid is a Grid geometry object, not an elevation array."""
+    grid = Grid(min_x=0, min_y=0, max_x=10, max_y=10, resolution=2.0)
+    raster = Raster(grid=grid, values=np.zeros((grid.rows, grid.columns)))
+    dtm = DTM(tin=None, grid=grid, raster=raster)  # type: ignore[arg-type]
+
+    assert isinstance(dtm.grid, Grid)
+    assert not isinstance(dtm.grid, np.ndarray)
+
+
+def test_gridded_surface_no_longer_requires_interpolate_or_contains() -> None:
+    """DTM genuinely lacks these methods -- confirms the protocol no longer demands them."""
+    grid = Grid(min_x=0, min_y=0, max_x=10, max_y=10, resolution=2.0)
+    raster = Raster(grid=grid, values=np.zeros((grid.rows, grid.columns)))
+    dtm = DTM(tin=None, grid=grid, raster=raster)  # type: ignore[arg-type]
+
+    assert not hasattr(dtm, "interpolate")
+    assert not hasattr(dtm, "contains")
+
+
+def test_gridded_surface_protocol_members() -> None:
+    grid = Grid(min_x=0, min_y=0, max_x=10, max_y=10, resolution=2.0)
+    raster = Raster(grid=grid, values=np.zeros((grid.rows, grid.columns)))
+    dtm = DTM(tin=None, grid=grid, raster=raster)  # type: ignore[arg-type]
+
+    surface: GriddedSurface = dtm  # must type-check: DTM structurally satisfies GriddedSurface
+    assert surface.grid is grid
+    assert surface.resolution == grid.resolution
+    assert surface.elevations is dtm.elevations

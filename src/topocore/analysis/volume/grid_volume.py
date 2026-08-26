@@ -14,7 +14,7 @@ Negative values represent fill.
 
 Author
 ------
-Hernán Mina
+HernÃ¡n Mina
 
 License
 -------
@@ -23,6 +23,7 @@ MIT
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
@@ -144,11 +145,35 @@ class GridVolume:
         """
         Compute volume from DTM surfaces.
 
-        Both DTMs must have identical grid geometry.
+        Both DTMs must have identical grid geometry, and that
+        geometry's resolution must match this instance's own
+        `resolution` (see `Raises` below).
         """
 
         if existing_dtm.grid != proposed_dtm.grid:
             raise VolumeError("DTMs must share the same grid geometry.")
+
+        # Found and fixed in PR20: this previously used self._cell_area
+        # (fixed at construction time) unconditionally, never checking
+        # it against the DTMs' own actual resolution -- confirmed
+        # directly: a GridVolume(resolution=1.0) fed real DTMs at
+        # resolution=2.0 silently computed a cut volume exactly 4x
+        # too small (cell_area off by resolution-squared), with no
+        # error or warning. Unlike CutFillVolume.compute_with_dtm()
+        # (which sidesteps this by always deriving a fresh cell_area
+        # from the DTM's own resolution), this class's own resolution
+        # is a real, meaningful instance property (exposed via a
+        # public `resolution`/`cell_area` property, unlike
+        # CutFillVolume) -- so silently overriding it here would
+        # contradict what the instance claims to be configured for.
+        # Fixed by validating the two agree and failing loudly
+        # instead, per HernÃ¡n's explicit choice over the alternative
+        # (silently deriving from the DTM, matching CutFillVolume).
+        if not math.isclose(self._resolution, existing_dtm.resolution):
+            raise VolumeError(
+                f"GridVolume resolution ({self._resolution}) does not match "
+                f"the DTM's resolution ({existing_dtm.resolution})."
+            )
 
         return self.compute(
             existing_dtm.elevations,

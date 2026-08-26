@@ -67,9 +67,9 @@ class ProgressiveTINGroundClassifier(GroundClassifier):
 
     __slots__ = (
         "_cell_size",
-        "_max_distance",
-        "_max_angle",
         "_cos_max_angle",
+        "_max_angle",
+        "_max_distance",
         "_max_iterations",
     )
 
@@ -177,7 +177,28 @@ class ProgressiveTINGroundClassifier(GroundClassifier):
     ) -> BoolArray1D:
         """
         Classify points as ground or non-ground.
+
+        Raises
+        ------
+        GroundError
+            If `cloud` is empty.
+
+        Notes
+        -----
+        Found and fixed in PR20 coverage phase: this previously
+        called `_extract_xyz(cloud)` with no prior empty-cloud
+        check, unlike every sibling ground classifier in this same
+        package (`PMFGroundClassifier`, `CSFGroundClassifier`), both
+        of which cleanly reject an empty cloud with `GroundError`.
+        Confirmed directly: an empty `PointCloud` crashed here with
+        a raw, unhandled `ValueError` ("need at least one array to
+        concatenate") from inside `_extract_xyz`, breaking the
+        consistent `GroundError` contract every other classifier in
+        this package honors.
         """
+        if cloud.is_empty:
+            raise GroundError("Cannot classify an empty point cloud.")
+
         x, y, z = _extract_xyz(cloud)
 
         seed_mask = self._get_seeds(

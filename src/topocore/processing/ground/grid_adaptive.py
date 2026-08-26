@@ -28,6 +28,7 @@ from typing import override
 import numpy as np
 
 from topocore.pointcloud.pointcloud import PointCloud
+from topocore.processing._shared import compute_pca
 from topocore.processing.exceptions import GroundError
 from topocore.processing.neighbors import NeighborhoodManager
 from topocore.processing.types import (
@@ -68,9 +69,9 @@ class AdaptiveGridGroundClassifier(GroundClassifier):
 
     __slots__ = (
         "_base_cell_size",
-        "_min_cell_size",
-        "_max_cell_size",
         "_base_height_threshold",
+        "_max_cell_size",
+        "_min_cell_size",
         "_slope_threshold",
         "_use_multiresolution",
     )
@@ -148,39 +149,57 @@ class AdaptiveGridGroundClassifier(GroundClassifier):
     ) -> FloatArray1D:
         """
         Estimate the local terrain slope for every point.
+
+        Found and fixed in PR19 coverage phase: this previously
+        computed ``arctan(sqrt(mean(|dx|)**2 + mean(|dy|)**2))`` over
+        the k-nearest neighbors -- a formula that NEVER reads the Z
+        coordinate at all. Confirmed directly with two point clouds
+        sharing identical XY spacing (a 1m grid) but genuinely
+        different elevations (perfectly flat vs. a true 45-degree
+        grade): the "estimated slope" came out nearly identical
+        (~46.9 deg vs ~47.4 deg) for BOTH, dominated by horizontal
+        point spacing/density rather than actual terrain steepness.
+        Since this value feeds directly into
+        `_compute_adaptive_threshold()` (meant to widen the height
+        threshold on steep slopes so slope points aren't wrongly
+        rejected as non-ground), the entire "slope-aware
+        classification" feature this classifier's own docstring
+        claims to provide was not functioning -- the threshold was
+        effectively constant regardless of real terrain slope.
+
+        Fixed by reusing `compute_pca` (the same shared,
+        already-audited local-plane-fitting primitive used by
+        `PCANormalEstimator` elsewhere in this codebase, not a new,
+        parallel implementation) to fit a local plane to each
+        point's k nearest neighbors, then deriving the slope angle
+        from that plane's normal: ``arccos(|normal_z|)`` -- the
+        standard "angle from horizontal" formula, matching
+        ``topocore.features.terrain._mesh_utils.triangle_slope_deg``'s
+        own convention (``abs()`` handles a normal of either
+        orientation).
         """
-        points = np.column_stack(
-            (
-                x,
-                y,
-                z,
-            )
-        )
+        point_count = x.shape[0]
+        k = min(10, point_count)
+
+        if k < 3:
+            # Too few points for a meaningful local plane fit --
+            # slope is undefined; treat as flat (0 rad) rather than
+            # raising, since a 1- or 2-point cloud is still valid
+            # input for the rest of the classifier.
+            return np.zeros(point_count, dtype=np.float64)
+
+        points = np.column_stack((x, y, z)).astype(np.float64)
 
         manager = NeighborhoodManager.from_array(points)
 
-        indices, _ = manager.knn_many(
-            k=10,
-            include_self=True,
-        )
+        pca = compute_pca(manager, k=k)
 
-        neighbors = points[indices]
+        # Smallest-eigenvalue eigenvector = local plane normal (np.linalg.eigh
+        # returns eigenvalues in ascending order, so index 0 is the smallest).
+        normal_z = np.abs(pca.eigenvectors[:, 2, 0])
+        normal_z = np.clip(normal_z, 0.0, 1.0)
 
-        dx = np.abs(neighbors[:, :, 0] - x[:, None]).mean(axis=1)
-
-        dy = np.abs(neighbors[:, :, 1] - y[:, None]).mean(axis=1)
-
-        gradient = np.sqrt(dx * dx + dy * dy)
-
-        gradient = np.maximum(
-            gradient,
-            np.finfo(np.float64).eps,
-        )
-
-        return np.asarray(
-            np.arctan(gradient),
-            dtype=np.float64,
-        )
+        return np.asarray(np.arccos(normal_z), dtype=np.float64)
 
     def _compute_adaptive_threshold(
         self,

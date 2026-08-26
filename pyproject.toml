@@ -29,7 +29,7 @@ terrain = [
 
 ml = [
     "scikit-learn>=1.7.0",
-    "joblib>=1.4.0",
+    "joblib>=1.5.3",
 ]
 
 lightgbm = [
@@ -51,7 +51,7 @@ yaml = [
 full = [
     "cloth-simulation-filter>=1.1.7",
     "scikit-learn>=1.7.0",
-    "joblib>=1.4.0",
+    "joblib>=1.5.3",
     "lightgbm>=4.0",
     "xgboost>=2.0",
     "ezdxf>=1.3",

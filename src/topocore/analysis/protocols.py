@@ -25,6 +25,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from topocore.geometry.point3d import Point3D
+from topocore.terrain.grid import Grid
 
 # ============================================================================
 # Generic types
@@ -107,14 +108,32 @@ class TriangulatedSurface(TerrainSurface, Protocol):
         ...
 
 
-class GriddedSurface(TerrainSurface, Protocol):
+class GriddedSurface(Protocol):
     """
     Protocol for gridded terrain surfaces.
+
+    Found and fixed in PR20: this previously extended
+    `TerrainSurface` (requiring `interpolate()`/`contains()`) and
+    declared `grid` as `NDArray[np.float64]` -- neither matches the
+    real `topocore.terrain.dtm.DTM` class this protocol is used for
+    throughout `analysis.volume`/`analysis.statistics` (confirmed:
+    DTM has no `interpolate`/`contains` methods at all -- it exposes
+    point queries via `elevation(x, y)` instead -- and its `grid`
+    attribute is a `topocore.terrain.grid.Grid` geometry object, not
+    an elevation array). Confirmed via mypy structural checking and
+    a grep across every real consumer of this protocol (`analysis.
+    volume.cut_fill`, `.grid_volume`, `analysis.statistics.elevation`,
+    `.slope`, `.manager`): none of them ever call `interpolate()` or
+    `contains()` on a `GriddedSurface`-typed parameter, only `.grid`
+    (for geometry-equality checks), `.resolution`, and `.elevations`.
+    Corrected to describe what is actually used, rather than
+    over-specifying an interface DTM doesn't (and doesn't need to)
+    implement.
     """
 
     @property
-    def grid(self) -> NDArray[np.float64]:
-        """Elevation grid."""
+    def grid(self) -> Grid:
+        """Grid geometry (bounds, resolution)."""
         ...
 
     @property

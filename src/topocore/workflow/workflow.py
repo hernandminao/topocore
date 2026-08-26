@@ -670,11 +670,25 @@ class Workflow:
         cloud = self._store.get(ArtifactType.POINT_CLOUD)
 
         dependencies = [self._dependency(ArtifactType.POINT_CLOUD, required=True)]
+        # Found and fixed in PR20 coverage phase: this previously
+        # also tracked ArtifactType.GROUND_CLOUD here (both for
+        # staleness AND as a recorded dependency), but
+        # DetectionContext (see topocore.features.protocols) has NO
+        # `ground_cloud` field at all -- confirmed directly: its
+        # only fields are cloud/tin/dtm/classification/normals/
+        # pca_features. No detector reached through this pathway can
+        # ever actually consume GROUND_CLOUD data. Tracking its
+        # staleness anyway was a real, reproducible false-positive
+        # bug: detect_features() incorrectly raised StaleArtifactError
+        # whenever GROUND_CLOUD alone became stale, even though the
+        # actual inputs detect_features() uses were fully fresh and
+        # correct -- confirmed with a direct reproduction before
+        # fixing. This was introduced earlier in this same session
+        # when require_current() was first wired in, not pre-existing.
         optional_types = (
             ArtifactType.TIN,
             ArtifactType.DTM,
             ArtifactType.CLASSIFICATION_RESULT,
-            ArtifactType.GROUND_CLOUD,
         )
         for artifact_type in optional_types:
             if self._store.has(artifact_type):
@@ -722,8 +736,26 @@ class Workflow:
 
         def work() -> Any:
             from topocore.dxf import DXFExporter
+            from topocore.dxf.models import DXFExportOptions, ExportContext
 
-            return DXFExporter(**exporter_kwargs).export(features, path)
+            # Found and fixed in PR20 coverage phase: this previously
+            # called DXFExporter(**exporter_kwargs) directly, but
+            # DXFExporter.__init__ takes a single `context:
+            # ExportContext | None` parameter -- it does NOT accept
+            # arbitrary keyword arguments. Confirmed directly: calling
+            # export_dxf(path, strict=False) crashed with
+            # "DXFExporter.__init__() got an unexpected keyword
+            # argument 'strict'" for ANY non-empty exporter_kwargs,
+            # even though the method's own **exporter_kwargs: Any
+            # signature advertises pass-through configuration.
+            # export_gpkg() already gets this right (builds a
+            # GPKGExportOptions from kwargs, then passes THAT single
+            # object) -- mirrored here: build DXFExportOptions from
+            # exporter_kwargs, wrap it in ExportContext, then pass
+            # that.
+            options = DXFExportOptions(**exporter_kwargs)
+            context = ExportContext(options=options)
+            return DXFExporter(context).export(features, path)
 
         self._execute_stage(WorkflowStage.EXPORT_DXF, work, dependencies=(dep,), produces=None)
         return self

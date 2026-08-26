@@ -1543,14 +1543,14 @@ DEFAULT_ANALYSIS_CONFIG: Final[AnalysisConfig] = AnalysisConfig()
 
 
 __all__ = [
-    "DistanceConfig",
-    "VolumeConfig",
-    "ProfileConfig",
-    "VisibilityConfig",
-    "StatisticsConfig",
-    "QualityConfig",
-    "AnalysisConfig",
     "DEFAULT_ANALYSIS_CONFIG",
+    "AnalysisConfig",
+    "DistanceConfig",
+    "ProfileConfig",
+    "QualityConfig",
+    "StatisticsConfig",
+    "VisibilityConfig",
+    "VolumeConfig",
 ]
 
 </content>
@@ -1689,6 +1689,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from topocore.geometry.point3d import Point3D
+from topocore.terrain.grid import Grid
 
 # ============================================================================
 # Generic types
@@ -1771,14 +1772,32 @@ class TriangulatedSurface(TerrainSurface, Protocol):
         ...
 
 
-class GriddedSurface(TerrainSurface, Protocol):
+class GriddedSurface(Protocol):
     """
     Protocol for gridded terrain surfaces.
+
+    Found and fixed in PR20: this previously extended
+    `TerrainSurface` (requiring `interpolate()`/`contains()`) and
+    declared `grid` as `NDArray[np.float64]` -- neither matches the
+    real `topocore.terrain.dtm.DTM` class this protocol is used for
+    throughout `analysis.volume`/`analysis.statistics` (confirmed:
+    DTM has no `interpolate`/`contains` methods at all -- it exposes
+    point queries via `elevation(x, y)` instead -- and its `grid`
+    attribute is a `topocore.terrain.grid.Grid` geometry object, not
+    an elevation array). Confirmed via mypy structural checking and
+    a grep across every real consumer of this protocol (`analysis.
+    volume.cut_fill`, `.grid_volume`, `analysis.statistics.elevation`,
+    `.slope`, `.manager`): none of them ever call `interpolate()` or
+    `contains()` on a `GriddedSurface`-typed parameter, only `.grid`
+    (for geometry-equality checks), `.resolution`, and `.elevations`.
+    Corrected to describe what is actually used, rather than
+    over-specifying an interface DTM doesn't (and doesn't need to)
+    implement.
     """
 
     @property
-    def grid(self) -> NDArray[np.float64]:
-        """Elevation grid."""
+    def grid(self) -> Grid:
+        """Grid geometry (bounds, resolution)."""
         ...
 
     @property
@@ -1927,15 +1946,15 @@ class Generable(Protocol[R_co]):
 
 
 __all__ = [
+    "CRSType",
+    "Calculable",
+    "CoordinateTransformer",
+    "Generable",
+    "GriddedSurface",
+    "Measurable",
+    "PointCloudData",
     "TerrainSurface",
     "TriangulatedSurface",
-    "GriddedSurface",
-    "PointCloudData",
-    "CoordinateTransformer",
-    "CRSType",
-    "Measurable",
-    "Calculable",
-    "Generable",
 ]
 
 </content>
@@ -2040,6 +2059,8 @@ class VolumeResult:
     fill_volume: float
     net_volume: float
     method: str
+    valid_cells: int | None = None
+    excluded_cells: int | None = None
 
     @property
     def cubic_meters(self) -> float:
@@ -2644,6 +2665,18 @@ __all__ = [
     "CloudToMeshResult",
     "HausdorffResult",
     "ChamferResult",
+    # ---------------------------------------------------------------------
+    # Generic quality summary
+    #
+    # Found and fixed in PR19: QualitySummary is a real, defined class
+    # in this module, but was missing from __all__ -- meaning
+    # `from topocore.analysis.types import *` silently skipped it, and
+    # any tooling relying on __all__ to enumerate this module's public
+    # API would not see it, despite it being a legitimate exported
+    # class. Not currently used elsewhere in the codebase, so this was
+    # a pure omission, not a reachable functional bug.
+    # ---------------------------------------------------------------------
+    "QualitySummary",
 ]
 
 </content>
@@ -2825,6 +2858,667 @@ __all__ = [
     "PrecisionResult",
     "RegistrationQualityResult",
     "RMSEResult",
+]
+
+</content>
+
+<content full_path="topocore\analysis\comparison\cut_fill.py">
+"""
+topocore.analysis.comparison.cut_fill
+======================================
+
+Surface comparison combined with cut/fill volume analysis.
+
+Author
+------
+Hernán Mina
+
+License
+-------
+MIT
+"""
+
+from __future__ import annotations
+
+import math
+
+import numpy as np
+from numpy.typing import NDArray
+
+from topocore.analysis.exceptions import VolumeError
+from topocore.analysis.types import VolumeResult
+from topocore.analysis.volume.cut_fill import CutFillVolume
+
+from .result import SurfaceComparisonResult
+from .surface import SurfaceComparison
+
+FloatArray = NDArray[np.float64]
+
+
+class SurfaceCutFill:
+    """
+    Combined surface comparison and cut/fill volume analysis.
+
+    Runs `SurfaceComparison` (per-cell ΔZ classification) and
+    `CutFillVolume` (cut/fill/net volumes) over the same pair of
+    elevation grids, so a caller gets both the spatial picture and
+    the volumetric summary from one call, without either analysis
+    duplicating the other's math -- `SurfaceComparison` answers "what
+    changed", `CutFillVolume` answers "how much material that
+    represents" (see `topocore.analysis.volume`).
+
+    Parameters
+    ----------
+    cell_area
+        Area of each raster cell in square meters. Must be finite
+        and positive.
+    tolerance
+        Elevation difference tolerance for the comparison's cut/
+        fill/unchanged classification, in meters. Does not affect
+        the volume computation (which always integrates every
+        non-zero difference, per `CutFillVolume`'s own contract).
+    """
+
+    __slots__ = ("_comparison", "_volume")
+
+    def __init__(
+        self,
+        *,
+        cell_area: float,
+        tolerance: float = 0.0,
+    ) -> None:
+        if not math.isfinite(cell_area):
+            raise VolumeError("Cell area must be finite.")
+
+        if cell_area <= 0:
+            raise VolumeError("Cell area must be positive.")
+
+        self._comparison = SurfaceComparison(tolerance=tolerance)
+        self._volume = CutFillVolume(cell_area)
+
+    @property
+    def tolerance(self) -> float:
+        """Elevation comparison tolerance, in meters."""
+        return self._comparison.tolerance
+
+    @property
+    def cell_area(self) -> float:
+        """Cell area in square meters."""
+        return self._volume.cell_area
+
+    def compute(
+        self,
+        existing: FloatArray,
+        proposed: FloatArray,
+    ) -> tuple[SurfaceComparisonResult, VolumeResult]:
+        """
+        Compare surfaces and compute cut/fill volumes.
+
+        Parameters
+        ----------
+        existing
+            Existing terrain elevations.
+        proposed
+            Proposed design elevations.
+
+        Returns
+        -------
+        tuple
+            ``(comparison, volume)`` -- the per-cell comparison and
+            the aggregate cut/fill/net volumes.
+        """
+        comparison = self._comparison.compute(existing, proposed)
+        volume = self._volume.compute(existing, proposed)
+
+        return comparison, volume
+
+    def __call__(
+        self,
+        existing: FloatArray,
+        proposed: FloatArray,
+    ) -> tuple[SurfaceComparisonResult, VolumeResult]:
+        """Compare surfaces and compute cut/fill volumes."""
+        return self.compute(existing, proposed)
+
+
+__all__ = [
+    "SurfaceCutFill",
+]
+
+</content>
+
+<content full_path="topocore\analysis\comparison\result.py">
+"""
+topocore.analysis.comparison.result
+====================================
+
+Results produced by surface comparison analysis.
+
+Author
+------
+Hernán Mina
+
+License
+-------
+MIT
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import numpy as np
+from numpy.typing import NDArray
+
+FloatArray = NDArray[np.float64]
+BoolArray = NDArray[np.bool_]
+
+
+@dataclass(frozen=True, slots=True)
+class SurfaceComparisonResult:
+    """
+    Result of comparing two terrain surfaces.
+
+    Parameters
+    ----------
+    difference
+        Elevation difference ``proposed - existing`` (NaN at
+        excluded/NoData cells).
+    cut_mask
+        Cells where the proposed surface is below the existing
+        surface (beyond tolerance).
+    fill_mask
+        Cells where the proposed surface is above the existing
+        surface (beyond tolerance).
+    unchanged_mask
+        Valid cells whose difference falls within tolerance.
+    valid_cells
+        Number of valid comparison cells.
+    excluded_cells
+        Number of excluded NoData cells.
+    minimum_difference
+        Minimum valid elevation difference.
+    maximum_difference
+        Maximum valid elevation difference.
+    mean_difference
+        Mean valid elevation difference.
+    """
+
+    difference: FloatArray
+    cut_mask: BoolArray
+    fill_mask: BoolArray
+    unchanged_mask: BoolArray
+
+    valid_cells: int
+    excluded_cells: int
+
+    minimum_difference: float
+    maximum_difference: float
+    mean_difference: float
+
+    @property
+    def cut_cells(self) -> int:
+        """Number of cut cells."""
+        return int(np.count_nonzero(self.cut_mask))
+
+    @property
+    def fill_cells(self) -> int:
+        """Number of fill cells."""
+        return int(np.count_nonzero(self.fill_mask))
+
+    @property
+    def unchanged_cells(self) -> int:
+        """Number of unchanged cells."""
+        return int(np.count_nonzero(self.unchanged_mask))
+
+    @property
+    def total_cells(self) -> int:
+        """
+        Total number of cells in the compared grid, valid or not.
+
+        Added in PR20.6, corrected before close: this must be
+        derived from ``difference.size`` (the actual grid), not from
+        ``valid_cells + excluded_cells``. Deriving it from those two
+        fields would make the documented invariant
+        ``valid_cells + excluded_cells == total_cells`` a tautology
+        -- always true by construction, even if a
+        `SurfaceComparisonResult` were ever built inconsistently
+        (e.g. by a future bug in `SurfaceComparison`/`TINComparison`,
+        or a hand-constructed instance in a test). Deriving
+        ``total_cells`` independently from the grid itself means the
+        invariant is a genuine, checkable property of the result,
+        not something this property enforces by definition.
+        """
+        return int(self.difference.size)
+
+
+__all__ = [
+    "SurfaceComparisonResult",
+]
+
+</content>
+
+<content full_path="topocore\analysis\comparison\surface.py">
+"""
+topocore.analysis.comparison.surface
+=====================================
+
+Surface-to-surface elevation comparison.
+
+Author
+------
+Hernán Mina
+
+License
+-------
+MIT
+"""
+
+from __future__ import annotations
+
+import math
+
+import numpy as np
+from numpy.typing import NDArray
+
+from topocore.analysis._shared.volume import validate_volume_arrays
+from topocore.analysis.exceptions import VolumeError
+
+from .result import SurfaceComparisonResult
+
+FloatArray = NDArray[np.float64]
+
+
+class SurfaceComparison:
+    """
+    Compare two gridded terrain surfaces.
+
+    The elevation difference is defined as::
+
+        difference = proposed - existing
+
+    Therefore:
+
+    * difference < -tolerance -> cut (proposed is below existing)
+    * difference > +tolerance -> fill (proposed is above existing)
+    * abs(difference) <= tolerance -> unchanged
+
+    Validation is delegated to
+    `topocore.analysis._shared.volume.validate_volume_arrays` -- the
+    same shape/dimensionality/NoData rules already used by
+    `CutFillVolume`/`GridVolume`, so a surface accepted by one is
+    accepted by the other. NaN cells (in either array) are excluded
+    from the comparison rather than propagating or raising -- see
+    that function's own docstring for why this matters for real,
+    irregularly-bounded DTM surfaces.
+
+    Parameters
+    ----------
+    tolerance
+        Elevation difference tolerance, in meters. Differences with
+        absolute value at or below this are classified as
+        unchanged rather than cut/fill. Must be non-negative.
+    """
+
+    __slots__ = ("_tolerance",)
+
+    def __init__(
+        self,
+        *,
+        tolerance: float = 0.0,
+    ) -> None:
+        if not math.isfinite(tolerance):
+            raise VolumeError("Comparison tolerance must be finite.")
+
+        if tolerance < 0.0:
+            raise VolumeError("Comparison tolerance cannot be negative.")
+
+        self._tolerance = float(tolerance)
+
+    @property
+    def tolerance(self) -> float:
+        """Elevation comparison tolerance."""
+        return self._tolerance
+
+    def compute(
+        self,
+        existing: FloatArray,
+        proposed: FloatArray,
+    ) -> SurfaceComparisonResult:
+        """
+        Compare two elevation grids.
+
+        Parameters
+        ----------
+        existing
+            Existing terrain elevations.
+        proposed
+            Proposed design elevations.
+
+        Returns
+        -------
+        SurfaceComparisonResult
+            Per-cell classification and summary statistics.
+
+        Raises
+        ------
+        VolumeError
+            If the surfaces are invalid or share no valid cells.
+        """
+        existing_array = np.asarray(existing, dtype=np.float64)
+        proposed_array = np.asarray(proposed, dtype=np.float64)
+
+        validate_volume_arrays(existing_array, proposed_array)
+
+        valid = np.isfinite(existing_array) & np.isfinite(proposed_array)
+
+        difference = np.full(existing_array.shape, np.nan, dtype=np.float64)
+        difference[valid] = proposed_array[valid] - existing_array[valid]
+
+        cut_mask = valid & (difference < -self._tolerance)
+        fill_mask = valid & (difference > self._tolerance)
+        unchanged_mask = valid & ~cut_mask & ~fill_mask
+
+        valid_values = difference[valid]
+
+        if valid_values.size == 0:
+            raise VolumeError(
+                "Surface comparison contains no valid overlapping cells "
+                "(existing and proposed have no shared non-NaN cells)."
+            )
+
+        return SurfaceComparisonResult(
+            difference=difference,
+            cut_mask=cut_mask,
+            fill_mask=fill_mask,
+            unchanged_mask=unchanged_mask,
+            valid_cells=int(valid_values.size),
+            excluded_cells=int(difference.size - valid_values.size),
+            minimum_difference=float(np.min(valid_values)),
+            maximum_difference=float(np.max(valid_values)),
+            mean_difference=float(np.mean(valid_values)),
+        )
+
+    def __call__(
+        self,
+        existing: FloatArray,
+        proposed: FloatArray,
+    ) -> SurfaceComparisonResult:
+        """Compare two surfaces."""
+        return self.compute(existing, proposed)
+
+
+__all__ = [
+    "SurfaceComparison",
+]
+
+</content>
+
+<content full_path="topocore\analysis\comparison\tin_surface.py">
+"""
+topocore.analysis.comparison.tin_surface
+=========================================
+
+TIN-to-TIN surface comparison.
+
+Evaluates two triangulated surfaces over a shared grid built from
+their overlapping XY domain, then delegates the cut/fill/unchanged
+classification to `SurfaceComparison` -- the same primitive used for
+gridded-surface comparison -- rather than reimplementing that logic.
+
+Author
+------
+Hernán Mina
+
+License
+-------
+MIT
+"""
+
+from __future__ import annotations
+
+import math
+
+import numpy as np
+from numpy.typing import NDArray
+
+from topocore.analysis.exceptions import VolumeError
+from topocore.analysis.protocols import TriangulatedSurface
+
+from .result import SurfaceComparisonResult
+from .surface import SurfaceComparison
+
+FloatArray = NDArray[np.float64]
+
+
+class TINComparison:
+    """
+    Compare two triangulated (TIN) surfaces.
+
+    Both surfaces are evaluated over a shared regular grid covering
+    their overlapping XY domain (the intersection of the two TINs'
+    own `bounds`), then compared with the same `SurfaceComparison`
+    used for gridded surfaces -- see that class for the difference
+    convention (``proposed - existing``) and tolerance semantics.
+
+    Known limitations
+    ------------------
+    - `topocore.terrain.tin.TIN` carries no CRS information at all
+      (confirmed: no `crs` property, no CRS parameter on
+      `from_points()`/`from_mesh()`). This class therefore cannot
+      validate that the two TINs share a common CRS -- that check is
+      simply not representable at the TIN level in this codebase
+      today. Callers are responsible for ensuring both TINs are
+      expressed in the same coordinate system before comparing them.
+    - `TIN.find_triangle()` (used internally by both `interpolate()`
+      and `contains()`) is a documented O(triangle_count) brute-force
+      scan (see that method's own docstring). Evaluating a shared
+      grid therefore costs O(grid_points x triangle_count) -- fine
+      for typical survey-sized TINs, but a real cost to be aware of
+      for very large or very fine-resolution comparisons.
+    - This class compares two TINs by sampling both at regular grid
+      CELL CENTERS over their shared domain, not by computing an
+      exact geometric intersection of the two triangulations
+      themselves. A cell whose center happens to be interpolable in
+      both TINs is treated as fully valid, even though the actual
+      overlap of the two hulls within that cell may only be partial
+      (or, at fine enough triangle scale relative to the sampling
+      resolution, a cell's center could fall in a different local
+      triangle than most of the cell's true area). This is an
+      accepted approximation for PR20 -- exact triangle-triangle
+      intersection, spatial indexing to avoid the brute-force scan
+      above, and other sampling-strategy refinements belong to PR21
+      (Optimization), not mixed into this PR's scope of "correct
+      behavior with a stable contract first."
+
+    Parameters
+    ----------
+    resolution
+        Grid cell size, in meters, used to sample both TINs over
+        their shared domain. Must be finite and positive.
+    tolerance
+        Elevation difference tolerance passed through to the
+        underlying `SurfaceComparison`.
+    max_grid_cells
+        Safety limit on the number of grid cells the shared-domain
+        sampling grid may contain, matching the same
+        ``max_grid_cells`` guard already used by
+        ``topocore.processing.ground.pmf.PMFGroundClassifier`` for an
+        analogous risk. Found and fixed in PR20.5: an unvalidated,
+        very small ``resolution`` relative to a large shared domain
+        previously created an astronomically large grid with no
+        error -- confirmed directly: resolution=0.001 over a 20x20m
+        domain builds a 20,000 x 20,000 grid (4*10**8 cells), and
+        given this class's own documented O(grid_points x
+        triangle_count) sampling cost, that combination hung
+        indefinitely rather than raising. Must be a positive integer.
+    """
+
+    __slots__ = ("_comparison", "_max_grid_cells", "_resolution")
+
+    def __init__(
+        self,
+        *,
+        resolution: float,
+        tolerance: float = 0.0,
+        max_grid_cells: int = 8_000_000,
+    ) -> None:
+        if not math.isfinite(resolution):
+            raise VolumeError("Resolution must be finite.")
+
+        if resolution <= 0.0:
+            raise VolumeError("Resolution must be positive.")
+
+        if isinstance(max_grid_cells, bool) or not isinstance(max_grid_cells, int) or max_grid_cells < 1:
+            raise VolumeError(f"max_grid_cells must be an integer >= 1, got {max_grid_cells}.")
+
+        self._resolution = float(resolution)
+        self._max_grid_cells = int(max_grid_cells)
+        self._comparison = SurfaceComparison(tolerance=tolerance)
+
+    @property
+    def resolution(self) -> float:
+        """Grid resolution used to sample both TINs."""
+        return self._resolution
+
+    @property
+    def tolerance(self) -> float:
+        """Elevation comparison tolerance."""
+        return self._comparison.tolerance
+
+    def compute(
+        self,
+        existing: TriangulatedSurface,
+        proposed: TriangulatedSurface,
+    ) -> SurfaceComparisonResult:
+        """
+        Compare two TIN surfaces over their shared XY domain.
+
+        Parameters
+        ----------
+        existing
+            Existing triangulated surface.
+        proposed
+            Proposed triangulated surface.
+
+        Returns
+        -------
+        SurfaceComparisonResult
+            Per-cell classification and summary statistics, computed
+            over the shared grid.
+
+        Raises
+        ------
+        VolumeError
+            If either TIN has no triangles, the two TINs' bounds do
+            not overlap, or no sampled grid cell falls inside both
+            hulls.
+        """
+        if existing.triangle_count <= 0:
+            raise VolumeError("Existing TIN contains no triangles.")
+
+        if proposed.triangle_count <= 0:
+            raise VolumeError("Proposed TIN contains no triangles.")
+
+        min_x = max(existing.bounds[0], proposed.bounds[0])
+        min_y = max(existing.bounds[1], proposed.bounds[1])
+        max_x = min(existing.bounds[2], proposed.bounds[2])
+        max_y = min(existing.bounds[3], proposed.bounds[3])
+
+        if max_x <= min_x or max_y <= min_y:
+            raise VolumeError("Existing and proposed TINs do not share an overlapping XY domain.")
+
+        columns = max(1, math.ceil((max_x - min_x) / self._resolution))
+        rows = max(1, math.ceil((max_y - min_y) / self._resolution))
+
+        if rows * columns > self._max_grid_cells:
+            raise VolumeError(
+                f"Shared-domain grid would contain {rows * columns} cells, "
+                f"exceeding max_grid_cells={self._max_grid_cells}. Increase "
+                "resolution or max_grid_cells."
+            )
+
+        xs = (min_x + (np.arange(columns) + 0.5) * self._resolution).astype(np.float64)
+        ys = (min_y + (np.arange(rows) + 0.5) * self._resolution).astype(np.float64)
+
+        existing_grid = self._sample(existing, xs, ys, rows, columns)
+        proposed_grid = self._sample(proposed, xs, ys, rows, columns)
+
+        return self._comparison.compute(existing_grid, proposed_grid)
+
+    @staticmethod
+    def _sample(
+        surface: TriangulatedSurface,
+        xs: FloatArray,
+        ys: FloatArray,
+        rows: int,
+        columns: int,
+    ) -> FloatArray:
+        """
+        Evaluate a TIN's elevation over a regular grid.
+
+        `interpolate()` raises `ValueError` for points outside the
+        TIN's convex hull (a different NoData convention than the
+        NaN-based one gridded surfaces use, e.g.
+        `topocore.terrain.dtm.DTM.from_tin()`) -- caught here and
+        mapped to NaN, so `SurfaceComparison`'s own NaN-based
+        NoData handling applies uniformly to both gridded and TIN
+        comparisons.
+        """
+        values = np.full((rows, columns), np.nan, dtype=np.float64)
+
+        for row in range(rows):
+            for col in range(columns):
+                try:
+                    values[row, col] = surface.interpolate(float(xs[col]), float(ys[row]))
+                except ValueError:
+                    continue
+
+        return values
+
+    def __call__(
+        self,
+        existing: TriangulatedSurface,
+        proposed: TriangulatedSurface,
+    ) -> SurfaceComparisonResult:
+        """Compare two TIN surfaces."""
+        return self.compute(existing, proposed)
+
+
+__all__ = [
+    "TINComparison",
+]
+
+</content>
+
+<content full_path="topocore\analysis\comparison\__init__.py">
+"""
+topocore.analysis.comparison
+============================
+
+Surface comparison and cut/fill analysis.
+
+Author
+------
+Hernán Mina
+
+License
+-------
+MIT
+"""
+
+from __future__ import annotations
+
+from .cut_fill import SurfaceCutFill
+from .result import SurfaceComparisonResult
+from .surface import SurfaceComparison
+from .tin_surface import TINComparison
+
+__all__ = [
+    "SurfaceComparison",
+    "SurfaceComparisonResult",
+    "SurfaceCutFill",
+    "TINComparison",
 ]
 
 </content>
@@ -3487,13 +4181,13 @@ class DistanceAnalysis:
 
     __slots__ = (
         "_config",
-        "_method",
         "_euclidean_2d",
         "_euclidean_3d",
-        "_horizontal",
-        "_vertical",
-        "_slope",
         "_geodesic",
+        "_horizontal",
+        "_method",
+        "_slope",
+        "_vertical",
     )
 
     def __init__(
@@ -3560,7 +4254,28 @@ class DistanceAnalysis:
                 return self._euclidean_2d.compute(*args)
 
             if len(args) == 6:
-                return self._euclidean_3d.compute(*args)
+                # EuclideanDistance.compute()'s own parameter order is
+                # (x1, y1, x2, y2, z1, z2) -- NOT the natural
+                # point-grouped (x1, y1, z1, x2, y2, z2) order every
+                # OTHER method in this module expects and exposes
+                # (SlopeDistance.compute(), GeodesicDistance.compute()).
+                #
+                # A real, severe bug was found and fixed here in
+                # PR19: this branch used to forward `*args` straight
+                # through (`self._euclidean_3d.compute(*args)`),
+                # silently reinterpreting the caller's natural
+                # (x1,y1,z1,x2,y2,z2) as EuclideanDistance's own
+                # (x1,y1,x2,y2,z1,z2) -- confirmed directly:
+                # compute(0,0,0,3,4,12) (expected distance 13.0, the
+                # 3-4-12 right triangle) silently returned 8.544
+                # instead, with no error. Confirmed the correct
+                # reordering pattern by cross-referencing
+                # SlopeDistance._compute(), which already explicitly
+                # reorders before delegating to the same
+                # EuclideanDistance engine -- this branch now matches
+                # that same, already-correct pattern.
+                x1, y1, z1, x2, y2, z2 = args
+                return self._euclidean_3d.compute(x1, y1, x2, y2, z1, z2)
 
             raise DistanceError("Euclidean requires 4 or 6 coordinates.")
 
@@ -4585,8 +5300,8 @@ class ProfileAnalysis:
 
     __slots__ = (
         "_config",
-        "_method",
         "_interval",
+        "_method",
         "_width",
     )
 
@@ -4744,7 +5459,12 @@ class ProfileAnalysis:
         Generate profile using selected method.
         """
 
-        selected = ProfileMethod(method or self._method.value)
+        try:
+            selected = ProfileMethod(method or self._method.value)
+        except ValueError as exc:
+            raise ProfileError(
+                f"Unsupported profile method '{method}'. Available: {[m.value for m in ProfileMethod]}"
+            ) from exc
 
         if selected is ProfileMethod.LONGITUDINAL:
             return self.longitudinal(
@@ -5175,22 +5895,53 @@ class TransversalProfile:
     def _generate_offsets(self) -> list[float]:
         """
         Generate transversal offsets.
-        """
 
-        if self._interval >= self._width:
-            return [
-                -self._width,
-                self._width,
-            ]
+        Always includes ``offset=0.0`` (the axis/centerline itself)
+        exactly once, along with both exact endpoints (``-width``,
+        ``+width``), regardless of whether ``width`` is an exact
+        multiple of ``interval``.
+
+        Found and fixed in PR19: the previous implementation stepped
+        from ``-width`` in increments of ``interval``
+        (``-width + i*interval``), which only hits exactly 0 when
+        ``width`` happens to be an exact multiple of ``interval`` --
+        confirmed directly with ``width=10, interval=3``: the
+        generated offsets were ``[-10,-7,-4,-1,2,5,8,10]``, with the
+        two points nearest zero being -1 and +2, straddling but
+        never touching the axis. This broke the guarantee
+        ``LongitudinalProfile`` already provides for its own
+        equivalent reference point (``station=0`` is always present
+        by construction), and propagated into
+        ``CrossSectionProfile`` (which delegates to this method for
+        every vertex of an alignment). ``MultiProfile`` was
+        confirmed unaffected -- it takes explicit, caller-supplied
+        offsets (defaulting to ``(0.0,)``) rather than
+        auto-generating a grid.
+
+        Fixed by building the positive-side offsets outward from 0
+        (0, interval, 2*interval, ..., up to width, with the exact
+        ``width`` endpoint appended if not already hit), then
+        mirroring the strictly-positive values to the negative side
+        and combining -- 0 is included by construction, exactly
+        once, on both the exact-multiple and non-exact-multiple
+        paths. This also naturally subsumes the old
+        ``interval >= width`` special case (which previously
+        returned only ``[-width, width]``, missing 0 -- now handled
+        correctly by the same general logic, no separate branch
+        needed).
+        """
+        if self._width <= 0:
+            return [0.0]
 
         count = int(self._width // self._interval)
+        positive = [index * self._interval for index in range(count + 1)]
 
-        offsets = [-self._width + i * self._interval for i in range(count * 2 + 1)]
+        if abs(positive[-1] - self._width) > 1e-9:
+            positive.append(self._width)
 
-        if abs(offsets[-1] - self._width) > 1e-9:
-            offsets.append(self._width)
+        negative = [-value for value in positive if value > 1e-9]
 
-        return offsets
+        return sorted(negative + positive)
 
     def __call__(
         self,
@@ -5326,6 +6077,9 @@ class CloudToCloudDistance:
         max_distance: float = 0.0,
     ) -> None:
 
+        if not np.isfinite(max_distance):
+            raise QualityError("Max distance must be finite.")
+
         if max_distance < 0:
             raise QualityError("Max distance cannot be negative.")
 
@@ -5377,19 +6131,27 @@ class CloudToCloudDistance:
                 compared,
             )
 
-        valid = distances[np.isfinite(distances)]
+        unmatched = ~np.isfinite(distances)
 
-        if valid.size == 0:
-            raise QualityError("No valid nearest-neighbor distances found.")
+        if np.any(unmatched):
+            unmatched_count = int(np.count_nonzero(unmatched))
+            raise QualityError(
+                "Cloud-to-Cloud correspondence incomplete: "
+                f"{unmatched_count} of {distances.size} reference points "
+                "have no nearest neighbor within max_distance."
+            )
 
-        std = float(np.std(valid, ddof=1)) if valid.size > 1 else 0.0
+        # At this point every reference point has a finite correspondence.
+        # Do not silently discard unmatched points: doing so would bias
+        # quality statistics toward the matched subset.
+        std = float(np.std(distances, ddof=1)) if distances.size > 1 else 0.0
 
         return CloudToCloudResult(
-            mean=float(np.mean(valid)),
+            mean=float(np.mean(distances)),
             std=std,
-            minimum=float(np.min(valid)),
-            maximum=float(np.max(valid)),
-            median=float(np.median(valid)),
+            minimum=float(np.min(distances)),
+            maximum=float(np.max(distances)),
+            median=float(np.median(distances)),
             distances=distances,
         )
 
@@ -5407,6 +6169,9 @@ class CloudToCloudDistance:
 
         if cloud.shape[0] == 0:
             raise QualityError(f"{name} cloud must not be empty.")
+
+        if not np.isfinite(cloud).all():
+            raise QualityError(f"{name} cloud contains NaN or infinite coordinates.")
 
     def _compute_kdtree(
         self,
@@ -5601,9 +6366,11 @@ class CloudToMeshDistance:
         Maximum search distance (meters). Zero means unlimited.
     """
 
-    __slots__ = ("_max_distance", "_cache_tin_id", "_cache_index")
+    __slots__ = ("_cache_index", "_cache_tin_id", "_max_distance")
 
     def __init__(self, max_distance: float = 0.0) -> None:
+        if not np.isfinite(max_distance):
+            raise QualityError("Max distance must be finite.")
         if max_distance < 0:
             raise QualityError("Max distance cannot be negative.")
         self._max_distance = float(max_distance)
@@ -5654,20 +6421,33 @@ class CloudToMeshDistance:
         distances = self._query_distances(pointcloud, index)
 
         if self._max_distance > 0:
-            distances = np.where(distances <= self._max_distance, distances, np.inf)
+            distances = np.where(
+                distances <= self._max_distance,
+                distances,
+                np.inf,
+            )
 
-        valid_mask = np.isfinite(distances)
-        valid_distances = distances[valid_mask]
+        unmatched = ~np.isfinite(distances)
 
-        if valid_distances.size == 0:
-            raise QualityError("No valid distances computed.")
+        if np.any(unmatched):
+            unmatched_count = int(np.count_nonzero(unmatched))
+            raise QualityError(
+                "Cloud-to-Mesh correspondence incomplete: "
+                f"{unmatched_count} of {distances.size} point-cloud points "
+                "have no mesh distance within max_distance."
+            )
+
+        # Every input point must participate in the statistics.  Silently
+        # dropping points outside max_distance would make the quality result
+        # look better than the actual coverage of the correspondence.
+        std = float(np.std(distances, ddof=1)) if distances.size > 1 else 0.0
 
         return CloudToMeshResult(
-            mean=float(np.mean(valid_distances)),
-            std=(float(np.std(valid_distances, ddof=1)) if valid_distances.size > 1 else 0.0),
-            minimum=float(np.min(valid_distances)),
-            maximum=float(np.max(valid_distances)),
-            median=float(np.median(valid_distances)),
+            mean=float(np.mean(distances)),
+            std=std,
+            minimum=float(np.min(distances)),
+            maximum=float(np.max(distances)),
+            median=float(np.median(distances)),
             distances=distances,
         )
 
@@ -5765,8 +6545,8 @@ class CloudToMeshDistance:
             1e-6,
         )
 
-        n_cols = max(int(math.ceil(extent_x / cell_size)), 1)
-        n_rows = max(int(math.ceil(extent_y / cell_size)), 1)
+        n_cols = max(math.ceil(extent_x / cell_size), 1)
+        n_rows = max(math.ceil(extent_y / cell_size), 1)
 
         cell_min_x = np.clip(
             np.floor((tri_min_x - min_x) / cell_size).astype(np.int64),
@@ -5840,8 +6620,16 @@ class CloudToMeshDistance:
         n = points.shape[0]
         distances = np.full(n, np.inf, dtype=np.float64)
 
-        col = np.clip(np.floor((points[:, 0] - index.min_x) / index.cell_size).astype(np.int64), 0, index.n_cols - 1)
-        row = np.clip(np.floor((points[:, 1] - index.min_y) / index.cell_size).astype(np.int64), 0, index.n_rows - 1)
+        col = np.clip(
+            np.floor((points[:, 0] - index.min_x) / index.cell_size).astype(np.int64),
+            0,
+            index.n_cols - 1,
+        )
+        row = np.clip(
+            np.floor((points[:, 1] - index.min_y) / index.cell_size).astype(np.int64),
+            0,
+            index.n_rows - 1,
+        )
         cell_keys = row * index.n_cols + col
 
         order = np.argsort(cell_keys, kind="stable")
@@ -6237,6 +7025,12 @@ class ChamferDistance:
         if set_b.shape[0] == 0:
             raise QualityError("Set B must not be empty.")
 
+        if not np.isfinite(set_a).all():
+            raise QualityError("Set A contains NaN or infinite coordinates.")
+
+        if not np.isfinite(set_b).all():
+            raise QualityError("Set B contains NaN or infinite coordinates.")
+
         if set_a.shape[1] != set_b.shape[1]:
             raise QualityError("Point sets must have the same dimensionality.")
 
@@ -6420,17 +7214,23 @@ class CompletenessAnalysis:
         if points.shape[0] == 0:
             raise QualityError("Point array must not be empty.")
 
+        if not np.isfinite(points).all():
+            raise QualityError("Point coordinates contain NaN or infinite values.")
+
         if len(reference_bbox) != 4:
             raise QualityError("Bounding box must contain four values.")
 
         min_x, min_y, max_x, max_y = reference_bbox
 
+        if not np.isfinite(np.asarray(reference_bbox, dtype=np.float64)).all():
+            raise QualityError("Bounding box contains NaN or infinite values.")
+
         if max_x <= min_x or max_y <= min_y:
             raise QualityError("Bounding box has invalid extent.")
 
-        n_cols = int(math.ceil((max_x - min_x) / self._resolution))
+        n_cols = math.ceil((max_x - min_x) / self._resolution)
 
-        n_rows = int(math.ceil((max_y - min_y) / self._resolution))
+        n_rows = math.ceil((max_y - min_y) / self._resolution)
 
         if n_cols <= 0 or n_rows <= 0:
             raise QualityError("Computed grid is empty.")
@@ -6990,6 +7790,12 @@ class HausdorffDistance:
         if set_b.shape[0] == 0:
             raise QualityError("Set B must not be empty.")
 
+        if not np.isfinite(set_a).all():
+            raise QualityError("Set A contains NaN or infinite coordinates.")
+
+        if not np.isfinite(set_b).all():
+            raise QualityError("Set B contains NaN or infinite coordinates.")
+
         h_ab = self._directed_hausdorff(
             set_a,
             set_b,
@@ -7204,9 +8010,9 @@ class QualityAnalysis:
 
     __slots__ = (
         "_config",
+        "_dispatch",
         "_method",
         "_tolerance",
-        "_dispatch",
     )
 
     def __init__(
@@ -7295,6 +8101,7 @@ class QualityAnalysis:
             tx,
             ty,
             tz,
+            confidence_level=self._config.confidence_level,
         ).compute(observations)
 
     def registration(
@@ -7504,6 +8311,7 @@ class PrecisionAnalysis:
     """
 
     __slots__ = (
+        "_confidence_level",
         "_tol_x",
         "_tol_y",
         "_tol_z",
@@ -7514,6 +8322,7 @@ class PrecisionAnalysis:
         tolerance_x: float = 0.02,
         tolerance_y: float = 0.02,
         tolerance_z: float = 0.04,
+        confidence_level: float = 0.95,
     ) -> None:
 
         if tolerance_x <= 0:
@@ -7525,9 +8334,13 @@ class PrecisionAnalysis:
         if tolerance_z <= 0:
             raise QualityError("Tolerance Z must be positive.")
 
+        if not 0.0 < confidence_level < 1.0:
+            raise QualityError("Confidence level must be between 0 and 1.")
+
         self._tol_x = float(tolerance_x)
         self._tol_y = float(tolerance_y)
         self._tol_z = float(tolerance_z)
+        self._confidence_level = float(confidence_level)
 
     # ------------------------------------------------------------------
     # Properties
@@ -7544,6 +8357,11 @@ class PrecisionAnalysis:
     @property
     def tolerance_z(self) -> float:
         return self._tol_z
+
+    @property
+    def confidence_level(self) -> float:
+        """Confidence level used for statistical intervals."""
+        return self._confidence_level
 
     # ------------------------------------------------------------------
     # Computation
@@ -7619,14 +8437,22 @@ class PrecisionAnalysis:
         else:
             std_z = 0.0
 
-        # Confidence interval 95%
+        # Confidence interval for the estimated mean deviation.
+        #
+        # The margin of error is:
+        #
+        #   t_(1-alpha/2, n-1) * s / sqrt(n)
+        #
+        # Using ``s`` directly would produce a confidence interval
+        # for an individual observation scale, not for the estimated
+        # mean represented by this result.
         count = data.shape[0]
-
         degrees_of_freedom = count - 1
+        alpha = 1.0 - self._confidence_level
 
         t_value = float(
             t.ppf(
-                0.975,
+                1.0 - alpha / 2.0,
                 degrees_of_freedom,
             )
         )
@@ -7636,28 +8462,17 @@ class PrecisionAnalysis:
         else:
             deviation = math.sqrt(std_x**2 + std_y**2)
 
-        confidence_margin = t_value * deviation
+        confidence_margin = t_value * deviation / math.sqrt(count)
 
         confidence_interval = (
             -confidence_margin,
             confidence_margin,
         )
 
-        # Tolerance evaluation internally
-        # (reserved for future QualityReport integration)
-        if dimensions == 3:
-            _within_tolerance = std_x <= self._tol_x and std_y <= self._tol_y and std_z <= self._tol_z
-        else:
-            _within_tolerance = std_x <= self._tol_x and std_y <= self._tol_y
-
-        # Avoid unused-variable warnings while keeping
-        # evaluation ready for future result expansion.
-        _ = _within_tolerance
-
         return PrecisionResult(
             std_dev=deviation,
             confidence_interval=confidence_interval,
-            confidence_level=0.95,
+            confidence_level=self._confidence_level,
             count=count,
         )
 
@@ -7726,6 +8541,9 @@ class RegistrationQuality:
         self,
         tolerance: float = 0.05,
     ) -> None:
+        if not np.isfinite(tolerance):
+            raise QualityError("Tolerance must be finite.")
+
         if tolerance <= 0.0:
             raise QualityError("Tolerance must be positive.")
 
@@ -7782,20 +8600,21 @@ class RegistrationQuality:
         else:
             raise QualityError(f"Unsupported residual shape {residuals.shape}. Expected (n,) or (n, 3).")
 
-        valid = distances[np.isfinite(distances)]
+        if not np.isfinite(residuals).all():
+            raise QualityError("Residuals contain NaN or infinite values.")
 
-        if valid.size == 0:
-            raise QualityError("No finite residual values.")
+        # Registration quality must be computed over every supplied
+        # residual.  Silently removing invalid values can hide failures
+        # and artificially increase the fitness score.
+        fitness = float(np.count_nonzero(distances <= self._tolerance) / distances.size)
 
-        fitness = float(np.count_nonzero(valid <= self._tolerance) / valid.size)
-
-        rmse = float(np.sqrt(np.mean(valid * valid)))
+        rmse = float(np.sqrt(np.mean(distances * distances)))
 
         return RegistrationQualityResult(
             fitness=fitness,
             rmse=rmse,
-            mean_distance=float(np.mean(valid)),
-            max_distance=float(np.max(valid)),
+            mean_distance=float(np.mean(distances)),
+            max_distance=float(np.max(distances)),
         )
 
     def __call__(
@@ -8030,8 +8849,8 @@ __all__ = [
     "PrecisionAnalysis",
     "QualityAnalysis",
     "QualityMethod",
-    "RegistrationQuality",
     "RMSEAnalysis",
+    "RegistrationQuality",
 ]
 
 </content>
@@ -8555,6 +9374,27 @@ class DistributionStatistics:
         ------
         StatisticsError
             If insufficient finite values exist.
+
+        Notes
+        -----
+        A real bug was found and fixed here in PR19: skewness and
+        kurtosis mixed SAMPLE standard deviation (``ddof=1``, Bessel's
+        correction) in the denominator with POPULATION-style moments
+        (dividing by N, not N-1) in the numerator -- a non-standard
+        hybrid matching neither scipy.stats.skew/kurtosis(bias=True)
+        (fully population-based) nor bias=False (fully sample-based).
+        For large samples the discrepancy is small (~0.3% at n=1000),
+        but for small samples -- common in terrain statistics, e.g. a
+        handful of survey points -- it becomes severe: confirmed
+        directly with n=6, kurtosis differed by 1676% and FLIPPED SIGN
+        (-0.88 here vs +0.056 with scipy's population formula),
+        which would have reported a qualitatively wrong distribution
+        shape (platykurtic vs leptokurtic). No other code in this
+        repository reads ``DistributionStats.skewness``/``.kurtosis``
+        (confirmed by search), so there was no existing convention to
+        preserve; fixed to use population statistics consistently
+        throughout (``ddof=0``), matching
+        ``scipy.stats.skew/kurtosis(bias=True)`` exactly.
         """
         valid = self._finite_values(values)
 
@@ -8571,7 +9411,7 @@ class DistributionStatistics:
         cumulative = np.cumsum(counts) / total
 
         mean = float(np.mean(valid))
-        std = float(np.std(valid, ddof=1))
+        std = float(np.std(valid, ddof=0))
 
         if std <= _STD_EPSILON:
             skewness = 0.0
@@ -9672,10 +10512,10 @@ class LineOfSight:
     """
 
     __slots__ = (
-        "_observer_height",
-        "_target_height",
         "_earth_curvature",
         "_num_samples",
+        "_observer_height",
+        "_target_height",
     )
 
     def __init__(
@@ -9782,7 +10622,10 @@ class LineOfSight:
             los_z = observer_z + (target_z - observer_z) * factor
 
             if self._earth_curvature:
-                los_z -= self._curvature_correction(distance * factor)
+                los_z -= self._curvature_correction(
+                    distance * factor,
+                    distance * (1.0 - factor),
+                )
 
             triangle = tin.find_triangle(x, y)
 
@@ -9814,25 +10657,52 @@ class LineOfSight:
 
     @staticmethod
     def _curvature_correction(
-        distance_meters: float,
+        distance_from_observer_meters: float,
+        distance_from_target_meters: float,
     ) -> float:
         """
-        Compute earth curvature correction.
+        Compute earth curvature correction (the "earth bulge") at a
+        point along the observer-target path.
 
         Parameters
         ----------
-        distance_meters
-            Distance from observer.
+        distance_from_observer_meters
+            Distance from the observer to the sample point (d1).
+        distance_from_target_meters
+            Distance from the sample point to the target (d2).
 
         Returns
         -------
         float
             Curvature correction in meters.
+
+        Notes
+        -----
+        A real, severe bug was found and fixed here in PR19: this
+        method used to take only ``distance_from_observer_meters``
+        and compute ``d1**2 / (2R)`` -- a formula that grows without
+        bound as the sample point approaches the TARGET, instead of
+        correctly returning to zero at both path endpoints (the
+        observer's and target's own given elevations are already
+        correct/complete and need no further correction at their own
+        position). The standard, correct "earth bulge" formula used
+        in radio/microwave path engineering and surveying visibility
+        studies is the PRODUCT form ``d1 * d2 / (2R)`` -- zero when
+        either d1=0 (at the observer) or d2=0 (at the target), and
+        maximal at the path's midpoint.
+
+        Confirmed the bug directly against the well-known horizon-
+        distance formula (``d = sqrt(2*R*h)``, ~4.65 km for a 1.7 m
+        eye height): the old formula reported a target at GROUND
+        level as already invisible at just 1 km, because its
+        (incorrect) correction grew largest right next to the
+        target rather than vanishing there.
         """
 
-        distance_km = distance_meters / _KM_TO_METERS
+        d1_km = distance_from_observer_meters / _KM_TO_METERS
+        d2_km = distance_from_target_meters / _KM_TO_METERS
 
-        return distance_km**2 / (2.0 * _EARTH_RADIUS_KM) * _KM_TO_METERS
+        return d1_km * d2_km / (2.0 * _EARTH_RADIUS_KM) * _KM_TO_METERS
 
     @staticmethod
     def _validate_points(
@@ -9920,7 +10790,8 @@ MIT
 
 from __future__ import annotations
 
-from typing import Any, Callable, TypeAlias
+from collections.abc import Callable
+from typing import Any, TypeAlias
 
 from topocore.analysis.config import (
     DEFAULT_ANALYSIS_CONFIG,
@@ -9986,10 +10857,10 @@ class VisibilityAnalysis:
 
     __slots__ = (
         "_config",
+        "_dispatch",
         "_method",
         "_observer_height",
         "_target_height",
-        "_dispatch",
     )
 
     def __init__(
@@ -10083,6 +10954,7 @@ class VisibilityAnalysis:
             observer_height=oh,
             resolution=resolution,
             max_distance=max_distance,
+            earth_curvature=(self._config.earth_curvature_correction),
         ).compute(
             observer,
             tin,
@@ -10819,7 +11691,7 @@ class CutFillVolume:
             proposed,
         )
 
-        cut, fill, net = compute_cut_fill(
+        cut, fill, net, valid_cells, excluded_cells = compute_cut_fill(
             existing,
             proposed,
             self._cell_area,
@@ -10830,6 +11702,8 @@ class CutFillVolume:
             fill_volume=fill,
             net_volume=net,
             method="cut_fill",
+            valid_cells=valid_cells,
+            excluded_cells=excluded_cells,
         )
 
     # ------------------------------------------------------------------
@@ -10899,7 +11773,7 @@ Negative values represent fill.
 
 Author
 ------
-Hernán Mina
+HernÃ¡n Mina
 
 License
 -------
@@ -10908,6 +11782,7 @@ MIT
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import numpy as np
@@ -10935,8 +11810,8 @@ class GridVolume:
     """
 
     __slots__ = (
-        "_resolution",
         "_cell_area",
+        "_resolution",
     )
 
     def __init__(
@@ -11002,7 +11877,7 @@ class GridVolume:
             proposed,
         )
 
-        cut, fill, net = compute_cut_fill(
+        cut, fill, net, valid_cells, excluded_cells = compute_cut_fill(
             existing,
             proposed,
             self._cell_area,
@@ -11013,6 +11888,8 @@ class GridVolume:
             fill_volume=fill,
             net_volume=net,
             method="grid_volume",
+            valid_cells=valid_cells,
+            excluded_cells=excluded_cells,
         )
 
     # ------------------------------------------------------------------
@@ -11027,11 +11904,35 @@ class GridVolume:
         """
         Compute volume from DTM surfaces.
 
-        Both DTMs must have identical grid geometry.
+        Both DTMs must have identical grid geometry, and that
+        geometry's resolution must match this instance's own
+        `resolution` (see `Raises` below).
         """
 
         if existing_dtm.grid != proposed_dtm.grid:
             raise VolumeError("DTMs must share the same grid geometry.")
+
+        # Found and fixed in PR20: this previously used self._cell_area
+        # (fixed at construction time) unconditionally, never checking
+        # it against the DTMs' own actual resolution -- confirmed
+        # directly: a GridVolume(resolution=1.0) fed real DTMs at
+        # resolution=2.0 silently computed a cut volume exactly 4x
+        # too small (cell_area off by resolution-squared), with no
+        # error or warning. Unlike CutFillVolume.compute_with_dtm()
+        # (which sidesteps this by always deriving a fresh cell_area
+        # from the DTM's own resolution), this class's own resolution
+        # is a real, meaningful instance property (exposed via a
+        # public `resolution`/`cell_area` property, unlike
+        # CutFillVolume) -- so silently overriding it here would
+        # contradict what the instance claims to be configured for.
+        # Fixed by validating the two agree and failing loudly
+        # instead, per HernÃ¡n's explicit choice over the alternative
+        # (silently deriving from the DTM, matching CutFillVolume).
+        if not math.isclose(self._resolution, existing_dtm.resolution):
+            raise VolumeError(
+                f"GridVolume resolution ({self._resolution}) does not match "
+                f"the DTM's resolution ({existing_dtm.resolution})."
+            )
 
         return self.compute(
             existing_dtm.elevations,
@@ -11168,7 +12069,25 @@ class VolumeAnalysis:
         sections: list[tuple[float, float]],
     ) -> VolumeResult:
         """
-        Compute prismoidal volume.
+        Compute prismoidal volume using the composite Simpson's 1/3
+        rule.
+
+        Requires an odd number of sections (at least 3), uniformly
+        spaced, with genuinely measured intermediate areas -- not
+        synthesized from the endpoints. See
+        ``topocore.analysis.volume.prismoidal`` for the full
+        contract.
+
+        .. note::
+            The PR19 finding that this method used to be
+            mathematically equivalent to ``average_end_area()`` (the
+            middle-section area was approximated as the average of
+            the endpoints, defeating Simpson's rule) has since been
+            resolved: ``PrismoidalVolume`` now requires real,
+            measured intermediate sections and gives genuinely
+            different (more accurate for curved cross-section
+            variation) results. Confirmed directly against an exact
+            analytic integral of a quadratic area profile.
         """
 
         return PrismoidalVolume(sections).compute()
@@ -11284,21 +12203,30 @@ __all__ = [
 topocore.analysis.volume.prismoidal
 ====================================
 
-Prismoidal volume computation.
+Prismoidal volume computation using composite Simpson's 1/3 rule.
 
-Applies the prismoidal formula along a series of parallel cross
-sections.
+The calculation uses measured cross-sectional areas at uniformly
+spaced stations.
 
-Formula:
+For three sections:
 
-    V = L / 6 * (A1 + 4*Am + A2)
+    V = h / 3 * (A0 + 4*A1 + A2)
 
-where:
+For multiple sections, the composite Simpson's 1/3 rule is applied.
 
-- L  = distance between sections
-- A1 = first section area
-- A2 = second section area
-- Am = intermediate section area
+Requirements
+------------
+- At least 3 sections.
+- Odd number of sections.
+- Strictly increasing stations.
+- Uniform station spacing.
+- Finite, non-negative areas.
+
+The intermediate section areas are the measured values supplied by
+the caller; they are not interpolated from the endpoint areas.
+
+The class stores the sections provided at construction time and
+exposes both ``compute()`` and the callable interface ``__call__()``.
 
 Author
 ------
@@ -11311,6 +12239,7 @@ MIT
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 
 from topocore.analysis.exceptions import VolumeError
@@ -11318,13 +12247,23 @@ from topocore.analysis.types import VolumeResult
 
 
 class PrismoidalVolume:
-    """
-    Computes volumes using the prismoidal formula.
+    """Compute volume using the composite Simpson's 1/3 rule.
 
     Parameters
     ----------
-    sections
-        Ordered sequence of ``(station, area)`` pairs.
+    sections:
+        Sequence of ``(station, area)`` pairs.
+
+    Requirements
+    ------------
+    - At least three sections.
+    - An odd number of sections.
+    - Strictly increasing stations.
+    - Uniform station spacing.
+    - Finite, non-negative areas.
+
+    The intermediate section areas supplied by the caller are used
+    directly. They are not synthesized from endpoint areas.
     """
 
     __slots__ = ("_sections",)
@@ -11333,22 +12272,34 @@ class PrismoidalVolume:
         self,
         sections: Sequence[tuple[float, float]],
     ) -> None:
+        if len(sections) < 3:
+            raise VolumeError("Prismoidal volume requires at least three sections.")
 
-        if len(sections) < 2:
-            raise VolumeError("Prismoidal formula requires at least 2 cross sections.")
+        if len(sections) % 2 == 0:
+            raise VolumeError("Prismoidal volume requires an odd number of sections.")
 
-        normalized = list(sections)
+        normalized = [(float(station), float(area)) for station, area in sections]
 
-        for i in range(1, len(normalized)):
-            previous_station = normalized[i - 1][0]
-            current_station = normalized[i][0]
+        for index, (station, area) in enumerate(normalized):
+            if not math.isfinite(station):
+                raise VolumeError(f"Section station at index {index} must be finite.")
 
-            if current_station <= previous_station:
-                raise VolumeError("Cross sections must be ordered by increasing station.")
+            if not math.isfinite(area):
+                raise VolumeError(f"Section area at index {index} must be finite.")
 
-        for station, area in normalized:
-            if area < 0:
-                raise VolumeError(f"Section area cannot be negative (station={station}).")
+            if area < 0.0:
+                raise VolumeError(f"Section area at index {index} cannot be negative.")
+
+        spacings = [normalized[index + 1][0] - normalized[index][0] for index in range(len(normalized) - 1)]
+
+        if any(spacing <= 0.0 for spacing in spacings):
+            raise VolumeError("Section stations must be strictly increasing.")
+
+        spacing = spacings[0]
+        tolerance = max(1.0, abs(spacing)) * 1e-9
+
+        if any(abs(current - spacing) > tolerance for current in spacings[1:]):
+            raise VolumeError("Prismoidal sections must have uniformly spaced stations.")
 
         self._sections = normalized
 
@@ -11366,52 +12317,57 @@ class PrismoidalVolume:
     # ------------------------------------------------------------------
 
     def compute(self) -> VolumeResult:
-        """
-        Compute total prismoidal volume.
+        """Compute volume using composite Simpson's 1/3 rule."""
+        areas = [area for _, area in self._sections]
 
-        Returns
-        -------
-        VolumeResult
-            Total computed volume.
-        """
+        spacing = self._sections[1][0] - self._sections[0][0]
 
-        total_volume = 0.0
-
-        for segment_volume in self.segment_volumes():
-            total_volume += segment_volume
+        volume = spacing / 3.0 * (areas[0] + areas[-1] + 4.0 * sum(areas[1:-1:2]) + 2.0 * sum(areas[2:-1:2]))
 
         return VolumeResult(
-            cut_volume=total_volume,
+            cut_volume=volume,
             fill_volume=0.0,
-            net_volume=total_volume,
+            net_volume=volume,
             method="prismoidal",
+            valid_cells=None,
+            excluded_cells=None,
         )
 
+    # ------------------------------------------------------------------
+    # Segment volumes
+    # ------------------------------------------------------------------
+
     def segment_volumes(self) -> list[float]:
-        """
-        Compute individual segment volumes.
+        """Compute Simpson volumes for each prismoidal panel.
 
-        Returns
-        -------
-        list[float]
-            Volume of each interval.
-        """
+        Each panel consists of three consecutive sections:
 
+            S0 ---- S1 ---- S2
+            A0      A1      A2
+
+        The returned values therefore correspond to:
+
+            [S0,S1,S2], [S2,S3,S4], ...
+
+        and their sum equals :meth:`compute`.
+        """
         volumes: list[float] = []
 
-        for i in range(len(self._sections) - 1):
-            station1, area1 = self._sections[i]
-            station2, area2 = self._sections[i + 1]
+        for index in range(0, len(self._sections) - 2, 2):
+            station1, area1 = self._sections[index]
+            station2, area2 = self._sections[index + 1]
+            # before station3, area3 = self._sections[index + 2]
+            _, area3 = self._sections[index + 2]
 
-            length = station2 - station1
+            spacing = station2 - station1
 
-            #
-            # Without an explicit middle section, use
-            # the average area approximation.
-            #
-            middle_area = (area1 + area2) / 2.0
+            # Validation was already performed in __init__.
+            # Simpson's 1/3 rule over two equal intervals.
+            volume = spacing / 3.0 * (area1 + 4.0 * area2 + area3)
 
-            volume = length / 6.0 * (area1 + 4.0 * middle_area + area2)
+            # station3 is intentionally part of the panel validation
+            # and documents the three-section Simpson interval.
+            # _ = station3
 
             volumes.append(volume)
 
@@ -11422,6 +12378,7 @@ class PrismoidalVolume:
     # ------------------------------------------------------------------
 
     def __call__(self) -> VolumeResult:
+        """Compute the prismoidal volume."""
         return self.compute()
 
 
@@ -11792,6 +12749,21 @@ def validate_volume_arrays(
     ------
     VolumeError
         If arrays are invalid.
+
+    Notes
+    -----
+    NaN cells ARE allowed here (a common, legitimate case: a DTM
+    grid extending slightly beyond its source data's convex hull,
+    e.g. ``topocore.terrain.dtm.DTM.from_tin()``, correctly leaves
+    those cells as NaN -- see that module's own PR19 fix). Rejecting
+    any grid containing NaN made cut/fill volume computation
+    unusable on essentially any real, irregularly-bounded terrain
+    surface. ``compute_cut_fill`` excludes NaN cells from the sums
+    rather than failing outright -- this function only rejects
+    genuinely unusable input (empty, mismatched shape, wrong
+    dimensionality, or infinite values, which are never legitimate
+    NoData markers in this codebase and likely indicate a real
+    upstream error).
     """
 
     if existing.size == 0:
@@ -11806,18 +12778,24 @@ def validate_volume_arrays(
     if existing.ndim != 2:
         raise VolumeError("Elevation arrays must be 2-dimensional grids.")
 
-    if not np.isfinite(existing).all():
-        raise VolumeError("Existing surface contains invalid elevations.")
+    if np.isinf(existing).any():
+        raise VolumeError("Existing surface contains infinite elevations.")
 
-    if not np.isfinite(proposed).all():
-        raise VolumeError("Proposed surface contains invalid elevations.")
+    if np.isinf(proposed).any():
+        raise VolumeError("Proposed surface contains infinite elevations.")
+
+    if np.isnan(existing).all():
+        raise VolumeError("Existing surface has no valid (non-NaN) elevations.")
+
+    if np.isnan(proposed).all():
+        raise VolumeError("Proposed surface has no valid (non-NaN) elevations.")
 
 
 def compute_cut_fill(
     existing: FloatArray,
     proposed: FloatArray,
     cell_area: float,
-) -> tuple[float, float, float]:
+) -> tuple[float, float, float, int, int]:
     """
     Compute cut/fill volumes.
 
@@ -11829,13 +12807,21 @@ def compute_cut_fill(
         Proposed terrain.
     cell_area
         Cell area in square meters.
-    method
-        Volume method identifier.
 
     Returns
     -------
     tuple
-        cut, fill, net volumes.
+        cut, fill, net volumes, valid_cells, excluded_cells.
+
+    Notes
+    -----
+    Cells that are NaN in EITHER array (e.g. outside a DTM's convex
+    hull) are excluded from the volume sums rather than propagating
+    NaN or raising -- see ``validate_volume_arrays``'s docstring.
+    ``excluded_cells`` tells the caller how much of the grid had no
+    overlapping data, so a near-total exclusion (e.g. mismatched or
+    barely-overlapping surfaces) is visible rather than silently
+    returning a near-zero volume from a handful of valid cells.
     """
 
     if not np.isfinite(cell_area):
@@ -11844,7 +12830,11 @@ def compute_cut_fill(
     if cell_area <= 0:
         raise VolumeError("Cell area must be positive.")
 
-    diff = existing - proposed
+    valid_mask = np.isfinite(existing) & np.isfinite(proposed)
+    valid_cells = int(np.count_nonzero(valid_mask))
+    excluded_cells = int(existing.size - valid_cells)
+
+    diff = np.where(valid_mask, existing - proposed, 0.0)
 
     cut = np.maximum(diff, 0.0)
     fill = np.maximum(-diff, 0.0)
@@ -11857,13 +12847,15 @@ def compute_cut_fill(
         cut_volume,
         fill_volume,
         cut_volume - fill_volume,
+        valid_cells,
+        excluded_cells,
     )
 
 
 __all__ = [
     "FloatArray",
-    "validate_volume_arrays",
     "compute_cut_fill",
+    "validate_volume_arrays",
 ]
 
 </content>
@@ -12118,6 +13110,8 @@ __all__ = ["DXFError", "DXFValidationError", "DXFGeometryError", "DXFExportError
 from __future__ import annotations
 
 import importlib
+import os
+import tempfile
 from pathlib import Path
 
 from topocore.dxf._ezdxf_compat import is_available, require_ezdxf
@@ -12151,6 +13145,23 @@ class DXFExporter:
 
         self._context = context or ExportContext()
         options = self._context.options
+
+        if options.units is not DrawingUnits.METERS:
+            raise DXFExportError(
+                f"DXFExportOptions.units={options.units.value!r} is not supported yet: "
+                "DXFExporter only sets the DXF file's $INSUNITS header variable (a "
+                "metadata label telling CAD software how to interpret the drawing) -- "
+                "it does NOT convert the actual coordinate values. TopoCore's feature "
+                "geometries are always in meters (the standard working unit throughout "
+                "this codebase), so declaring any other unit here would silently "
+                "mislabel unconverted meter coordinates as that unit, causing CAD "
+                "software to display/measure the geometry at the wrong scale (e.g. "
+                "~3.28x wrong for feet) with no error or warning. Confirmed directly "
+                "with a real exported file in PR19. Use "
+                "DXFExportOptions.units=DrawingUnits.METERS until real coordinate "
+                "conversion is implemented."
+            )
+
         self._validator = DXFValidator()
         self._mapper = GeometryMapper(options.tolerance, non_planar_polygon_mode=options.non_planar_polygon_mode)
 
@@ -12216,12 +13227,40 @@ class DXFExporter:
             report.entity_count += len(entities)
             self._tally(report, decision.representation, len(entities))
 
-        try:
-            doc.saveas(str(path))
-        except (OSError, ezdxf.DXFError) as exc:
-            raise DXFExportError(f"Failed to save DXF file to '{path}': {exc}") from exc
+        final_path = Path(path)
 
-        report.output_path = Path(path)
+        try:
+            final_path.parent.mkdir(parents=True, exist_ok=True)
+
+            with tempfile.NamedTemporaryFile(
+                prefix=f".{final_path.stem}.",
+                suffix=final_path.suffix or ".dxf",
+                dir=final_path.parent,
+                delete=False,
+            ) as temporary:
+                temporary_path = Path(temporary.name)
+
+            try:
+                doc.saveas(str(temporary_path))
+
+                if not temporary_path.exists():
+                    raise DXFExportError(f"DXF writer did not create the temporary file for '{final_path}'.")
+
+                if temporary_path.stat().st_size == 0:
+                    raise DXFExportError(f"DXF writer produced an empty file for '{final_path}'.")
+
+                os.replace(temporary_path, final_path)
+
+            finally:
+                if temporary_path.exists():
+                    temporary_path.unlink()
+
+        except DXFExportError:
+            raise
+        except (OSError, ezdxf.DXFError) as exc:
+            raise DXFExportError(f"Failed to save DXF file to '{final_path}': {exc}") from exc
+
+        report.output_path = final_path
         report.dxf_version = options.dxf_version
         report.units = options.units
         report.layer_count = len(LAYER_STYLES)
@@ -12263,7 +13302,34 @@ class DXFExporter:
                 interval=extra.get("interval"),
                 every=index_contour_every,
             )
-        return layer_for(feature.feature_type)
+
+        try:
+            return layer_for(feature.feature_type)
+        except KeyError as exc:
+            # Found and fixed in PR19: layer_for() raises a raw,
+            # unwrapped KeyError for any FeatureType not present in
+            # LAYER_BY_FEATURE_TYPE -- confirmed that 63 of 84
+            # FeatureType values (75%) are NOT covered, meaning
+            # exporting any feature of one of those types (without
+            # an explicit cad_layer attribute) crashed the ENTIRE
+            # export with a raw KeyError, bypassing options.strict
+            # entirely: the strict=False "skip bad features instead
+            # of crashing" contract only ever caught
+            # (DXFGeometryError, DXFExportError) here, so this
+            # specific, very common failure mode was NEVER
+            # catchable/skippable, regardless of strict mode. Wrapped
+            # into DXFExportError (already one of the caught types in
+            # export()'s own try/except) so it now correctly
+            # participates in that same strict/skip contract, rather
+            # than silently bypassing it. This does not invent a
+            # layer/color mapping for the 63 uncovered types -- that
+            # remains a separate, deliberate design decision (which
+            # types get which layer/color) out of scope for this fix.
+            raise DXFExportError(
+                f"No DXF layer mapping defined for feature type "
+                f"'{feature.feature_type.value}', and no explicit "
+                f"'cad_layer' attribute was set on feature {feature.feature_id}."
+            ) from exc
 
     @staticmethod
     def _tally(report: _ReportBuilder, representation: DXFRepresentation, count: int) -> None:
@@ -13301,6 +14367,7 @@ from enum import StrEnum
 import numpy as np
 
 from topocore.features._code_utils import base_code as _base_code
+from topocore.features.exceptions import GeometryError
 from topocore.features.feature_codes import (
     CATALOG_TO_MODEL_GEOMETRY,
     FeatureCodeDefinition,
@@ -13584,7 +14651,38 @@ def _build_legacy(
 
         closed = _is_closed_run(definition, run, closure_tolerance)
         line_feature = _LineFeature(code=base_code, definition=definition, points=tuple(run), closed=closed)
-        collection.add(_line_feature_to_feature(line_feature, next_id))
+
+        # Found and fixed in PR19: this only checked `len(run) < 2`,
+        # a LINE-sized minimum -- but POLYGON geometry actually
+        # requires >= 3 vertices (see FeatureGeometry._MIN_VERTICES).
+        # A run of exactly 2 points for a POLYGON-type code (a
+        # plausible field-survey scenario -- a missed corner shot,
+        # or a truncated file) passed this check, then raised an
+        # UNCAUGHT GeometryError inside FeatureGeometry's own
+        # validation, crashing the ENTIRE build_features() call for
+        # the whole survey instead of reporting just this one run as
+        # INSUFFICIENT_POINTS and skipping it -- confirmed directly
+        # with a 2-point run against a POLYGON-type code. Fixed by
+        # catching GeometryError around construction and reporting it
+        # the same way as the already-existing INSUFFICIENT_POINTS
+        # case, rather than duplicating _MIN_VERTICES' per-geometry
+        # values here (more robust to any future FeatureGeometry
+        # validation change too, not just this specific threshold).
+        try:
+            feature = _line_feature_to_feature(line_feature, next_id)
+        except GeometryError:
+            unmatched.extend(run)
+            diagnostics.append(
+                BuildDiagnostic(
+                    code=base_code,
+                    reason=BuildDiagnosticReason.INSUFFICIENT_POINTS,
+                    point_count=len(run),
+                    point_ids=tuple(p.id for p in run),
+                )
+            )
+            continue
+
+        collection.add(feature)
         next_id += 1
 
     return FeatureBuildResult(
@@ -13681,7 +14779,26 @@ def _build_with_grammar(
             points=figure.points,
             closed=closed,
         )
-        collection.add(_line_feature_to_feature(line_feature, next_id))
+
+        # Same fix as _build_legacy -- see its comment for the full
+        # explanation. A figure of exactly 2 points for a
+        # POLYGON-type code passes this function's own `< 2` check
+        # but fails FeatureGeometry's real >= 3 requirement.
+        try:
+            feature = _line_feature_to_feature(line_feature, next_id)
+        except GeometryError:
+            unmatched.extend(figure.points)
+            diagnostics.append(
+                BuildDiagnostic(
+                    code=figure.base_code,
+                    reason=BuildDiagnosticReason.INSUFFICIENT_POINTS,
+                    point_count=len(figure.points),
+                    point_ids=tuple(p.id for p in figure.points),
+                )
+            )
+            continue
+
+        collection.add(feature)
         next_id += 1
 
     return FeatureBuildResult(
@@ -13723,7 +14840,15 @@ def build_features(
         interleaved with other figures in the file; codes without
         the grammar separator still use the same consecutive-run
         rule as legacy mode.
+
+    Raises
+    ------
+    ValueError
+        If `closure_tolerance` is negative.
     """
+    if closure_tolerance < 0:
+        raise ValueError(f"closure_tolerance must be non-negative; got {closure_tolerance}.")
+
     if use_field_code_grammar:
         return _build_with_grammar(points, registry, closure_tolerance=closure_tolerance)
     return _build_legacy(points, registry, closure_tolerance=closure_tolerance)
@@ -15430,9 +16555,15 @@ class RetainingWallDetector(BaseFeatureDetector):
     feature_type = FeatureType.RETAINING_WALL
     geometry_type = GeometryType.POLYGON
     version = "1.0"
-    required_inputs = frozenset({ContextField.POINT_CLOUD, ContextField.CLASSIFICATION, ContextField.PCA_FEATURES})
+    required_inputs = frozenset(
+        {
+            ContextField.POINT_CLOUD,
+            ContextField.CLASSIFICATION,
+            ContextField.PCA_FEATURES,
+        }
+    )
 
-    __slots__ = ("_min_verticality", "_eps", "_min_points", "_min_height")
+    __slots__ = ("_eps", "_min_height", "_min_points", "_min_verticality")
 
     def __init__(
         self,
@@ -15485,14 +16616,26 @@ class RetainingWallDetector(BaseFeatureDetector):
         )
 
         result = FeatureCollection()
+        local_id = 0
 
-        for local_id, local_idx in enumerate(clusters, start=1):
+        # Found and fixed in PR19: confirmed reachable here (unlike
+        # WallDetector) since min_height is an ACTIVE, default-on
+        # filter (0.4m) -- a real cluster shorter than that mid-
+        # sequence caused a gap in the surviving features' feature_id
+        # (verified directly: [1, 3] instead of [1, 2] for 2 kept
+        # clusters out of 3). Fixed to only increment local_id on
+        # successful addition, matching the established correct
+        # pattern used elsewhere (ClusterDetectorBase's own template
+        # method, terrain detectors, etc.).
+        for local_idx in clusters:
             cluster_xyz = xyz[candidate_idx[local_idx]]
 
             height = float(cluster_xyz[:, 2].max() - cluster_xyz[:, 2].min())
 
             if height < self._min_height:
                 continue
+
+            local_id += 1
 
             mean_verticality = float(np.mean(verticality[candidate_idx[local_idx]]))
 
@@ -16077,12 +17220,29 @@ class WallDetector(ClusterDetectorBase):
         )
 
         result = FeatureCollection()
+        local_id = 0
 
-        for local_id, local_idx in enumerate(clusters, start=1):
+        # Found and fixed in PR19: local_id previously came directly
+        # from enumerate(clusters, start=1), so a cluster rejected by
+        # _passes_filters() mid-sequence (continue) still consumed a
+        # local_id value, leaving gaps in the surviving features'
+        # feature_id (e.g. [1, 3] instead of [1, 2] for 2 features).
+        # Not reachable through WallDetector's own constructor today
+        # (it never sets the optional height/extent/elongation bounds
+        # ClusterFilterConfig supports, so _passes_filters() is
+        # currently always a no-op here), but this is the same
+        # shared _passes_filters() used by ClusterDetectorBase's own
+        # correctly-incrementing template method elsewhere -- fixed
+        # to match that established, correct pattern (increment only
+        # on success) rather than leaving a latent trap for the next
+        # person who adds a height/extent parameter to this detector.
+        for local_idx in clusters:
             cluster_xyz = xyz[candidate_idx[local_idx]]
 
             if not self._passes_filters(cluster_xyz):
                 continue
+
+            local_id += 1
 
             result.add(
                 Feature(
@@ -26402,12 +27562,35 @@ class GeoPackageExporter:
     def _split_attributes(
         feature: Feature,
     ) -> tuple[str | None, str | None, str | None, str | None]:
+        """Split promoted attributes from the JSON attribute payload.
+
+        Raises
+        ------
+        GPKGExportError
+            If an attribute cannot be serialized as JSON.
+        """
         attrs = feature.attributes
+
         survey_code = attrs.get("survey_code")
         survey_name = attrs.get("survey_name")
         cad_layer = attrs.get("cad_layer")
-        rest = {k: v for k, v in attrs.items() if k not in _PROMOTED_ATTRIBUTE_KEYS}
-        attributes_json = json.dumps(rest, ensure_ascii=False, separators=(",", ":")) if rest else None
+
+        rest = {key: value for key, value in attrs.items() if key not in _PROMOTED_ATTRIBUTE_KEYS}
+
+        if not rest:
+            return survey_code, survey_name, cad_layer, None
+
+        try:
+            attributes_json = json.dumps(
+                rest,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise GPKGExportError(
+                f"Feature {feature.feature_id} contains attributes that cannot be serialized as JSON."
+            ) from exc
+
         return survey_code, survey_name, cad_layer, attributes_json
 
 
@@ -26507,10 +27690,23 @@ def geometry_family(geometry_type: GeometryType) -> GeometryFamily:
         raise GPKGGeometryError(f"No GeoPackage mapping for geometry_type={geometry_type!r}.") from exc
 
 
+def _validate_vertices(vertices: np.ndarray) -> None:
+    """Validate the common vertex representation."""
+    if vertices.ndim != 2 or vertices.shape[1] != 3:
+        raise GPKGGeometryError("Geometry vertices must have shape (n, 3).")
+
+    if vertices.shape[0] == 0:
+        raise GPKGGeometryError("Geometry must contain at least one vertex.")
+
+    if not np.isfinite(vertices).all():
+        raise GPKGGeometryError("Geometry vertices contain NaN or infinite coordinates.")
+
+
 def _to_shapely(
     geometry: FeatureGeometry,
 ) -> Point | LineString | Polygon | MultiPolygon:
     vertices = geometry.vertices
+    _validate_vertices(vertices)
 
     if geometry.geometry_type == GeometryType.POINT:
         x, y, z = vertices[0]
@@ -26530,16 +27726,49 @@ def _to_shapely(
         return Polygon(coords)
 
     if geometry.geometry_type == GeometryType.MESH:
-        if geometry.faces is None or geometry.faces.size == 0:
-            raise GPKGGeometryError("MESH geometry has no faces to triangulate into a MultiPolygon.")
-        polygons: list[Polygon] = []
-        for face in geometry.faces:
-            tri = vertices[face]
-            coords = [(float(v[0]), float(v[1]), float(v[2])) for v in tri]
-            polygons.append(Polygon(coords))
-        return MultiPolygon(polygons)
+        faces = geometry.faces
 
-    raise GPKGGeometryError(f"No GeoPackage mapping for geometry_type={geometry.geometry_type!r}.")
+        if faces is None or faces.size == 0:
+            raise GPKGGeometryError("MESH geometry has no faces to triangulate into a MultiPolygon.")
+
+        if faces.ndim != 2 or faces.shape[1] != 3:
+            raise GPKGGeometryError("MESH faces must have shape (n, 3).")
+
+        if not np.issubdtype(faces.dtype, np.integer):
+            raise GPKGGeometryError("MESH face indices must be integers.")
+
+        if np.any(faces < 0) or np.any(faces >= vertices.shape[0]):
+            raise GPKGGeometryError("MESH contains face indices outside the vertex array.")
+
+        polygons: list[Polygon] = []
+
+        for face in faces:
+            tri = vertices[face]
+
+            edge_a = tri[1] - tri[0]
+            edge_b = tri[2] - tri[0]
+            cross = np.cross(edge_a, edge_b)
+
+            if float(np.dot(cross, cross)) <= 0.0:
+                raise GPKGGeometryError("MESH contains a degenerate triangular face.")
+
+            coords = [
+                (
+                    float(vertex[0]),
+                    float(vertex[1]),
+                    float(vertex[2]),
+                )
+                for vertex in tri
+            ]
+
+            polygon = Polygon(coords)
+
+            if polygon.is_empty or not polygon.is_valid:
+                raise GPKGGeometryError("MESH contains a face that cannot produce a valid polygon.")
+
+            polygons.append(polygon)
+
+        return MultiPolygon(polygons)
 
 
 def build_gpb(geometry: FeatureGeometry, srs_id: int) -> bytes:
@@ -26957,6 +28186,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+import numpy as np
+
 from topocore.features.models import Feature, GeometryType
 
 
@@ -26989,17 +28220,46 @@ class GPKGValidator:
                 )
             )
 
-        if feature.geometry.geometry_type == GeometryType.MESH and (
-            feature.geometry.faces is None or feature.geometry.faces.size == 0
-        ):
-            issues.append(
-                GPKGValidationIssue(
-                    code="GPKG002",
-                    feature_id=feature.feature_id,
-                    severity=GPKGValidationSeverity.ERROR,
-                    message="MESH geometry has no faces to triangulate into a MultiPolygon.",
+        if feature.geometry.geometry_type == GeometryType.MESH:
+            faces = feature.geometry.faces
+            vertices = feature.geometry.vertices
+
+            if faces is None or faces.size == 0:
+                issues.append(
+                    GPKGValidationIssue(
+                        code="GPKG002",
+                        feature_id=feature.feature_id,
+                        severity=GPKGValidationSeverity.ERROR,
+                        message=("MESH geometry has no faces to triangulate into a MultiPolygon."),
+                    )
                 )
-            )
+            elif faces.ndim != 2 or faces.shape[1] != 3:
+                issues.append(
+                    GPKGValidationIssue(
+                        code="GPKG003",
+                        feature_id=feature.feature_id,
+                        severity=GPKGValidationSeverity.ERROR,
+                        message="MESH faces must have shape (n, 3).",
+                    )
+                )
+            elif not np.issubdtype(faces.dtype, np.integer):
+                issues.append(
+                    GPKGValidationIssue(
+                        code="GPKG004",
+                        feature_id=feature.feature_id,
+                        severity=GPKGValidationSeverity.ERROR,
+                        message="MESH face indices must be integers.",
+                    )
+                )
+            elif np.any(faces < 0) or np.any(faces >= vertices.shape[0]):
+                issues.append(
+                    GPKGValidationIssue(
+                        code="GPKG005",
+                        feature_id=feature.feature_id,
+                        severity=GPKGValidationSeverity.ERROR,
+                        message="MESH contains out-of-range face indices.",
+                    )
+                )
 
         return tuple(issues)
 
@@ -27565,6 +28825,7 @@ from typing import Final
 
 import numpy as np
 
+from topocore.io.exceptions import CorruptedFileError
 from topocore.pointcloud.attributes import ATTRIBUTE_DTYPES, PointAttribute
 from topocore.pointcloud.chunk import Chunk
 
@@ -27588,6 +28849,49 @@ ATTRIBUTE_MAPPING: Final[dict[str, PointAttribute]] = {
     "user_data": PointAttribute.USER_DATA,
     "point_source_id": PointAttribute.POINT_SOURCE_ID,
 }
+
+
+def _validate_range(
+    values: np.ndarray,
+    target_dtype: np.dtype,
+    column_name: str,
+) -> None:
+    """
+    Reject values that don't fit in the destination integer dtype.
+
+    Found and fixed in PR19: ASCIIConverter is a standalone
+    implementation (like LASConverter) that does NOT go through
+    topocore.io.common.base_converter.BasePointConverter -- so the
+    range-validation fix already applied there does not protect
+    ASCII sources at all. Confirmed directly: an "intensity" column
+    value of 70000 (a plausible unit/scale mismatch in a real ASCII
+    export) silently became 4464 (``70000 % 65536``) via a plain
+    ``.astype()`` cast to the target uint16 dtype, with no error or
+    warning. Fixed with the same range check as base_converter.py --
+    including rejecting NaN/infinite values for integer-target
+    columns, since NumPy's own float->int cast silently turns NaN
+    into 0 with only a RuntimeWarning, not an exception.
+    """
+
+    if not np.issubdtype(target_dtype, np.integer) or values.size == 0:
+        return
+
+    info = np.iinfo(target_dtype)
+
+    if np.issubdtype(values.dtype, np.floating) and not np.isfinite(values).all():
+        raise CorruptedFileError(
+            f"Column '{column_name}' contains NaN or infinite values, which cannot be "
+            f"represented in its {target_dtype} integer representation."
+        )
+
+    actual_min = values.min()
+    actual_max = values.max()
+
+    if actual_min < info.min or actual_max > info.max:
+        raise CorruptedFileError(
+            f"Column '{column_name}' has values out of range for its {target_dtype} "
+            f"representation: expected [{info.min}, {info.max}], got [{actual_min}, {actual_max}]."
+        )
 
 
 class ASCIIConverter:
@@ -27640,6 +28944,13 @@ class ASCIIConverter:
 
             # Forzar el dtype canónico de TopoCore
             target_dtype = ATTRIBUTE_DTYPES[attribute]
+
+            _validate_range(
+                np.asarray(values),
+                target_dtype,
+                column_name,
+            )
+
             arrays[attribute] = np.asarray(values, dtype=target_dtype)
 
         #
@@ -27697,13 +29008,15 @@ class ASCIIConverter:
 
         # Asegurar que el stack tenga el dtype correcto (uint16)
         target_dtype = ATTRIBUTE_DTYPES[PointAttribute.COLOR]
-        arrays[PointAttribute.COLOR] = np.column_stack(
+        stacked = np.column_stack(
             (
                 columns["red"],
                 columns["green"],
                 columns["blue"],
             )
-        ).astype(target_dtype)
+        )
+        _validate_range(stacked, target_dtype, "red/green/blue")
+        arrays[PointAttribute.COLOR] = stacked.astype(target_dtype)
 
     @staticmethod
     def _build_normal(
@@ -28310,22 +29623,20 @@ class ASCIIParser:
         """
         Append one record to the current buffers.
 
-        Missing trailing fields are stored as empty strings.
+        Records must contain every field required by the selected
+        coordinate/attribute columns. Extra fields are allowed because
+        formats may contain attributes that TopoCore does not consume.
         """
 
-        buffers = context.buffers
+        required_columns = max(context.columns.values(), default=-1) + 1
+        if len(fields) < required_columns:
+            raise InvalidASCIIRecordError(
+                f"Invalid ASCII record: expected at least {required_columns} fields, got {len(fields)}: {line}"
+            )
 
         try:
-            for (
-                column_name,
-                column_index,
-            ) in context.columns.items():
-                value = fields[column_index] if column_index < len(fields) else ""
-
-                buffers[column_name].append(
-                    value,
-                )
-
+            for column_name, column_index in context.columns.items():
+                context.buffers[column_name].append(fields[column_index])
         except (IndexError, ValueError) as exc:
             raise InvalidASCIIRecordError(f"Invalid ASCII record: {line}") from exc
 
@@ -28706,6 +30017,7 @@ from topocore.io.ascii.base_reader import BaseASCIIReader
 from topocore.io.ascii.converter import ASCIIConverter
 from topocore.io.ascii.format import ASCIIFormat
 from topocore.io.ascii.parser import ASCIIParser
+from topocore.io.exceptions import CorruptedFileError
 from topocore.pointcloud.chunk import Chunk
 
 
@@ -28733,10 +30045,21 @@ class PTSReader(BaseASCIIReader):
             encoding=self.encoding,
         ) as stream:
             #
-            # Skip point count
+            # PTS requires the first non-empty line to contain the
+            # declared point count.
             #
 
-            next(stream)
+            first_line = stream.readline()
+            if not first_line:
+                raise CorruptedFileError("PTS file is missing its point count.")
+
+            try:
+                declared_count = int(first_line.strip())
+            except ValueError as exc:
+                raise CorruptedFileError("PTS point count must be an integer.") from exc
+
+            if declared_count < 0:
+                raise CorruptedFileError("PTS point count cannot be negative.")
 
             parser = ASCIIParser(
                 stream,
@@ -28749,10 +30072,18 @@ class PTSReader(BaseASCIIReader):
 
             converter = ASCIIConverter()
 
+            actual_count = 0
+
             for batch in parser.iter_batches(
                 chunk_size=self.chunk_size,
             ):
+                actual_count += batch.size
                 yield converter(batch)
+
+            if actual_count != declared_count:
+                raise CorruptedFileError(
+                    f"PTS point count mismatch: header declares {declared_count}, read {actual_count} points."
+                )
 
     @property
     def format_name(self) -> str:
@@ -29006,6 +30337,7 @@ import numpy as np
 
 from topocore.io.common.attribute_mapping import resolve_attribute
 from topocore.io.common.records import PointRecordBatch
+from topocore.io.exceptions import CorruptedFileError
 from topocore.pointcloud.attributes import ATTRIBUTE_DTYPES, PointAttribute
 from topocore.pointcloud.chunk import Chunk
 
@@ -29105,10 +30437,16 @@ class BasePointConverter(ABC):
 
             target_dtype = ATTRIBUTE_DTYPES[attribute]
 
-            chunk[attribute][:] = np.asarray(
-                batch[source_name],
-                dtype=target_dtype,
+            source_array = np.asarray(batch[source_name])
+
+            self._validate_range(
+                source_array,
+                target_dtype,
+                attribute,
+                source_name,
             )
+
+            chunk[attribute][:] = source_array.astype(target_dtype)
 
             processed.add(source_name)
 
@@ -29116,6 +30454,63 @@ class BasePointConverter(ABC):
             chunk,
             batch,
         )
+
+    @staticmethod
+    def _validate_range(
+        source_array: np.ndarray,
+        target_dtype: np.dtype,
+        attribute: PointAttribute,
+        source_name: str,
+    ) -> None:
+        """
+        Reject values that don't fit in the destination integer dtype.
+
+        Found and fixed in PR19: converting a source array to a
+        narrower integer dtype (e.g. ``int32`` -> ``uint16``, the
+        exact case for "intensity") via a plain ``.astype()`` call
+        does NOT raise -- NumPy silently wraps out-of-range integers
+        modulo the target type's range. Confirmed directly: a value
+        of 70000 read from an ASCII or PLY source silently became
+        4464 (``70000 % 65536``) in the resulting Chunk, with no
+        error or warning anywhere, for ANY format going through this
+        shared converter (confirmed reproducible via both PLY and
+        ASCII sources, since both route through this same method).
+        Fixed by validating the actual value range against the
+        target dtype's representable range BEFORE casting, raising a
+        clear, domain-specific error instead of silently corrupting
+        the data.
+
+        Also rejects NaN/infinite values in a float source destined
+        for an integer attribute: confirmed separately that NumPy's
+        own float->int cast turns NaN into 0 with only a
+        ``RuntimeWarning`` (not an exception) -- easy to miss, and
+        the same "corrupt data must fail loud" principle applies,
+        since a NaN in a column like "intensity" or "classification"
+        (unlike elevation, which legitimately uses NaN for NoData)
+        indicates a genuinely malformed source file.
+        """
+
+        if not np.issubdtype(target_dtype, np.integer) or source_array.size == 0:
+            return
+
+        info = np.iinfo(target_dtype)
+
+        if np.issubdtype(source_array.dtype, np.floating) and not np.isfinite(source_array).all():
+            raise CorruptedFileError(
+                f"Attribute '{attribute.value}' (source column '{source_name}') contains NaN "
+                f"or infinite values, which cannot be represented in its {target_dtype} integer "
+                "representation."
+            )
+
+        actual_min = source_array.min()
+        actual_max = source_array.max()
+
+        if actual_min < info.min or actual_max > info.max:
+            raise CorruptedFileError(
+                f"Attribute '{attribute.value}' (source column '{source_name}') has values "
+                f"out of range for its {target_dtype} representation: expected "
+                f"[{info.min}, {info.max}], got [{actual_min}, {actual_max}]."
+            )
 
     @abstractmethod
     def _populate_special_attributes(
@@ -29128,8 +30523,6 @@ class BasePointConverter(ABC):
 
         Concrete converters may override this method.
         """
-
-        pass
 
 </content>
 
@@ -29478,20 +30871,64 @@ from typing import Final
 
 import numpy as np
 
-from topocore.pointcloud.attributes import PointAttribute
+from topocore.pointcloud.attributes import ATTRIBUTE_DTYPES, PointAttribute
 from topocore.pointcloud.chunk import Chunk
 
 #: E57 fields mapped 1:1 onto a single-valued TopoCore attribute.
+#: "intensity" is handled separately -- see _scale_intensity below.
 E57_ATTRIBUTE_MAPPING: Final = {
     "cartesianX": PointAttribute.X,
     "cartesianY": PointAttribute.Y,
     "cartesianZ": PointAttribute.Z,
-    "intensity": PointAttribute.INTENSITY,
 }
 
 #: E57 stores red/green/blue as three separate fields; TopoCore
 #: stores them combined as one PointAttribute.COLOR of shape (3,).
 _COLOR_FIELDS = ("colorRed", "colorGreen", "colorBlue")
+
+
+def _scale_intensity(raw: np.ndarray) -> np.ndarray:
+    """
+    Rescale raw E57 intensity into TopoCore's unified uint16 range.
+
+    Found and fixed in PR19: E57's "intensity" field has no fixed,
+    universal range -- pye57's own read_scan() returns whatever raw
+    values the file stores, unscaled (confirmed by reading pye57's
+    own source: it applies no normalization at all). Per the ASTM
+    E57 spec, a file MAY declare its own intensityLimits, but common
+    real-world files often use a normalized [0, 1] float range.
+    PointAttribute.INTENSITY, however, is a unified,
+    format-agnostic uint16 field (matching LAS's own raw-count
+    convention). Directly assigning E57's float intensity into that
+    uint16 column (as the previous code did, since "intensity"
+    wasn't even being requested from pye57 at all -- a separate bug
+    also fixed in this session) silently truncated every value to 0
+    for the common [0, 1]-normalized case: confirmed directly with a
+    real E57 file containing intensity=[0.1, 0.5, 0.9], which became
+    [0, 0, 0].
+
+    Fixed with data-driven min-max normalization: rescale the
+    ACTUAL observed range in this scan to fill [0, 65535], rather
+    than assuming any fixed a-priori range. This correctly handles
+    both already-[0,1]-normalized files and files using a different
+    native range, without needing to parse E57's own
+    intensityLimits metadata.
+    """
+
+    raw = np.asarray(raw, dtype=np.float64)
+
+    minimum = float(np.min(raw))
+    maximum = float(np.max(raw))
+
+    if maximum <= minimum:
+        # Degenerate case: every value identical (including a
+        # single-point scan) -- map to the middle of the range
+        # rather than dividing by zero.
+        return np.full(raw.shape, 32767, dtype=ATTRIBUTE_DTYPES[PointAttribute.INTENSITY])
+
+    scaled = (raw - minimum) / (maximum - minimum) * 65535.0
+
+    return scaled.astype(ATTRIBUTE_DTYPES[PointAttribute.INTENSITY])
 
 
 class E57Converter:
@@ -29511,6 +30948,11 @@ class E57Converter:
 
         attributes = [attribute for name, attribute in E57_ATTRIBUTE_MAPPING.items() if name in scan]
 
+        has_intensity = "intensity" in scan
+
+        if has_intensity:
+            attributes.append(PointAttribute.INTENSITY)
+
         has_color = all(field in scan for field in _COLOR_FIELDS)
 
         if has_color:
@@ -29528,6 +30970,9 @@ class E57Converter:
             if name in scan:
                 chunk[attribute][:] = np.asarray(scan[name])
 
+        if has_intensity:
+            chunk[PointAttribute.INTENSITY][:] = _scale_intensity(scan["intensity"])
+
         if has_color:
             chunk[PointAttribute.COLOR][:] = np.stack(
                 [np.asarray(scan[field]) for field in _COLOR_FIELDS],
@@ -29538,8 +30983,8 @@ class E57Converter:
 
 
 __all__ = [
-    "E57Converter",
     "E57_ATTRIBUTE_MAPPING",
+    "E57Converter",
 ]
 
 </content>
@@ -29566,7 +31011,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import numpy as np
-import pye57  # type: ignore[import-not-found]
+import pye57  # type: ignore[import-untyped]
 
 from topocore.io.exceptions import PointCloudIOError
 from topocore.pointcloud.chunk import Chunk
@@ -29605,13 +31050,43 @@ class E57Reader(BaseE57Reader):
     def _iterate_scans(
         self,
     ) -> Iterator[tuple[int, dict[str, np.ndarray]]]:
+        """
+        Iterate over every scan in the file.
+
+        Notes
+        -----
+        Found and fixed in PR19: this previously called
+        ``read_scan(scan_index)`` with pye57's own bare defaults
+        (``intensity=False, colors=False``) -- meaning intensity and
+        RGB color were NEVER read, even from E57 files that
+        genuinely contain them, despite ``E57Converter`` already
+        being fully prepared to extract both. Confirmed directly
+        with a real E57 file (written via pye57 itself, not a mock)
+        containing intensity and colorRed/colorGreen/colorBlue: the
+        resulting Chunk had only X/Y/Z, silently dropping both.
+        Fixed by explicitly requesting ``intensity=True,
+        colors=True``. Also added ``ignore_missing_fields=True``,
+        since not every real E57 file populates every optional
+        field (confirmed directly: pye57's own default raises
+        ValueError for a missing, genuinely-optional field like
+        ``cartesianInvalidState`` rather than simply omitting it) --
+        this correctly makes each field's *presence* in the returned
+        dict the source of truth (matching how ``E57Converter``
+        already checks ``if name in scan``), instead of the reader
+        crashing outright on any file missing an optional field.
+        """
 
         assert self._reader is not None
 
         for scan_index in range(self._reader.scan_count):
             yield (
                 scan_index,
-                self._reader.read_scan(scan_index),
+                self._reader.read_scan(
+                    scan_index,
+                    intensity=True,
+                    colors=True,
+                    ignore_missing_fields=True,
+                ),
             )
 
     def _create_chunk(
@@ -29823,8 +31298,7 @@ from typing import Final
 #: XML namespace for LandXML 1.2, the version this subsystem reads
 #: and writes. Older (1.0/0.88) and newer (2.0) namespaces are not
 #: recognized on read -- see ``reader.py``.
-# XML namespace identifier (not a network URL); S5332 does not apply.
-LANDXML_1_2_NAMESPACE: Final[str] = "http://www.landxml.org/schema/LandXML-1.2"  # NOSONAR
+LANDXML_1_2_NAMESPACE: Final[str] = "http://www.landxml.org/schema/LandXML-1.2"
 
 #: ``version`` attribute written on the root ``<LandXML>`` element.
 LANDXML_VERSION: Final[str] = "1.2"
@@ -32092,8 +33566,11 @@ class LASReader(BaseLASReader):
 
         assert self._reader is not None
 
-        for points in self._reader.chunk_iterator(self._chunk_size):
-            yield LASConverter.from_las_points(points)
+        try:
+            for points in self._reader.chunk_iterator(self._chunk_size):
+                yield LASConverter.from_las_points(points)
+        except Exception as exc:
+            raise PointCloudIOError(f"Unable to read point data from '{self.path}'.") from exc
 
 
 __all__ = [
@@ -32129,10 +33606,42 @@ from topocore.io.base import PointCloudWriter
 from topocore.pointcloud.attributes import PointAttribute
 from topocore.pointcloud.pointcloud import PointCloud
 
+#: ASPRS-recommended default scale factor (1mm) -- finer than
+#: laspy's own internal default (0.01, 1cm). Found and fixed in
+#: PR19: LASWriter previously never set header.scales/header.offsets
+#: at all, silently relying on laspy's coarser 1cm default for EVERY
+#: write, regardless of the actual precision of the source data.
+#: Confirmed directly with a write->read round trip on realistic
+#: UTM-style survey coordinates: 500123.456 became 500123.46 --
+#: exactly the kind of silent precision loss that matters for
+#: GNSS RTK-grade survey workflows (millimeter precision), which
+#: this library is explicitly built around.
+_DEFAULT_SCALE = (0.001, 0.001, 0.001)
+
 
 class LASWriter(PointCloudWriter):
     """
     Writer for ASPRS LAS files.
+
+    Parameters
+    ----------
+    path
+        Destination file.
+    point_format
+        LAS point format.
+    version
+        LAS version string.
+    scale
+        Per-axis (x, y, z) scale factor used to encode coordinates
+        as scaled integers. If not given, defaults to 1mm on each
+        axis (the ASPRS-recommended default) -- NOT laspy's own,
+        coarser 1cm internal default.
+    offset
+        Per-axis (x, y, z) offset. If not given, it is computed
+        automatically from the minimum coordinate of the data being
+        written, keeping the internal scaled-integer values small
+        and avoiding unnecessary precision loss far from the
+        coordinate origin.
     """
 
     def __init__(
@@ -32141,11 +33650,15 @@ class LASWriter(PointCloudWriter):
         *,
         point_format: int = 3,
         version: str = "1.2",
+        scale: tuple[float, float, float] | None = None,
+        offset: tuple[float, float, float] | None = None,
     ) -> None:
         super().__init__(path)
 
         self._point_format = point_format
         self._version = version
+        self._scale = scale
+        self._offset = offset
 
     @property
     def point_format(self) -> int:
@@ -32157,6 +33670,16 @@ class LASWriter(PointCloudWriter):
         """LAS version."""
         return self._version
 
+    @property
+    def scale(self) -> tuple[float, float, float] | None:
+        """Explicitly configured scale, if any."""
+        return self._scale
+
+    @property
+    def offset(self) -> tuple[float, float, float] | None:
+        """Explicitly configured offset, if any."""
+        return self._offset
+
     def write(
         self,
         cloud: PointCloud,
@@ -32165,13 +33688,6 @@ class LASWriter(PointCloudWriter):
         Write a PointCloud into a LAS file.
         """
 
-        header = laspy.LasHeader(
-            point_format=self._point_format,
-            version=self._version,
-        )
-
-        las = laspy.LasData(header)
-
         arrays: dict[PointAttribute, list[np.ndarray]] = {}
 
         for chunk in cloud:
@@ -32179,6 +33695,24 @@ class LASWriter(PointCloudWriter):
                 arrays.setdefault(attribute, []).append(chunk[attribute])
 
         merged = {attribute: np.concatenate(values) for attribute, values in arrays.items()}
+
+        header = laspy.LasHeader(
+            point_format=self._point_format,
+            version=self._version,
+        )
+
+        header.scales = list(self._scale) if self._scale is not None else list(_DEFAULT_SCALE)
+
+        if self._offset is not None:
+            header.offsets = list(self._offset)
+        elif PointAttribute.X in merged and PointAttribute.Y in merged and PointAttribute.Z in merged:
+            header.offsets = [
+                float(np.min(merged[PointAttribute.X])),
+                float(np.min(merged[PointAttribute.Y])),
+                float(np.min(merged[PointAttribute.Z])),
+            ]
+
+        las = laspy.LasData(header)
 
         if PointAttribute.X in merged:
             las.x = merged[PointAttribute.X]
@@ -32221,7 +33755,6 @@ class LASWriter(PointCloudWriter):
 
         No persistent resources are kept by LASWriter.
         """
-        pass
 
 
 __all__ = [
@@ -32377,10 +33910,39 @@ from topocore.io.base import PointCloudWriter
 from topocore.pointcloud.attributes import PointAttribute
 from topocore.pointcloud.pointcloud import PointCloud
 
+#: ASPRS-recommended default scale factor (1mm) -- finer than
+#: laspy's own internal default (0.01, 1cm). Found and fixed in
+#: PR19: this writer -- a near-duplicate of LASWriter, sharing the
+#: exact same bug -- never set header.scales/header.offsets at all,
+#: silently relying on laspy's coarser 1cm default for EVERY write.
+#: Confirmed directly with a write->read round trip on realistic
+#: UTM-style survey coordinates through a real compressed .laz file
+#: (lazrs backend): 500123.456 became 500123.46. See
+#: topocore.io.las.writer for the identical original finding.
+_DEFAULT_SCALE = (0.001, 0.001, 0.001)
+
 
 class LAZWriter(PointCloudWriter):
     """
     Writer for compressed ASPRS LAZ files.
+
+    Parameters
+    ----------
+    path
+        Destination file.
+    point_format
+        LAS point format.
+    version
+        LAS version string.
+    scale
+        Per-axis (x, y, z) scale factor used to encode coordinates
+        as scaled integers. If not given, defaults to 1mm on each
+        axis (the ASPRS-recommended default) -- NOT laspy's own,
+        coarser 1cm internal default.
+    offset
+        Per-axis (x, y, z) offset. If not given, it is computed
+        automatically from the minimum coordinate of the data being
+        written.
     """
 
     def __init__(
@@ -32389,11 +33951,25 @@ class LAZWriter(PointCloudWriter):
         *,
         point_format: int = 3,
         version: str = "1.2",
+        scale: tuple[float, float, float] | None = None,
+        offset: tuple[float, float, float] | None = None,
     ) -> None:
         super().__init__(path)
 
         self._point_format = point_format
         self._version = version
+        self._scale = scale
+        self._offset = offset
+
+    @property
+    def scale(self) -> tuple[float, float, float] | None:
+        """Explicitly configured scale, if any."""
+        return self._scale
+
+    @property
+    def offset(self) -> tuple[float, float, float] | None:
+        """Explicitly configured offset, if any."""
+        return self._offset
 
     def write(
         self,
@@ -32403,13 +33979,6 @@ class LAZWriter(PointCloudWriter):
         Write a PointCloud into a compressed LAZ file.
         """
 
-        header = laspy.LasHeader(
-            point_format=self._point_format,
-            version=self._version,
-        )
-
-        las = laspy.LasData(header)
-
         arrays: dict[PointAttribute, list[np.ndarray]] = {}
 
         for chunk in cloud:
@@ -32417,6 +33986,24 @@ class LAZWriter(PointCloudWriter):
                 arrays.setdefault(attribute, []).append(chunk[attribute])
 
         merged = {attribute: np.concatenate(values) for attribute, values in arrays.items()}
+
+        header = laspy.LasHeader(
+            point_format=self._point_format,
+            version=self._version,
+        )
+
+        header.scales = list(self._scale) if self._scale is not None else list(_DEFAULT_SCALE)
+
+        if self._offset is not None:
+            header.offsets = list(self._offset)
+        elif PointAttribute.X in merged and PointAttribute.Y in merged and PointAttribute.Z in merged:
+            header.offsets = [
+                float(np.min(merged[PointAttribute.X])),
+                float(np.min(merged[PointAttribute.Y])),
+                float(np.min(merged[PointAttribute.Z])),
+            ]
+
+        las = laspy.LasData(header)
 
         if PointAttribute.X in merged:
             las.x = merged[PointAttribute.X]
@@ -32463,7 +34050,6 @@ class LAZWriter(PointCloudWriter):
         This implementation is intentionally a no-op because no
         persistent resources are held.
         """
-        pass
 
 
 __all__ = [
@@ -33436,6 +35022,7 @@ import numpy as np
 
 from topocore.io.base import PointCloudReader
 from topocore.io.common.records import PointRecordBatch
+from topocore.io.exceptions import CorruptedFileError, MissingAttributeError
 from topocore.pointcloud.chunk import Chunk
 
 from .converter import PLYConverter
@@ -33538,6 +35125,13 @@ class PLYReader(PointCloudReader):
             )
         ]
 
+        property_names = {p.name for p in properties}
+        missing = {"x", "y", "z"} - property_names
+        if missing:
+            raise MissingAttributeError(
+                f"PLY vertex element is missing required coordinate properties: {', '.join(sorted(missing))}."
+            )
+
         arrays: dict[str, list[str]] = {p.name: [] for p in properties}
 
         points = 0
@@ -33559,6 +35153,11 @@ class PLYReader(PointCloudReader):
             if not values:
                 continue
 
+            if len(values) != len(properties):
+                raise CorruptedFileError(
+                    f"Incomplete PLY vertex record: expected {len(properties)} scalar properties, got {len(values)}."
+                )
+
             for index, prop in enumerate(properties):
                 arrays[prop.name].append(values[index])
 
@@ -33571,7 +35170,12 @@ class PLYReader(PointCloudReader):
 
                 arrays = {p.name: [] for p in properties}
 
-        if arrays[properties[0].name]:
+        if points != total:
+            raise CorruptedFileError(
+                f"Incomplete PLY ASCII vertex data: header declares {total} vertices, read {points}."
+            )
+
+        if properties and arrays[properties[0].name]:
             yield self._flush_ascii(
                 arrays,
             )
@@ -33648,8 +35252,10 @@ class PLYReader(PointCloudReader):
                 count=size,
             )
 
-            if len(data) == 0:
-                break
+            if len(data) != size:
+                raise CorruptedFileError(
+                    f"Incomplete PLY binary vertex data: expected {size} records, read {len(data)}."
+                )
 
             names = data.dtype.names
             assert names is not None
@@ -37098,16 +38704,12 @@ def compute_pca(
     points = manager.search.points
 
     if points.ndim != 2 or points.shape[1] != 3:
-        raise ProcessingError(
-            f"Point coordinates must have shape (N, 3), got {points.shape}."
-        )
+        raise ProcessingError(f"Point coordinates must have shape (N, 3), got {points.shape}.")
 
     point_count = points.shape[0]
 
     if point_count < k:
-        raise ProcessingError(
-            f"Point cloud has {point_count} points, but PCA requires at least {k}."
-        )
+        raise ProcessingError(f"Point cloud has {point_count} points, but PCA requires at least {k}.")
 
     if not np.isfinite(points).all():
         raise ProcessingError("Point cloud coordinates contain NaN or Inf values.")
@@ -37121,14 +38723,10 @@ def compute_pca(
         raise ProcessingError("Failed to compute PCA neighbourhood search.") from exc
 
     if indices.shape != (point_count, k):
-        raise ProcessingError(
-            f"Invalid PCA neighbour index shape: {indices.shape}, expected {(point_count, k)}."
-        )
+        raise ProcessingError(f"Invalid PCA neighbour index shape: {indices.shape}, expected {(point_count, k)}.")
 
     if distances.shape != (point_count, k):
-        raise ProcessingError(
-            f"Invalid PCA distance shape: {distances.shape}, expected {(point_count, k)}."
-        )
+        raise ProcessingError(f"Invalid PCA distance shape: {distances.shape}, expected {(point_count, k)}.")
 
     neighbor_points = points[indices]
 
@@ -37146,9 +38744,7 @@ def compute_pca(
     covariances = np.einsum("nki,nkj->nij", centered, centered) / k
 
     if covariances.shape != (point_count, 3, 3):
-        raise ProcessingError(
-            f"Invalid PCA covariance shape: {covariances.shape}, expected {(point_count, 3, 3)}."
-        )
+        raise ProcessingError(f"Invalid PCA covariance shape: {covariances.shape}, expected {(point_count, 3, 3)}.")
 
     if not np.isfinite(covariances).all():
         raise ProcessingError("PCA covariance matrix contains NaN or Inf values.")
@@ -37159,14 +38755,10 @@ def compute_pca(
         raise ProcessingError("PCA eigendecomposition failed.") from exc
 
     if eigenvalues.shape != (point_count, 3):
-        raise ProcessingError(
-            f"Invalid PCA eigenvalues shape: {eigenvalues.shape}, expected {(point_count, 3)}."
-        )
+        raise ProcessingError(f"Invalid PCA eigenvalues shape: {eigenvalues.shape}, expected {(point_count, 3)}.")
 
     if eigenvectors.shape != (point_count, 3, 3):
-        raise ProcessingError(
-            f"Invalid PCA eigenvectors shape: {eigenvectors.shape}, expected {(point_count, 3, 3)}."
-        )
+        raise ProcessingError(f"Invalid PCA eigenvectors shape: {eigenvectors.shape}, expected {(point_count, 3, 3)}.")
 
     if not np.isfinite(eigenvalues).all():
         raise ProcessingError("PCA eigenvalues contain NaN or Inf values.")
@@ -37215,18 +38807,14 @@ def _validate_flattened_attributes(
     if not flattened:
         raise ProcessingError("Flattened attributes cannot be empty.")
 
-    lengths: dict[PointAttribute, int] = {
-        attribute: int(values.shape[0]) for attribute, values in flattened.items()
-    }
+    lengths: dict[PointAttribute, int] = {attribute: int(values.shape[0]) for attribute, values in flattened.items()}
 
     unique_lengths: set[int] = set(
         lengths.values(),
     )
 
     if len(unique_lengths) != 1:
-        raise ProcessingError(
-            f"All flattened attributes must have the same length, got: {lengths}."
-        )
+        raise ProcessingError(f"All flattened attributes must have the same length, got: {lengths}.")
 
     return next(iter(unique_lengths))
 
@@ -37242,9 +38830,7 @@ def flatten_attributes(cloud: PointCloud) -> FlattenedAttributes:
 
     attributes = frozenset(cloud.attributes)
 
-    combined: dict[PointAttribute, list[AttributeData]] = {
-        attribute: [] for attribute in attributes
-    }
+    combined: dict[PointAttribute, list[AttributeData]] = {attribute: [] for attribute in attributes}
 
     for chunk in cloud:
         _validate_chunk_attributes(chunk, attributes)
@@ -37311,9 +38897,7 @@ def build_cloud_from_mask(
     point_count = _validate_flattened_attributes(flattened)
 
     if mask.shape[0] != point_count:
-        raise ProcessingError(
-            f"Mask length {mask.shape[0]} does not match point count {point_count}."
-        )
+        raise ProcessingError(f"Mask length {mask.shape[0]} does not match point count {point_count}.")
 
     indices = np.flatnonzero(mask)
     return build_cloud(flattened, indices)
@@ -37354,9 +38938,7 @@ def concatenate_clouds(
 
     for cloud in clouds:
         if cloud.attributes != attributes:
-            raise ProcessingError(
-                "Cannot concatenate clouds with different attributes."
-            )
+            raise ProcessingError("Cannot concatenate clouds with different attributes.")
 
         for chunk in cloud:
             result.add_chunk(chunk)
@@ -39060,7 +40642,7 @@ MIT
 from __future__ import annotations
 
 from threading import RLock
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from .base import Cache
 
@@ -39091,10 +40673,10 @@ class LRUCache(Cache[K, V]):
     """
 
     __slots__ = (
-        "_maxsize",
         "_cache",
-        "_lock",
         "_hits",
+        "_lock",
+        "_maxsize",
         "_misses",
     )
 
@@ -39107,6 +40689,38 @@ class LRUCache(Cache[K, V]):
         self._lock = RLock()
         self._hits: int = 0
         self._misses: int = 0
+
+    def __getstate__(self) -> dict[str, Any]:
+        """
+        Support pickling (e.g. ``joblib.dump`` on an object that
+        holds an ``LRUCache``, such as a trained ML classifier's
+        internal ``FeatureManager``) -- ``threading.RLock`` is not
+        picklable by design, so it is deliberately excluded here and
+        recreated fresh in ``__setstate__``, rather than attempting
+        to (impossibly) serialize lock state across processes.
+
+        Found and fixed in PR19: this was never reachable before a
+        separate bug (``MachineLearningClassifier`` never registering
+        any feature computers -- see that module's own PR19 notes)
+        made every ``fit()`` call fail immediately; once that was
+        fixed, the very next real call (``save()``, which pickles the
+        whole classifier including its ``FeatureManager``'s
+        ``LRUCache``) failed with ``TypeError: cannot pickle
+        '_thread.RLock' object``.
+        """
+        return {
+            "_maxsize": self._maxsize,
+            "_cache": self._cache,
+            "_hits": self._hits,
+            "_misses": self._misses,
+        }
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self._maxsize = state["_maxsize"]
+        self._cache = state["_cache"]
+        self._hits = state["_hits"]
+        self._misses = state["_misses"]
+        self._lock = RLock()
 
     def get(
         self,
@@ -39335,9 +40949,7 @@ class ClassificationResult:
                 )
 
             if not np.issubdtype(self.confidence.dtype, np.floating):
-                raise TypeError(
-                    f"Confidence must be float-typed, got {self.confidence.dtype}."
-                )
+                raise TypeError(f"Confidence must be float-typed, got {self.confidence.dtype}.")
 
     @property
     def has_confidence(self) -> bool:
@@ -39682,9 +41294,7 @@ class GradientBoostClassifier(MachineLearningClassifier):
         self._l2_regularization = l2_regularization
         self._random_state = random_state
 
-        assert (
-            _SklearnHistGB is not None
-        )  # narrows type for mypy after the availability check above
+        assert _SklearnHistGB is not None  # narrows type for mypy after the availability check above
 
         model: Any = _SklearnHistGB(
             max_iter=max_iter,
@@ -39849,9 +41459,7 @@ class LightGBMClassifier(MachineLearningClassifier):
         self._random_state = random_state
         self._n_jobs = n_jobs
 
-        assert (
-            _lgb is not None
-        )  # narrows type for mypy after the availability check above
+        assert _lgb is not None  # narrows type for mypy after the availability check above
 
         model: Any = _lgb.LGBMClassifier(
             n_estimators=n_estimators,
@@ -40417,9 +42025,7 @@ class _GroundRelativeHeightFeatureComputer(ScalarFeatureComputer):
         ground_indices = np.flatnonzero(ground_mask)
 
         if ground_indices.size == 0:
-            raise ProcessingError(
-                "No ground points found for relative height computation."
-            )
+            raise ProcessingError("No ground points found for relative height computation.")
 
         ground_points = points[ground_indices]
         manager = NeighborhoodManager.from_array(ground_points)
@@ -40562,11 +42168,7 @@ class MachineLearningClassifier(Classifier):
         self._radius = radius
         self._ground_method = ground_method
 
-        self._feature_names = (
-            list(feature_names)
-            if feature_names is not None
-            else list(self._DEFAULT_FEATURES)
-        )
+        self._feature_names = list(feature_names) if feature_names is not None else list(self._DEFAULT_FEATURES)
         self._validate_features()
 
         self._feature_manager = FeatureManager()
@@ -40612,15 +42214,11 @@ class MachineLearningClassifier(Classifier):
             )
 
         if "density" in self._feature_names:
-            self._feature_manager.register(
-                "density", DensityFeatureComputer(radius=self._radius)
-            )
+            self._feature_manager.register("density", DensityFeatureComputer(radius=self._radius))
 
         for name, pca_feature_name in pca_accessors.items():
             if name in self._feature_names:
-                self._feature_manager.register(
-                    name, PCAFeatureComputer(feature_name=pca_feature_name, k=self._k)
-                )
+                self._feature_manager.register(name, PCAFeatureComputer(feature_name=pca_feature_name, k=self._k))
 
     def _validate_features(self) -> None:
         """Validate configured feature names."""
@@ -40666,9 +42264,7 @@ class MachineLearningClassifier(Classifier):
             raise ProcessingError("Labels must contain integer values.")
 
         if labels.shape[0] != cloud.point_count:
-            raise ProcessingError(
-                f"Expected {cloud.point_count} labels, got {labels.shape[0]}."
-            )
+            raise ProcessingError(f"Expected {cloud.point_count} labels, got {labels.shape[0]}.")
 
         if np.unique(labels).size < 2:
             raise ProcessingError("Training requires at least two classes.")
@@ -40799,9 +42395,7 @@ class MachineLearningClassifier(Classifier):
                 continue
 
             if attribute not in cloud.attributes:
-                raise ProcessingError(
-                    f"Feature '{name}' requires attribute '{attribute.name}'."
-                )
+                raise ProcessingError(f"Feature '{name}' requires attribute '{attribute.name}'.")
 
             feature_map[name] = self._extract_attribute(
                 cloud,
@@ -40820,9 +42414,7 @@ class MachineLearningClassifier(Classifier):
         values = [chunk[attribute].astype(np.float64) for chunk in cloud]
 
         if not values:
-            raise ProcessingError(
-                f"Point cloud does not contain attribute '{attribute.name}'."
-            )
+            raise ProcessingError(f"Point cloud does not contain attribute '{attribute.name}'.")
 
         return np.concatenate(values)
 
@@ -40841,9 +42433,7 @@ class MachineLearningClassifier(Classifier):
             raise ProcessingError(f"Feature '{name}' must be one-dimensional.")
 
         if feature.shape[0] != expected_size:
-            raise ProcessingError(
-                f"Feature '{name}' has invalid size {feature.shape[0]}, expected {expected_size}."
-            )
+            raise ProcessingError(f"Feature '{name}' has invalid size {feature.shape[0]}, expected {expected_size}.")
 
         if not np.issubdtype(feature.dtype, np.number):
             raise ProcessingError(f"Feature '{name}' must be numeric.")
@@ -40949,9 +42539,7 @@ class MachineLearningClassifier(Classifier):
         obj = joblib.load(Path(path))
 
         if not isinstance(obj, cls):
-            raise ClassificationError(
-                f"File does not contain a '{cls.__name__}': {path}"
-            )
+            raise ClassificationError(f"File does not contain a '{cls.__name__}': {path}")
 
         return obj
 
@@ -41753,7 +43341,9 @@ try:
 except ImportError:  # pragma: no cover - exercised only without xgboost installed
     _XGBOOST_AVAILABLE = False
 
-_NOT_INSTALLED_ERROR = "XGBoost is not installed. Install it with `pip install xgboost` (or `uv add xgboost`) to use XGBoostClassifier."
+_NOT_INSTALLED_ERROR = (
+    "XGBoost is not installed. Install it with `pip install xgboost` (or `uv add xgboost`) to use XGBoostClassifier."
+)
 
 
 class XGBoostClassifier(MachineLearningClassifier):
@@ -41851,9 +43441,7 @@ class XGBoostClassifier(MachineLearningClassifier):
         self._random_state = random_state
         self._n_jobs = n_jobs
 
-        assert (
-            _xgb is not None
-        )  # narrows type for mypy after the availability check above
+        assert _xgb is not None  # narrows type for mypy after the availability check above
 
         model: Any = _xgb.XGBClassifier(
             n_estimators=n_estimators,
@@ -42237,17 +43825,20 @@ class RelativeHeightFeatureComputer(FeatureComputer):
     """
     Compute relative height (height above ground).
 
-    This feature requires the point cloud to have a ground
-    classification. The relative height is computed as:
-    Z - ground_Z, where ground_Z is the elevation of the
-    nearest ground point.
+    The relative height is computed as:
+
+        Z - ground_Z
+
+    where ``ground_Z`` is obtained from the nearest classified ground
+    point for each input point.
 
     Parameters
     ----------
     ground_class
-        The classification code for ground points (default: 2).
+        Classification code for ground points (default: 2).
     k
-        Number of ground neighbors to consider.
+        Number of nearest ground points to consider. When ``k > 1``,
+        their elevations are averaged.
     """
 
     __slots__ = ("_ground_class", "_k")
@@ -42257,6 +43848,9 @@ class RelativeHeightFeatureComputer(FeatureComputer):
         ground_class: int = 2,
         k: int = 1,
     ) -> None:
+        if k < 1:
+            raise PointDescriptorError(f"k must be at least 1, got {k}.")
+
         self._ground_class = ground_class
         self._k = k
 
@@ -42264,46 +43858,73 @@ class RelativeHeightFeatureComputer(FeatureComputer):
         self,
         cloud: PointCloud,
     ) -> FloatArray1D:
+        if PointAttribute.X not in cloud.attributes:
+            raise PointDescriptorError("Point cloud has no X coordinate.")
+
+        if PointAttribute.Y not in cloud.attributes:
+            raise PointDescriptorError("Point cloud has no Y coordinate.")
+
         if PointAttribute.Z not in cloud.attributes:
             raise PointDescriptorError("Point cloud has no Z coordinate.")
 
         if PointAttribute.CLASSIFICATION not in cloud.attributes:
             raise PointDescriptorError("Point cloud has no classification attribute.")
 
-        # Extract all points
+        x_values: list[FloatArray1D] = []
+        y_values: list[FloatArray1D] = []
         z_values: list[FloatArray1D] = []
         classifications: list[IntArray1D] = []
-        for chunk in cloud:
-            z_values.append(cast(FloatArray1D, chunk[PointAttribute.Z]))
-            classifications.append(cast(IntArray1D, chunk[PointAttribute.CLASSIFICATION]))
 
+        for chunk in cloud:
+            x_values.append(cast(FloatArray1D, chunk[PointAttribute.X]))
+            y_values.append(cast(FloatArray1D, chunk[PointAttribute.Y]))
+            z_values.append(cast(FloatArray1D, chunk[PointAttribute.Z]))
+            classifications.append(
+                cast(
+                    IntArray1D,
+                    chunk[PointAttribute.CLASSIFICATION],
+                )
+            )
+
+        x: FloatArray1D = np.concatenate(x_values)
+        y: FloatArray1D = np.concatenate(y_values)
         z: FloatArray1D = np.concatenate(z_values)
         cls: IntArray1D = np.concatenate(classifications)
 
-        # Find ground points
         ground_mask = cls == self._ground_class
 
         if not ground_mask.any():
             raise PointDescriptorError("No ground points found for relative height computation.")
 
-        # Build index from ground points
-        ground_points: FloatArray2D = np.stack(
-            [
+        # Ground points must preserve their real XYZ coordinates.
+        ground_points: FloatArray2D = np.column_stack(
+            (
+                x[ground_mask],
+                y[ground_mask],
                 z[ground_mask],
-                np.zeros_like(z[ground_mask]),
-                np.zeros_like(z[ground_mask]),
-            ],
-            axis=1,
+            )
         )
 
-        # For each point, find the nearest ground point
         manager = NeighborhoodManager.from_array(ground_points)
-        indices, _ = manager.query_point(0.0, 0.0, z[0], k=self._k)
 
-        ground_z: FloatArray1D = ground_points[indices, 0]
+        ground_z = np.empty_like(z)
 
-        result: FloatArray1D = z - ground_z
-        return result
+        # Each point requires its own spatial query. Reusing a single
+        # query would assign the same ground elevation to every point.
+        for index in range(len(z)):
+            indices, _ = manager.query_point(
+                float(x[index]),
+                float(y[index]),
+                float(z[index]),
+                k=self._k,
+            )
+
+            if self._k == 1:
+                ground_z[index] = ground_points[indices[0], 2]
+            else:
+                ground_z[index] = np.mean(ground_points[indices, 2])
+
+        return z - ground_z
 
     def name(self) -> str:
         return "relative_height"
@@ -45263,6 +46884,7 @@ from typing import override
 import numpy as np
 
 from topocore.pointcloud.pointcloud import PointCloud
+from topocore.processing._shared import compute_pca
 from topocore.processing.exceptions import GroundError
 from topocore.processing.neighbors import NeighborhoodManager
 from topocore.processing.types import (
@@ -45303,9 +46925,9 @@ class AdaptiveGridGroundClassifier(GroundClassifier):
 
     __slots__ = (
         "_base_cell_size",
-        "_min_cell_size",
-        "_max_cell_size",
         "_base_height_threshold",
+        "_max_cell_size",
+        "_min_cell_size",
         "_slope_threshold",
         "_use_multiresolution",
     )
@@ -45383,39 +47005,57 @@ class AdaptiveGridGroundClassifier(GroundClassifier):
     ) -> FloatArray1D:
         """
         Estimate the local terrain slope for every point.
+
+        Found and fixed in PR19 coverage phase: this previously
+        computed ``arctan(sqrt(mean(|dx|)**2 + mean(|dy|)**2))`` over
+        the k-nearest neighbors -- a formula that NEVER reads the Z
+        coordinate at all. Confirmed directly with two point clouds
+        sharing identical XY spacing (a 1m grid) but genuinely
+        different elevations (perfectly flat vs. a true 45-degree
+        grade): the "estimated slope" came out nearly identical
+        (~46.9 deg vs ~47.4 deg) for BOTH, dominated by horizontal
+        point spacing/density rather than actual terrain steepness.
+        Since this value feeds directly into
+        `_compute_adaptive_threshold()` (meant to widen the height
+        threshold on steep slopes so slope points aren't wrongly
+        rejected as non-ground), the entire "slope-aware
+        classification" feature this classifier's own docstring
+        claims to provide was not functioning -- the threshold was
+        effectively constant regardless of real terrain slope.
+
+        Fixed by reusing `compute_pca` (the same shared,
+        already-audited local-plane-fitting primitive used by
+        `PCANormalEstimator` elsewhere in this codebase, not a new,
+        parallel implementation) to fit a local plane to each
+        point's k nearest neighbors, then deriving the slope angle
+        from that plane's normal: ``arccos(|normal_z|)`` -- the
+        standard "angle from horizontal" formula, matching
+        ``topocore.features.terrain._mesh_utils.triangle_slope_deg``'s
+        own convention (``abs()`` handles a normal of either
+        orientation).
         """
-        points = np.column_stack(
-            (
-                x,
-                y,
-                z,
-            )
-        )
+        point_count = x.shape[0]
+        k = min(10, point_count)
+
+        if k < 3:
+            # Too few points for a meaningful local plane fit --
+            # slope is undefined; treat as flat (0 rad) rather than
+            # raising, since a 1- or 2-point cloud is still valid
+            # input for the rest of the classifier.
+            return np.zeros(point_count, dtype=np.float64)
+
+        points = np.column_stack((x, y, z)).astype(np.float64)
 
         manager = NeighborhoodManager.from_array(points)
 
-        indices, _ = manager.knn_many(
-            k=10,
-            include_self=True,
-        )
+        pca = compute_pca(manager, k=k)
 
-        neighbors = points[indices]
+        # Smallest-eigenvalue eigenvector = local plane normal (np.linalg.eigh
+        # returns eigenvalues in ascending order, so index 0 is the smallest).
+        normal_z = np.abs(pca.eigenvectors[:, 2, 0])
+        normal_z = np.clip(normal_z, 0.0, 1.0)
 
-        dx = np.abs(neighbors[:, :, 0] - x[:, None]).mean(axis=1)
-
-        dy = np.abs(neighbors[:, :, 1] - y[:, None]).mean(axis=1)
-
-        gradient = np.sqrt(dx * dx + dy * dy)
-
-        gradient = np.maximum(
-            gradient,
-            np.finfo(np.float64).eps,
-        )
-
-        return np.asarray(
-            np.arctan(gradient),
-            dtype=np.float64,
-        )
+        return np.asarray(np.arccos(normal_z), dtype=np.float64)
 
     def _compute_adaptive_threshold(
         self,
@@ -45910,9 +47550,7 @@ class GroundManager:
         "csf": CSFGroundExtractor,
     }
 
-    _ELEVATION_ESTIMATORS: ClassVar[
-        dict[str, type[GroundElevationEstimator] | None]
-    ] = {
+    _ELEVATION_ESTIMATORS: ClassVar[dict[str, type[GroundElevationEstimator] | None]] = {
         "grid": GridGroundElevationEstimator,
         "adaptive_grid": None,
         "progressive_tin": None,
@@ -46085,9 +47723,7 @@ class GroundManager:
         if ground_indices.size == 0:
             raise GroundError(_NO_GROUND_POINTS_ERROR)
 
-        ground_points = np.column_stack(
-            (x[ground_indices], y[ground_indices], z[ground_indices])
-        )
+        ground_points = np.column_stack((x[ground_indices], y[ground_indices], z[ground_indices]))
         manager = NeighborhoodManager.from_array(ground_points)
         elevations = np.empty(len(x), dtype=np.float64)
 
@@ -46733,9 +48369,9 @@ class ProgressiveTINGroundClassifier(GroundClassifier):
 
     __slots__ = (
         "_cell_size",
-        "_max_distance",
-        "_max_angle",
         "_cos_max_angle",
+        "_max_angle",
+        "_max_distance",
         "_max_iterations",
     )
 
@@ -46843,7 +48479,28 @@ class ProgressiveTINGroundClassifier(GroundClassifier):
     ) -> BoolArray1D:
         """
         Classify points as ground or non-ground.
+
+        Raises
+        ------
+        GroundError
+            If `cloud` is empty.
+
+        Notes
+        -----
+        Found and fixed in PR20 coverage phase: this previously
+        called `_extract_xyz(cloud)` with no prior empty-cloud
+        check, unlike every sibling ground classifier in this same
+        package (`PMFGroundClassifier`, `CSFGroundClassifier`), both
+        of which cleanly reject an empty cloud with `GroundError`.
+        Confirmed directly: an empty `PointCloud` crashed here with
+        a raw, unhandled `ValueError` ("need at least one array to
+        concatenate") from inside `_extract_xyz`, breaking the
+        consistent `GroundError` contract every other classifier in
+        this package honors.
         """
+        if cloud.is_empty:
+            raise GroundError("Cannot classify an empty point cloud.")
+
         x, y, z = _extract_xyz(cloud)
 
         seed_mask = self._get_seeds(
@@ -48890,9 +50547,7 @@ class NormalManager:
     ) -> None:
 
         if method not in self._SUPPORTED_METHODS:
-            raise NormalError(
-                f"Unsupported method: {method}. Supported: {list(self._SUPPORTED_METHODS)}"
-            )
+            raise NormalError(f"Unsupported method: {method}. Supported: {list(self._SUPPORTED_METHODS)}")
 
         if k < 3:
             raise NormalError(f"k must be at least 3, got {k}.")
@@ -48918,9 +50573,7 @@ class NormalManager:
     ) -> None:
         """Set current method."""
         if value not in self._SUPPORTED_METHODS:
-            raise NormalError(
-                f"Unsupported method: {value}. Supported: {list(self._SUPPORTED_METHODS)}"
-            )
+            raise NormalError(f"Unsupported method: {value}. Supported: {list(self._SUPPORTED_METHODS)}")
 
         self._method = value
         self._cache.clear()
@@ -49191,9 +50844,7 @@ class NormalManager:
         """
         viewpoint = params["viewpoint"]
         viewpoint_key = (
-            (float(viewpoint[0]), float(viewpoint[1]), float(viewpoint[2]))
-            if viewpoint is not None
-            else None
+            (float(viewpoint[0]), float(viewpoint[1]), float(viewpoint[2])) if viewpoint is not None else None
         )
 
         sigma = params.get("sigma")
@@ -49979,9 +51630,7 @@ class Transformation:
             raise RegistrationError("Transformation matrix contains NaN or Inf.")
 
         if self.matrix.shape != (4, 4):
-            raise RegistrationError(
-                f"Transformation matrix must be (4, 4), got {self.matrix.shape}."
-            )
+            raise RegistrationError(f"Transformation matrix must be (4, 4), got {self.matrix.shape}.")
 
         # Check that the matrix is rigid (rotation part is orthogonal)
         rotation = self.matrix[:3, :3]
@@ -49991,15 +51640,11 @@ class Transformation:
         # Check that the rotation is proper (determinant = +1)
         det = np.linalg.det(rotation)
         if not np.isclose(det, 1.0, atol=1e-6):
-            raise RegistrationError(
-                f"Rotation matrix must have determinant +1, got {det:.6f}."
-            )
+            raise RegistrationError(f"Rotation matrix must have determinant +1, got {det:.6f}.")
 
         # Check that the bottom row is [0, 0, 0, 1]
         if not np.allclose(self.matrix[3, :], [0.0, 0.0, 0.0, 1.0], atol=1e-6):
-            raise RegistrationError(
-                "Transformation matrix bottom row must be [0, 0, 0, 1]."
-            )
+            raise RegistrationError("Transformation matrix bottom row must be [0, 0, 0, 1].")
 
     @classmethod
     def identity(cls) -> Transformation:
@@ -50032,9 +51677,7 @@ class Transformation:
 
         translation = np.asarray(translation, dtype=np.float64).reshape(-1)
         if translation.shape != (3,):
-            raise RegistrationError(
-                f"Translation must be (3,), got {translation.shape}."
-            )
+            raise RegistrationError(f"Translation must be (3,), got {translation.shape}.")
 
         matrix = np.eye(4, dtype=np.float64)
         matrix[:3, :3] = rotation
@@ -50084,9 +51727,7 @@ class Transformation:
 
             # Create new chunk
             attributes = list(chunk.attributes)
-            new_chunk = Chunk(
-                size=chunk.size, attributes=attributes, source_id=chunk.source_id
-            )
+            new_chunk = Chunk(size=chunk.size, attributes=attributes, source_id=chunk.source_id)
 
             # Copy transformed coordinates
             new_chunk[PointAttribute.X][:] = transformed[:, 0]
@@ -50140,9 +51781,7 @@ class Transformation:
             Transformed points.
         """
         if points.ndim != 2 or points.shape[1] != 3:
-            raise RegistrationError(
-                f"Points must have shape (N, 3), got {points.shape}."
-            )
+            raise RegistrationError(f"Points must have shape (N, 3), got {points.shape}.")
 
         # Apply transformation
         rotation = self.matrix[:3, :3]
@@ -50232,9 +51871,7 @@ class RegistrationResult:
             raise RegistrationError(f"RMSE must be non-negative, got {self.rmse}.")
 
         if self.iterations < 0:
-            raise RegistrationError(
-                f"Iterations must be non-negative, got {self.iterations}."
-            )
+            raise RegistrationError(f"Iterations must be non-negative, got {self.iterations}.")
 
 
 class Registrar(ABC):
@@ -50384,17 +52021,13 @@ class ICPBase(Registrar):
         use_adaptive_distance: bool = True,
     ) -> None:
         if max_iterations < 1:
-            raise RegistrationError(
-                f"max_iterations must be >= 1, got {max_iterations}."
-            )
+            raise RegistrationError(f"max_iterations must be >= 1, got {max_iterations}.")
 
         if tolerance < 0:
             raise RegistrationError(f"tolerance must be non-negative, got {tolerance}.")
 
         if max_correspondence_distance <= 0:
-            raise RegistrationError(
-                f"max_correspondence_distance must be positive, got {max_correspondence_distance}."
-            )
+            raise RegistrationError(f"max_correspondence_distance must be positive, got {max_correspondence_distance}.")
 
         self._max_iterations = max_iterations
         self._tolerance = tolerance
@@ -50593,14 +52226,10 @@ class ICPBase(Registrar):
             raise RegistrationError("Target point cloud is empty.")
 
         if not required.issubset(set(source.attributes)):
-            raise RegistrationError(
-                "Source point cloud must contain X, Y, and Z coordinates."
-            )
+            raise RegistrationError("Source point cloud must contain X, Y, and Z coordinates.")
 
         if not required.issubset(set(target.attributes)):
-            raise RegistrationError(
-                "Target point cloud must contain X, Y, and Z coordinates."
-            )
+            raise RegistrationError("Target point cloud must contain X, Y, and Z coordinates.")
 
     def _clone_cloud(
         self,
@@ -50900,9 +52529,7 @@ class RegistrationManager:
         """Validate that the registration method is supported."""
         if method not in cls._SUPPORTED_METHODS:
             supported = ", ".join(sorted(cls._SUPPORTED_METHODS))
-            raise RegistrationError(
-                f"Unsupported method: {method!r}. Supported methods: {supported}."
-            )
+            raise RegistrationError(f"Unsupported method: {method!r}. Supported methods: {supported}.")
 
     @classmethod
     def _validate_inputs(
@@ -50950,9 +52577,7 @@ class RegistrationManager:
         signature = inspect.signature(registrar_class.__init__)
 
         valid_args: dict[str, Any] = {
-            name: value
-            for name, value in normalized_params.items()
-            if name in signature.parameters
+            name: value for name, value in normalized_params.items() if name in signature.parameters
         }
 
         return registrar_class(**valid_args)
@@ -52221,14 +53846,10 @@ class StratifiedSampler(Sampler):
             raise SamplingError(f"cell_size must be positive, got {cell_size}.")
 
         if samples_per_cell < 1:
-            raise SamplingError(
-                f"samples_per_cell must be >= 1, got {samples_per_cell}."
-            )
+            raise SamplingError(f"samples_per_cell must be >= 1, got {samples_per_cell}.")
 
         if method not in self._SUPPORTED_METHODS:
-            raise SamplingError(
-                f"method must be one of {self._SUPPORTED_METHODS}, got {method}."
-            )
+            raise SamplingError(f"method must be one of {self._SUPPORTED_METHODS}, got {method}.")
 
         self._cell_size = cell_size
         self._samples_per_cell = samples_per_cell
@@ -54358,19 +55979,13 @@ class RegionGrowingSegmenter(BaseRegionGrowingSegmenter):
             raise SegmentationError(f"k must be >= 3, got {k}.")
 
         if curvature_threshold < 0:
-            raise SegmentationError(
-                f"curvature_threshold must be non-negative, got {curvature_threshold}."
-            )
+            raise SegmentationError(f"curvature_threshold must be non-negative, got {curvature_threshold}.")
 
         if not 0 <= normal_angle_threshold <= 90:
-            raise SegmentationError(
-                f"normal_angle_threshold must be in [0, 90], got {normal_angle_threshold}."
-            )
+            raise SegmentationError(f"normal_angle_threshold must be in [0, 90], got {normal_angle_threshold}.")
 
         if min_region_size < 1:
-            raise SegmentationError(
-                f"min_region_size must be >= 1, got {min_region_size}."
-            )
+            raise SegmentationError(f"min_region_size must be >= 1, got {min_region_size}.")
 
         if max_region_size < min_region_size:
             raise SegmentationError(
@@ -54785,9 +56400,7 @@ def _compute_relative_height(
     ground_indices = np.flatnonzero(ground_mask)
 
     if ground_indices.size == 0:
-        raise SegmentationError(
-            "No ground points found for relative height computation."
-        )
+        raise SegmentationError("No ground points found for relative height computation.")
 
     ground_points = points[ground_indices]
     manager = NeighborhoodManager.from_array(ground_points)
@@ -54909,17 +56522,13 @@ class TreeSegmenter(Segmenter):
         if min_height < 0:
             raise SegmentationError(f"min_height must be >= 0, got {min_height}.")
         if max_height <= min_height:
-            raise SegmentationError(
-                f"max_height ({max_height}) must be > min_height ({min_height})."
-            )
+            raise SegmentationError(f"max_height ({max_height}) must be > min_height ({min_height}).")
         if eps <= 0:
             raise SegmentationError(f"eps must be positive, got {eps}.")
         if min_samples < 1:
             raise SegmentationError(f"min_samples must be >= 1, got {min_samples}.")
         if min_points_per_tree < 1:
-            raise SegmentationError(
-                f"min_points_per_tree must be >= 1, got {min_points_per_tree}."
-            )
+            raise SegmentationError(f"min_points_per_tree must be >= 1, got {min_points_per_tree}.")
 
         self._min_height = min_height
         self._max_height = max_height
@@ -55056,23 +56665,15 @@ class BuildingSegmenter(Segmenter):
         if min_height < 0:
             raise SegmentationError(f"min_height must be >= 0, got {min_height}.")
         if max_height <= min_height:
-            raise SegmentationError(
-                f"max_height ({max_height}) must be > min_height ({min_height})."
-            )
+            raise SegmentationError(f"max_height ({max_height}) must be > min_height ({min_height}).")
         if k < 1:
             raise SegmentationError(f"k must be >= 1, got {k}.")
         if curvature_threshold < 0:
-            raise SegmentationError(
-                f"curvature_threshold must be >= 0, got {curvature_threshold}."
-            )
+            raise SegmentationError(f"curvature_threshold must be >= 0, got {curvature_threshold}.")
         if normal_angle_threshold <= 0:
-            raise SegmentationError(
-                f"normal_angle_threshold must be > 0, got {normal_angle_threshold}."
-            )
+            raise SegmentationError(f"normal_angle_threshold must be > 0, got {normal_angle_threshold}.")
         if min_points_per_building < 1:
-            raise SegmentationError(
-                f"min_points_per_building must be >= 1, got {min_points_per_building}."
-            )
+            raise SegmentationError(f"min_points_per_building must be >= 1, got {min_points_per_building}.")
 
         self._min_height = min_height
         self._max_height = max_height
@@ -58495,10 +60096,7 @@ class Grid:
         ``actual_max_y`` -- not necessarily within the nominal
         ``max_x``/``max_y`` the grid was constructed with).
         """
-        return (
-            self.min_x <= x <= self.actual_max_x
-            and self.min_y <= y <= self.actual_max_y
-        )
+        return self.min_x <= x <= self.actual_max_x and self.min_y <= y <= self.actual_max_y
 
     def row(
         self,
@@ -60747,19 +62345,13 @@ def _validate_mesh(
     caller's responsibility.
     """
     if len(vertices) == 0:
-        raise TriangulationError(
-            "At least one vertex is required to build a TIN from an explicit mesh."
-        )
+        raise TriangulationError("At least one vertex is required to build a TIN from an explicit mesh.")
 
     if simplices.ndim != 2 or simplices.shape[1] != 3:
-        raise TriangulationError(
-            "simplices must be an (n, 3) array of triangle vertex indices."
-        )
+        raise TriangulationError("simplices must be an (n, 3) array of triangle vertex indices.")
 
     if simplices.shape[0] == 0:
-        raise TriangulationError(
-            "At least one triangle is required to build a TIN from an explicit mesh."
-        )
+        raise TriangulationError("At least one triangle is required to build a TIN from an explicit mesh.")
 
     vertex_count = len(vertices)
 
@@ -60772,9 +62364,7 @@ def _validate_mesh(
         v0, v1, v2 = (int(simplices[triangle_index, k]) for k in range(3))
 
         if v0 == v1 or v1 == v2 or v0 == v2:
-            raise TriangulationError(
-                f"Triangle at index {triangle_index} has duplicated vertex indices."
-            )
+            raise TriangulationError(f"Triangle at index {triangle_index} has duplicated vertex indices.")
 
         p0, p1, p2 = vertices[v0], vertices[v1], vertices[v2]
 
@@ -63332,6 +64922,33 @@ class WorkflowStateError(WorkflowError):
     """
 
 
+class StaleArtifactError(WorkflowStateError):
+    """
+    Raised when a stage's required artifact -- or any artifact it
+    was transitively built from -- no longer matches the version
+    that was actually consumed to produce it.
+
+    A `WorkflowStateError` subtype, not `WorkflowValidationError`:
+    this is a precondition failure about pipeline progress/
+    consistency (the same category as a missing artifact), never
+    about a stage call's own parameters -- see
+    `WorkflowValidationError`'s own docstring, which explicitly
+    reserves that class for parameter validation, "never used for
+    missing artifacts."
+
+    Example
+    -------
+    ``POINT_CLOUD v1 -> TIN v1 -> DTM v1``, then ``POINT_CLOUD`` is
+    re-read (now v2) without rebuilding ``TIN``/``DTM``. ``TIN v1``
+    (and anything built from it) no longer reflects the current
+    ``POINT_CLOUD`` -- calling `build_dtm()` again (or any stage
+    consuming `TIN`) raises this, even though `TIN`'s own version
+    number (v1) hasn't changed, because the check walks back
+    transitively through `WorkflowResult`'s history, not just the
+    artifact's immediate recorded dependency.
+    """
+
+
 class WorkflowValidationError(WorkflowError):
     """
     Raised when a stage's own parameters are invalid, independent of
@@ -63352,6 +64969,7 @@ class WorkflowExecutionError(WorkflowError):
 
 
 __all__ = [
+    "StaleArtifactError",
     "WorkflowError",
     "WorkflowExecutionError",
     "WorkflowStateError",
@@ -63679,10 +65297,11 @@ class WorkflowStage(StrEnum):
     the artifact it reads or produces -- never after an algorithm
     variant or input origin.
 
-    READ_POINT_CLOUD covers both LAS and LAZ: both produce
-    `PointCloud` through the same `PointCloudReader` base contract
-    (see the Fase 1 audit), so the state they lead to -- not which
-    format was on disk -- is what the engine tracks.
+    READ_POINT_CLOUD covers LAS, LAZ, PLY, E57, XYZ, CSV and PTS: all
+    produce `PointCloud` through the same `PointCloudReader` base
+    contract (see the Fase 1 audit and PR19's reader-dispatch fix),
+    so the state they lead to -- not which format was on disk -- is
+    what the engine tracks.
 
     CLASSIFY_GROUND and CLASSIFY_POINTS are two distinct stages, not
     one: they wrap genuinely different algorithms with different
@@ -63730,19 +65349,22 @@ thin orchestrator.
 
 Deliberately narrow scope
 --------------------------
-- Only ever checks artifact *presence* (`ArtifactStore.has`) --
-  never versions (`ArtifactStore.version_of`). Staleness checks
-  belong to PR19, once `ArtifactDependency` has real consumers; this
-  file is kept clean so that addition is trivial later, not made now.
+- Checks artifact *presence* (`ArtifactStore.has`) via `require*`,
+  and *freshness* (transitively, via `WorkflowResult` history) via
+  `require_current` -- added in PR19, now that `ArtifactDependency`
+  has a real consumer. See `require_current`/`_is_stale`'s own
+  docstrings for why the freshness check must walk the history
+  transitively, not just compare one recorded version number.
 - Never validates a stage's own parameters (`cell_size`, `interval`,
   `epsg`, `path`, ...) -- that stays local to each stage method.
   `WorkflowValidator` only ever answers questions about the
-  `ArtifactStore`'s current contents.
-- Stateless: every method takes the `ArtifactStore` to check as an
-  explicit parameter. Never held as an instance reference, never
-  cached -- the store's contents can change between two calls (e.g.
-  across a `snapshot()` branch), so nothing here should assume
-  otherwise.
+  `ArtifactStore`'s (and, for `require_current`, the history's)
+  current contents.
+- Stateless: every method takes the `ArtifactStore` (and, where
+  needed, the history) to check as an explicit parameter. Never held
+  as an instance reference, never cached -- the store's contents can
+  change between two calls (e.g. across a `snapshot()` branch), so
+  nothing here should assume otherwise.
 
 Author
 ------
@@ -63755,8 +65377,17 @@ MIT
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from topocore.workflow.artifacts import ArtifactStore, ArtifactType
-from topocore.workflow.exceptions import WorkflowStateError
+from topocore.workflow.exceptions import StaleArtifactError, WorkflowStateError
+
+# Imported for typing only -- avoids a circular import at module load
+# time (topocore.workflow.history doesn't import validation.py, but
+# importing StageResult directly here isn't actually circular; kept
+# as a plain import for clarity since Sequence[StageResult] is used
+# in a public method signature, not just under TYPE_CHECKING).
+from topocore.workflow.history import StageResult
 from topocore.workflow.stages import WorkflowStage
 
 
@@ -63815,6 +65446,105 @@ class WorkflowValidator:
         if present:
             names = ", ".join(artifact.value for artifact in present)
             raise WorkflowStateError(f"Stage {stage.value} requires artifacts to be absent ({names}).")
+
+    @staticmethod
+    def require_current(
+        stage: WorkflowStage,
+        store: ArtifactStore,
+        history: Sequence[StageResult],
+        artifact: ArtifactType,
+    ) -> None:
+        """
+        Raises
+        ------
+        StaleArtifactError
+            If `artifact` is present but was built (directly or
+            transitively) from an input that has since been
+            superseded -- e.g. `TIN` still at v1 after `POINT_CLOUD`
+            was re-read to v2, even though `TIN` was never itself
+            rebuilt (its own version number alone can't reveal
+            this -- see `_is_stale`'s docstring).
+
+            Does nothing if `artifact` isn't present at all -- that
+            is `require`'s job, not this method's; call both
+            together (`require` first) to cover presence and
+            freshness.
+        """
+        if store.has(artifact) and WorkflowValidator._is_stale(store, history, artifact):
+            raise StaleArtifactError(
+                f"Stage {stage.value} requires a current {artifact.value}, but the one "
+                "available was built from since-superseded input(s). Rebuild it (and "
+                "everything downstream of the changed input) before continuing."
+            )
+
+    @staticmethod
+    def _is_stale(
+        store: ArtifactStore,
+        history: Sequence[StageResult],
+        artifact: ArtifactType,
+    ) -> bool:
+        """
+        Whether `artifact`'s CURRENT value in `store` was built from
+        input(s) that no longer match what `store` currently holds
+        for them -- checked transitively, not just one hop back.
+
+        Why transitive, not just a direct version comparison
+        ------------------------------------------------------
+        `ArtifactStore` only ever holds one CURRENT version per
+        `ArtifactType` (see that module's own docstring: it's
+        deliberately not a dependency graph). Comparing only
+        `artifact`'s own immediate recorded dependency version
+        against the store's current version is not enough: an
+        artifact that was never itself rebuilt keeps its own
+        version number even after one of ITS ancestors changed.
+
+        Concretely: `POINT_CLOUD v1 -> TIN v1 -> DTM v1`, then
+        `POINT_CLOUD` is re-read (now v2) without rebuilding `TIN`
+        or `DTM`. `DTM`'s own recorded dependency (`TIN v1`) still
+        matches `TIN`'s current version (still v1, since `TIN` was
+        never rebuilt) -- a one-hop check would wrongly call `DTM`
+        fresh. Only by recursing into `TIN`'s own staleness (whose
+        recorded dependency, `POINT_CLOUD v1`, no longer matches the
+        current `POINT_CLOUD v2`) does the check correctly find that
+        `DTM` is stale too.
+
+        How
+        ---
+        Walks `history` to find the `StageResult` whose `produced`
+        matches `artifact` at its current version (there is at most
+        one, since `ArtifactStore.set()` version numbers are
+        monotonic and never reused within one Workflow/branch), then
+        recurses into each of that stage's own `dependencies`.
+        """
+        current_version = store.version_of(artifact)
+
+        if current_version is None:
+            return False  # not present -- a presence question, not a staleness one
+
+        producing_stage = next(
+            (
+                stage_result
+                for stage_result in reversed(history)
+                if stage_result.produced is not None
+                and stage_result.produced.artifact == artifact
+                and stage_result.produced.version == current_version
+            ),
+            None,
+        )
+
+        if producing_stage is None:
+            # No matching production record (e.g. a hand-constructed
+            # store in a test) -- nothing to compare against, so
+            # there is no basis to call it stale.
+            return False
+
+        for dependency in producing_stage.dependencies:
+            if store.version_of(dependency.artifact) != dependency.version:
+                return True
+            if WorkflowValidator._is_stale(store, history, dependency.artifact):
+                return True
+
+        return False
 
 
 __all__ = ["WorkflowValidator"]
@@ -63878,6 +65608,12 @@ from topocore.workflow.validation import WorkflowValidator
 logger = logging.getLogger(__name__)
 
 _V = WorkflowValidator
+
+#: Default chunk_size supplied to E57Reader when the caller doesn't
+#: give one -- E57Reader.chunk_size has no built-in default (unlike
+#: every other point-cloud reader), confirmed directly. Matches the
+#: default already used by LASReader/LAZReader/PLYReader/ASCII readers.
+_DEFAULT_CHUNK_SIZE = 1_000_000
 
 
 class Workflow:
@@ -64096,9 +65832,18 @@ class Workflow:
         --------
         ArtifactType.POINT_CLOUD
 
-        Covers both LAS and LAZ: both produce `PointCloud` through
-        the same `PointCloudReader.read()` base contract, selected
-        here by file extension.
+        Supports LAS, LAZ, PLY, E57, XYZ, CSV, and PTS -- selected by
+        file extension (case-insensitive). All produce `PointCloud`
+        through the same `PointCloudReader.read()` base contract.
+        `**reader_kwargs` are passed straight through to whichever
+        reader class is selected (e.g. `chunk_size` for most formats,
+        `has_header` for CSV specifically) -- unrecognized kwargs for
+        a given format raise the same `TypeError` they always would
+        constructing that reader directly.
+
+        Found and fixed in PR19: this previously only distinguished
+        ".laz" from everything else, silently routing PLY/E57/XYZ/CSV/
+        PTS files (and any unrecognized extension) to `LASReader`.
         """
         _V.require_absent(
             WorkflowStage.READ_POINT_CLOUD,
@@ -64110,18 +65855,76 @@ class Workflow:
         def work() -> Any:
             from topocore.io.base import PointCloudReader
 
-            suffix = Path(path).suffix.lower()
-            reader_class: type[PointCloudReader]
-            if suffix == ".laz":
-                from topocore.io.laz import LAZReader
+            input_path = Path(path)
 
-                reader_class = LAZReader
-            else:
+            if not input_path.exists():
+                raise WorkflowExecutionError(f"Point-cloud file does not exist: '{input_path}'.")
+
+            if not input_path.is_file():
+                raise WorkflowExecutionError(f"Point-cloud path is not a file: '{input_path}'.")
+
+            suffix = input_path.suffix.lower()
+            reader_class: type[PointCloudReader]
+            reader_kwargs_final = dict(reader_kwargs)
+
+            # Found and fixed in PR19: this previously only
+            # distinguished ".laz" from everything else (defaulting
+            # unconditionally to LASReader) -- confirmed directly
+            # that ANY non-LAZ format (.ply, .e57, .xyz, .csv, .pts,
+            # or an unrecognized extension) silently got routed to
+            # LASReader, which would fail or misparse rather than use
+            # the correct, already-existing reader for that format.
+            #
+            # Import paths verified against the real package
+            # structure, not assumed: topocore.io.ply/__init__.py,
+            # topocore.io.ascii.csv/__init__.py, and
+            # topocore.io.ascii.pts/__init__.py do NOT re-export their
+            # Reader classes (unlike las/laz/e57/ascii.xyz, which do)
+            # -- those three must be imported from their `.reader`
+            # submodule directly, confirmed by direct import testing.
+            if suffix == ".las":
                 from topocore.io.las import LASReader
 
                 reader_class = LASReader
+            elif suffix == ".laz":
+                from topocore.io.laz import LAZReader
 
-            with reader_class(path, **reader_kwargs) as reader:
+                reader_class = LAZReader
+            elif suffix == ".ply":
+                from topocore.io.ply.reader import PLYReader
+
+                reader_class = PLYReader
+            elif suffix == ".e57":
+                from topocore.io.e57 import E57Reader
+
+                reader_class = E57Reader
+                # E57Reader.chunk_size is a REQUIRED keyword argument
+                # (no default) -- confirmed directly, unlike every
+                # other reader here, which all have a sensible
+                # built-in default. Supplying one here keeps
+                # read_point_cloud()'s own contract uniform across
+                # formats: the caller shouldn't need to know which
+                # one format has no built-in default.
+                reader_kwargs_final.setdefault("chunk_size", _DEFAULT_CHUNK_SIZE)
+            elif suffix == ".xyz":
+                from topocore.io.ascii.xyz import XYZReader
+
+                reader_class = XYZReader
+            elif suffix == ".csv":
+                from topocore.io.ascii.csv.reader import CSVReader
+
+                reader_class = CSVReader
+            elif suffix == ".pts":
+                from topocore.io.ascii.pts.reader import PTSReader
+
+                reader_class = PTSReader
+            else:
+                raise WorkflowExecutionError(
+                    f"Unsupported point-cloud format: '{suffix or '<none>'}'. "
+                    "Supported formats: LAS, LAZ, PLY, E57, XYZ, CSV, PTS."
+                )
+
+            with reader_class(input_path, **reader_kwargs_final) as reader:
                 return reader.read()
 
         self._execute_stage(
@@ -64153,6 +65956,7 @@ class Workflow:
         counts are cheaper to derive from `.point_count`).
         """
         _V.require(WorkflowStage.CLASSIFY_GROUND, self._store, ArtifactType.POINT_CLOUD)
+        _V.require_current(WorkflowStage.CLASSIFY_GROUND, self._store, self._history, ArtifactType.POINT_CLOUD)
         cloud = self._store.get(ArtifactType.POINT_CLOUD)
         dep = self._dependency(ArtifactType.POINT_CLOUD, required=True)
 
@@ -64193,6 +65997,7 @@ class Workflow:
         not the binary ground/non-ground split `GroundManager` performs.
         """
         _V.require(WorkflowStage.CLASSIFY_POINTS, self._store, ArtifactType.POINT_CLOUD)
+        _V.require_current(WorkflowStage.CLASSIFY_POINTS, self._store, self._history, ArtifactType.POINT_CLOUD)
         cloud = self._store.get(ArtifactType.POINT_CLOUD)
         dep = self._dependency(ArtifactType.POINT_CLOUD, required=True)
 
@@ -64225,6 +66030,7 @@ class Workflow:
         ArtifactType.TIN
         """
         _V.require(WorkflowStage.BUILD_TIN, self._store, ArtifactType.GROUND_CLOUD)
+        _V.require_current(WorkflowStage.BUILD_TIN, self._store, self._history, ArtifactType.GROUND_CLOUD)
         ground_cloud = self._store.get(ArtifactType.GROUND_CLOUD)
         dep = self._dependency(ArtifactType.GROUND_CLOUD, required=True)
 
@@ -64271,6 +66077,7 @@ class Workflow:
         `GeoPackageExporter` directly either -- Workflow always does.
         """
         _V.require(WorkflowStage.BUILD_DTM, self._store, ArtifactType.TIN)
+        _V.require_current(WorkflowStage.BUILD_DTM, self._store, self._history, ArtifactType.TIN)
         tin = self._store.get(ArtifactType.TIN)
         dep = self._dependency(ArtifactType.TIN, required=True)
 
@@ -64328,6 +66135,7 @@ class Workflow:
         `ContourGenerator` has no dependency on `DTM` at all).
         """
         _V.require(WorkflowStage.EXTRACT_CONTOURS, self._store, ArtifactType.TIN)
+        _V.require_current(WorkflowStage.EXTRACT_CONTOURS, self._store, self._history, ArtifactType.TIN)
         tin = self._store.get(ArtifactType.TIN)
         dep = self._dependency(ArtifactType.TIN, required=True)
 
@@ -64365,6 +66173,12 @@ class Workflow:
         _V.require(
             WorkflowStage.BUILD_FEATURES_FROM_SURVEY,
             self._store,
+            ArtifactType.SURVEY_POINT_SET,
+        )
+        _V.require_current(
+            WorkflowStage.BUILD_FEATURES_FROM_SURVEY,
+            self._store,
+            self._history,
             ArtifactType.SURVEY_POINT_SET,
         )
         survey_points = self._store.get(ArtifactType.SURVEY_POINT_SET)
@@ -64406,17 +66220,33 @@ class Workflow:
         ArtifactType.FEATURE_COLLECTION
         """
         _V.require(WorkflowStage.DETECT_FEATURES, self._store, ArtifactType.POINT_CLOUD)
+        _V.require_current(WorkflowStage.DETECT_FEATURES, self._store, self._history, ArtifactType.POINT_CLOUD)
         cloud = self._store.get(ArtifactType.POINT_CLOUD)
 
         dependencies = [self._dependency(ArtifactType.POINT_CLOUD, required=True)]
+        # Found and fixed in PR20 coverage phase: this previously
+        # also tracked ArtifactType.GROUND_CLOUD here (both for
+        # staleness AND as a recorded dependency), but
+        # DetectionContext (see topocore.features.protocols) has NO
+        # `ground_cloud` field at all -- confirmed directly: its
+        # only fields are cloud/tin/dtm/classification/normals/
+        # pca_features. No detector reached through this pathway can
+        # ever actually consume GROUND_CLOUD data. Tracking its
+        # staleness anyway was a real, reproducible false-positive
+        # bug: detect_features() incorrectly raised StaleArtifactError
+        # whenever GROUND_CLOUD alone became stale, even though the
+        # actual inputs detect_features() uses were fully fresh and
+        # correct -- confirmed with a direct reproduction before
+        # fixing. This was introduced earlier in this same session
+        # when require_current() was first wired in, not pre-existing.
         optional_types = (
             ArtifactType.TIN,
             ArtifactType.DTM,
             ArtifactType.CLASSIFICATION_RESULT,
-            ArtifactType.GROUND_CLOUD,
         )
         for artifact_type in optional_types:
             if self._store.has(artifact_type):
+                _V.require_current(WorkflowStage.DETECT_FEATURES, self._store, self._history, artifact_type)
                 dependencies.append(self._dependency(artifact_type, required=False))
 
         tin = self._store.get_or_none(ArtifactType.TIN)
@@ -64454,13 +66284,32 @@ class Workflow:
         same FeatureCollection.
         """
         _V.require(WorkflowStage.EXPORT_DXF, self._store, ArtifactType.FEATURE_COLLECTION)
+        _V.require_current(WorkflowStage.EXPORT_DXF, self._store, self._history, ArtifactType.FEATURE_COLLECTION)
         features = self._store.get(ArtifactType.FEATURE_COLLECTION)
         dep = self._dependency(ArtifactType.FEATURE_COLLECTION, required=True)
 
         def work() -> Any:
             from topocore.dxf import DXFExporter
+            from topocore.dxf.models import DXFExportOptions, ExportContext
 
-            return DXFExporter(**exporter_kwargs).export(features, path)
+            # Found and fixed in PR20 coverage phase: this previously
+            # called DXFExporter(**exporter_kwargs) directly, but
+            # DXFExporter.__init__ takes a single `context:
+            # ExportContext | None` parameter -- it does NOT accept
+            # arbitrary keyword arguments. Confirmed directly: calling
+            # export_dxf(path, strict=False) crashed with
+            # "DXFExporter.__init__() got an unexpected keyword
+            # argument 'strict'" for ANY non-empty exporter_kwargs,
+            # even though the method's own **exporter_kwargs: Any
+            # signature advertises pass-through configuration.
+            # export_gpkg() already gets this right (builds a
+            # GPKGExportOptions from kwargs, then passes THAT single
+            # object) -- mirrored here: build DXFExportOptions from
+            # exporter_kwargs, wrap it in ExportContext, then pass
+            # that.
+            options = DXFExportOptions(**exporter_kwargs)
+            context = ExportContext(options=options)
+            return DXFExporter(context).export(features, path)
 
         self._execute_stage(WorkflowStage.EXPORT_DXF, work, dependencies=(dep,), produces=None)
         return self
@@ -64476,6 +66325,7 @@ class Workflow:
         same FeatureCollection.
         """
         _V.require(WorkflowStage.EXPORT_GPKG, self._store, ArtifactType.FEATURE_COLLECTION)
+        _V.require_current(WorkflowStage.EXPORT_GPKG, self._store, self._history, ArtifactType.FEATURE_COLLECTION)
         features = self._store.get(ArtifactType.FEATURE_COLLECTION)
         dep = self._dependency(ArtifactType.FEATURE_COLLECTION, required=True)
 
@@ -64522,6 +66372,7 @@ from __future__ import annotations
 
 from topocore.workflow.artifacts import ArtifactType
 from topocore.workflow.exceptions import (
+    StaleArtifactError,
     WorkflowError,
     WorkflowExecutionError,
     WorkflowStateError,
@@ -64545,6 +66396,7 @@ __all__ = [
     "StageMetrics",
     "StageResult",
     "StageStatus",
+    "StaleArtifactError",
     "Workflow",
     "WorkflowError",
     "WorkflowExecutionError",

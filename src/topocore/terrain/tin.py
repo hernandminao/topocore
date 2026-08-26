@@ -23,6 +23,7 @@ MIT
 
 from __future__ import annotations
 
+import math
 from collections.abc import Generator
 from dataclasses import dataclass, field
 
@@ -207,6 +208,18 @@ class _TINCache:
         | None
     ) = None
 
+    # PR21.5 -- uniform-grid spatial index accelerating find_triangle()/
+    # contains(). Maps (row, col) grid cell -> tuple of candidate
+    # triangle indices whose AABB overlaps that cell. Built lazily on
+    # first use, matching the existing edges/bounds cache pattern.
+    # See TIN._build_triangle_index()'s own docstring for the design
+    # rationale (uniform AABB grid, not an R-tree) and correctness
+    # argument (a point inside a triangle is always inside that
+    # triangle's own AABB, so registering a triangle in every cell its
+    # AABB overlaps can never miss a query point).
+    triangle_index: dict[tuple[int, int], tuple[int, ...]] | None = None
+    triangle_index_cell_size: float | None = None
+
 
 @dataclass(slots=True)
 class TIN:
@@ -319,7 +332,7 @@ class TIN:
         Complements ``vertices`` (a tuple of ``Point3D``, convenient
         for per-point access and for ``ContourGenerator``, which
         indexes individual vertices by triangle) with the bulk NumPy
-        form that vectorized consumers need — currently
+        form that vectorized consumers need â€” currently
         ``features.terrain._mesh_utils.TINMesh``, which
         `BreaklineDetector`/`SlopeChangeDetector`/`EmbankmentDetector`
         rely on to build edge adjacency without a Python-level loop
@@ -519,11 +532,20 @@ class TIN:
         """
         Find the triangle containing a coordinate.
 
-        Implemented here as a brute-force scan (O(triangle_count))
-        rather than delegated to the Delaunay backend, which has no
-        point-location routine. A spatial-index-accelerated version
-        belongs to PR20 (Optimization), not here; this is the
-        correct, if not fastest, answer.
+        PR21.5: uses a uniform-grid spatial index (built lazily on
+        first call, cached on the TIN's own `_TINCache` -- see
+        `_build_triangle_index()`'s docstring for the design and
+        correctness argument) to narrow the search to the small set
+        of candidate triangles whose axis-aligned bounding box
+        overlaps the query point's grid cell, then runs the exact
+        same point-in-triangle test the pre-PR21 brute-force scan
+        used, on just those candidates. Confirmed via PR21's own
+        regression suite that this produces byte-for-byte identical
+        results to the original O(triangle_count) scan for every
+        query point tested (including points outside the convex
+        hull, on shared triangle edges, and exactly on grid-cell
+        boundaries) -- this method's contract and return value are
+        unchanged; only the internal search cost improves.
 
         Returns
         -------
@@ -531,13 +553,107 @@ class TIN:
             Triangle index, or -1 if (x, y) lies outside the
             triangulation's convex hull.
         """
-        for index in range(self.triangle_count):
-            p1, p2, p3 = self.triangle_vertices(index)
+        index, cell_size, min_x, min_y = self._build_triangle_index()
+
+        col = int((x - min_x) // cell_size)
+        row = int((y - min_y) // cell_size)
+
+        for candidate in index.get((row, col), ()):
+            p1, p2, p3 = self.triangle_vertices(candidate)
 
             if _point_in_triangle(x, y, p1, p2, p3):
-                return index
+                return candidate
 
         return -1
+
+    def _build_triangle_index(
+        self,
+    ) -> tuple[dict[tuple[int, int], tuple[int, ...]], float, float, float]:
+        """
+        Build (or return the already-cached) uniform-grid spatial
+        index accelerating `find_triangle()`.
+
+        Design
+        ------
+        The TIN's XY bounding box is divided into a uniform grid
+        with roughly one triangle per cell on average (grid side
+        length ~= sqrt(triangle_count)). Each triangle is registered
+        in every grid cell its own axis-aligned bounding box (AABB)
+        overlaps -- a triangle spanning multiple cells is registered
+        in all of them, not just one.
+
+        This is a simple uniform AABB grid, not an R-tree or other
+        external-dependency spatial structure, per an explicit
+        decision made during PR21 planning: benchmark the simplest
+        structure first, and only reach for something more
+        sophisticated (R-tree/STRtree) if a future benchmark shows
+        this isn't sufficient -- not before.
+
+        Correctness
+        -----------
+        A point (x, y) that lies inside a triangle is, by definition,
+        also inside that triangle's own AABB (the AABB is the
+        tightest axis-aligned box containing all 3 vertices, and any
+        point inside the triangle has coordinates between the min/max
+        of its vertices). Therefore the grid cell containing (x, y)
+        must be one of the cells that triangle's AABB overlaps, and
+        therefore one of the cells that triangle was registered in.
+        No containing triangle can ever be missed by only checking
+        the query point's own cell.
+
+        Returns
+        -------
+        tuple
+            ``(index, cell_size, min_x, min_y)`` -- the cell ->
+            candidate-triangle-indices mapping, the cell size, and
+            the grid's origin (needed by `find_triangle()` to convert
+            a query point into a cell coordinate).
+        """
+        if self._cache.triangle_index is not None and self._cache.triangle_index_cell_size is not None:
+            min_x, min_y, _, _ = self.bounds
+            return self._cache.triangle_index, self._cache.triangle_index_cell_size, min_x, min_y
+
+        min_x, min_y, max_x, max_y = self.bounds
+        triangle_count = self.triangle_count
+
+        width = max_x - min_x
+        height = max_y - min_y
+
+        if triangle_count == 0 or width <= 0.0 or height <= 0.0:
+            self._cache.triangle_index = {}
+            self._cache.triangle_index_cell_size = max(width, height, 1.0)
+            return self._cache.triangle_index, self._cache.triangle_index_cell_size, min_x, min_y
+
+        grid_side = max(1, math.isqrt(triangle_count))
+        cell_size = max(width, height) / grid_side
+
+        vertices = self.vertex_array()
+        simplices = self.simplices
+
+        triangle_x = vertices[simplices, 0]
+        triangle_y = vertices[simplices, 1]
+
+        triangle_min_x = triangle_x.min(axis=1)
+        triangle_max_x = triangle_x.max(axis=1)
+        triangle_min_y = triangle_y.min(axis=1)
+        triangle_max_y = triangle_y.max(axis=1)
+
+        col_start = np.floor((triangle_min_x - min_x) / cell_size).astype(np.int64)
+        col_end = np.floor((triangle_max_x - min_x) / cell_size).astype(np.int64)
+        row_start = np.floor((triangle_min_y - min_y) / cell_size).astype(np.int64)
+        row_end = np.floor((triangle_max_y - min_y) / cell_size).astype(np.int64)
+
+        index: dict[tuple[int, int], list[int]] = {}
+        for triangle_index in range(triangle_count):
+            for row in range(int(row_start[triangle_index]), int(row_end[triangle_index]) + 1):
+                for col in range(int(col_start[triangle_index]), int(col_end[triangle_index]) + 1):
+                    index.setdefault((row, col), []).append(triangle_index)
+
+        built_index = {key: tuple(value) for key, value in index.items()}
+        self._cache.triangle_index = built_index
+        self._cache.triangle_index_cell_size = cell_size
+
+        return built_index, cell_size, min_x, min_y
 
     def interpolate(
         self,

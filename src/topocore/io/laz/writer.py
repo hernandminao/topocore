@@ -91,71 +91,87 @@ class LAZWriter(PointCloudWriter):
     ) -> None:
         """
         Write a PointCloud into a compressed LAZ file.
+
+        PR21.7.3: mirrors the identical fix applied to
+        topocore.io.las.writer.LASWriter -- see that class's own
+        `write()` docstring for the full rationale (this was, and
+        remains, a near-duplicate of that writer, sharing the exact
+        same PR19 scale/offset finding and now the same PR21.7.3
+        streaming fix).
         """
+        if cloud.is_empty:
+            header = laspy.LasHeader(
+                point_format=self._point_format,
+                version=self._version,
+            )
+            header.scales = list(self._scale) if self._scale is not None else list(_DEFAULT_SCALE)
+            if self._offset is not None:
+                header.offsets = list(self._offset)
+            laspy.LasData(header).write(self.path, do_compress=True)
+            return
 
-        arrays: dict[PointAttribute, list[np.ndarray]] = {}
-
-        for chunk in cloud:
-            for attribute in chunk.attributes:
-                arrays.setdefault(attribute, []).append(chunk[attribute])
-
-        merged = {attribute: np.concatenate(values) for attribute, values in arrays.items()}
+        first_chunk = next(iter(cloud))
+        attributes = first_chunk.attributes
 
         header = laspy.LasHeader(
             point_format=self._point_format,
             version=self._version,
         )
-
         header.scales = list(self._scale) if self._scale is not None else list(_DEFAULT_SCALE)
 
         if self._offset is not None:
             header.offsets = list(self._offset)
-        elif PointAttribute.X in merged and PointAttribute.Y in merged and PointAttribute.Z in merged:
-            header.offsets = [
-                float(np.min(merged[PointAttribute.X])),
-                float(np.min(merged[PointAttribute.Y])),
-                float(np.min(merged[PointAttribute.Z])),
-            ]
+        elif PointAttribute.X in attributes and PointAttribute.Y in attributes and PointAttribute.Z in attributes:
+            min_x = min_y = min_z = float("inf")
+            for chunk in cloud:
+                min_x = min(min_x, float(np.min(chunk[PointAttribute.X])))
+                min_y = min(min_y, float(np.min(chunk[PointAttribute.Y])))
+                min_z = min(min_z, float(np.min(chunk[PointAttribute.Z])))
+            header.offsets = [min_x, min_y, min_z]
 
-        las = laspy.LasData(header)
+        with open(self.path, "wb") as file_object:
+            las_writer = laspy.LasWriter(file_object, header, do_compress=True)
 
-        if PointAttribute.X in merged:
-            las.x = merged[PointAttribute.X]
+            try:
+                for chunk in cloud:
+                    record = laspy.ScaleAwarePointRecord.zeros(chunk.size, header=las_writer.header)
 
-        if PointAttribute.Y in merged:
-            las.y = merged[PointAttribute.Y]
+                    if PointAttribute.X in attributes:
+                        record.x = chunk[PointAttribute.X]
 
-        if PointAttribute.Z in merged:
-            las.z = merged[PointAttribute.Z]
+                    if PointAttribute.Y in attributes:
+                        record.y = chunk[PointAttribute.Y]
 
-        if PointAttribute.INTENSITY in merged:
-            las.intensity = merged[PointAttribute.INTENSITY]
+                    if PointAttribute.Z in attributes:
+                        record.z = chunk[PointAttribute.Z]
 
-        if PointAttribute.CLASSIFICATION in merged:
-            las.classification = merged[PointAttribute.CLASSIFICATION]
+                    if PointAttribute.INTENSITY in attributes:
+                        record.intensity = chunk[PointAttribute.INTENSITY]
 
-        if PointAttribute.RETURN_NUMBER in merged:
-            las.return_number = merged[PointAttribute.RETURN_NUMBER]
+                    if PointAttribute.CLASSIFICATION in attributes:
+                        record.classification = chunk[PointAttribute.CLASSIFICATION]
 
-        if PointAttribute.NUMBER_OF_RETURNS in merged:
-            las.number_of_returns = merged[PointAttribute.NUMBER_OF_RETURNS]
+                    if PointAttribute.RETURN_NUMBER in attributes:
+                        record.return_number = chunk[PointAttribute.RETURN_NUMBER]
 
-        if PointAttribute.GPS_TIME in merged:
-            las.gps_time = merged[PointAttribute.GPS_TIME]
+                    if PointAttribute.NUMBER_OF_RETURNS in attributes:
+                        record.number_of_returns = chunk[PointAttribute.NUMBER_OF_RETURNS]
 
-        # PointAttribute.COLOR is stored combined, shape (n, 3); LAS
-        # itself keeps red/green/blue as three separate channels, so
-        # it's split back out here on the way out.
-        if PointAttribute.COLOR in merged:
-            color = merged[PointAttribute.COLOR]
-            las.red = color[:, 0]
-            las.green = color[:, 1]
-            las.blue = color[:, 2]
+                    if PointAttribute.GPS_TIME in attributes:
+                        record.gps_time = chunk[PointAttribute.GPS_TIME]
 
-        las.write(
-            self.path,
-            do_compress=True,
-        )
+                    # PointAttribute.COLOR is stored combined, shape (n, 3); LAS
+                    # itself keeps red/green/blue as three separate channels, so
+                    # it's split back out here on the way out.
+                    if PointAttribute.COLOR in attributes:
+                        color = chunk[PointAttribute.COLOR]
+                        record.red = color[:, 0]
+                        record.green = color[:, 1]
+                        record.blue = color[:, 2]
+
+                    las_writer.write_points(record)
+            finally:
+                las_writer.close()
 
     def close(self) -> None:
         """

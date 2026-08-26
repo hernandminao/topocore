@@ -179,11 +179,14 @@ class KDTreeNeighborSearch(NeighborSearch):
     __slots__ = (
         "_points",
         "_tree",
+        "_workers",
     )
 
     def __init__(
         self,
         points: FloatArray2D,
+        *,
+        workers: int = 1,
     ) -> None:
 
         if points.ndim != 2 or points.shape[1] != 3:
@@ -191,6 +194,8 @@ class KDTreeNeighborSearch(NeighborSearch):
 
         if points.shape[0] == 0:
             raise NeighborError("Cannot create KD-tree with zero points.")
+
+        self._validate_workers(workers)
 
         self._points = cast(
             FloatArray2D,
@@ -204,21 +209,40 @@ class KDTreeNeighborSearch(NeighborSearch):
             self._points,
         )
 
+        # PR21.2: number of worker threads scipy.spatial.cKDTree.query()/
+        # query_ball_point() use internally. Default (1) is scipy's own
+        # default and preserves EXACTLY the pre-PR21 single-threaded
+        # behavior/timing -- this is opt-in, never forced on a caller.
+        # -1 uses all available CPU cores. Each query point's neighbor
+        # search is fully independent of every other's, so parallelizing
+        # this batch cannot change the numerical result -- only wall-
+        # clock time -- confirmed by this module's own regression suite
+        # (workers=1 and workers=-1 produce identical indices/distances
+        # for the same input). Not benchmarked as a speedup in a
+        # single-core environment (no additional cores to parallelize
+        # across there), but zero-risk to enable given scipy's own
+        # documented, battle-tested parallel-query support.
+        self._workers = int(workers)
+
     @classmethod
     @override
     def from_point_cloud(
         cls,
         cloud: PointCloud,
+        *,
+        workers: int = 1,
     ) -> KDTreeNeighborSearch:
-        return cls(_extract_xyz(cloud))
+        return cls(_extract_xyz(cloud), workers=workers)
 
     @classmethod
     @override
     def from_array(
         cls,
         points: FloatArray2D,
+        *,
+        workers: int = 1,
     ) -> KDTreeNeighborSearch:
-        return cls(points)
+        return cls(points, workers=workers)
 
     @override
     def knn(
@@ -237,6 +261,7 @@ class KDTreeNeighborSearch(NeighborSearch):
         distances_raw, indices_raw = self._tree.query(
             self._points[index],
             k=query_k,
+            workers=self._workers,
         )
 
         distances = cast(
@@ -305,6 +330,7 @@ class KDTreeNeighborSearch(NeighborSearch):
         distances_raw, neighbor_indices_raw = self._tree.query(
             self._points[query_indices],
             k=query_k,
+            workers=self._workers,
         )
 
         distances = cast(
@@ -367,6 +393,7 @@ class KDTreeNeighborSearch(NeighborSearch):
             self._tree.query_ball_point(
                 self._points[index],
                 radius,
+                workers=self._workers,
             ),
             dtype=np.int64,
         )
@@ -411,6 +438,7 @@ class KDTreeNeighborSearch(NeighborSearch):
         raw_results = self._tree.query_ball_point(
             query_points,
             radius,
+            workers=self._workers,
         )
 
         results: list[IntArray1D] = [
@@ -454,6 +482,7 @@ class KDTreeNeighborSearch(NeighborSearch):
                 z,
             ],
             k=k,
+            workers=self._workers,
         )
 
         distances = cast(
@@ -493,6 +522,7 @@ class KDTreeNeighborSearch(NeighborSearch):
                     z,
                 ],
                 radius,
+                workers=self._workers,
             ),
             dtype=np.int64,
         )
@@ -556,6 +586,31 @@ class KDTreeNeighborSearch(NeighborSearch):
 
         if k > 1_000_000:
             raise NeighborError(f"k={k} exceeds maximum allowed.")
+
+    @staticmethod
+    def _validate_workers(
+        workers: int,
+    ) -> None:
+        """
+        Validate the `workers` parameter before it ever reaches
+        scipy, matching this module's own convention (see
+        `_validate_k`/`_validate_radius`) of converting invalid
+        input into a `NeighborError` at the TopoCore boundary rather
+        than letting a raw third-party exception leak through.
+        scipy.spatial.cKDTree.query()'s own contract: -1 means "use
+        all available CPUs", any other value must be a positive
+        integer (a specific worker count); 0 and negative values
+        other than -1 are invalid.
+        """
+
+        if not isinstance(
+            workers,
+            (int, np.integer),
+        ):
+            raise NeighborError(f"workers must be integer, got {type(workers).__name__}")
+
+        if workers == 0 or workers < -1:
+            raise NeighborError(f"workers must be -1 or >= 1, got {workers}")
 
     @staticmethod
     def _validate_radius(

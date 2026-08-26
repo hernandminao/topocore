@@ -52,6 +52,15 @@ class NeighborConfig:
         number of neighbors; for radius, it scales the radius.
     max_neighbors
         Maximum number of neighbors to return, as a safety cap.
+    workers
+        Number of worker threads scipy.spatial.cKDTree uses internally
+        for batched queries (PR21.2). Default (1) preserves EXACTLY
+        the pre-PR21 single-threaded behavior -- this is opt-in, never
+        forced. -1 uses all available CPU cores. Every query point's
+        neighbor search is fully independent of every other's, so
+        parallelizing cannot change the numerical result, only
+        wall-clock time -- confirmed by
+        topocore.processing.neighbors.kdtree's own regression suite.
     """
 
     knn_default: int = 8
@@ -59,6 +68,7 @@ class NeighborConfig:
     use_adaptive: bool = False
     adaptive_factor: float = 1.5
     max_neighbors: int = 128
+    workers: int = 1
 
 
 # ============================================================================

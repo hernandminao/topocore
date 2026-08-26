@@ -10,7 +10,7 @@ agnostic of file formats such as LAS, LAZ, E57 or PLY.
 
 Author
 ------
-Hernán Mina
+HernÃ¡n Mina
 
 License
 -------
@@ -52,6 +52,31 @@ class PointCloud:
         """
         self._chunks: list[Chunk] = []
         self._metadata: PointCloudMetadata = PointCloudMetadata()
+        # PR21.3.1: incremented on every operation that changes which
+        # points this cloud holds (add_chunk/remove_chunk/clear).
+        # Exists so external caches keyed on a PointCloud (e.g.
+        # NormalManager's normal/curvature cache) can detect "same
+        # object, but mutated in place" -- id(cloud) alone cannot,
+        # since Python object identity never changes when an object
+        # is mutated rather than replaced. Found and fixed as a real,
+        # demonstrated bug: NormalManager's pre-existing id(cloud)-only
+        # cache key returned a stale, incorrect normal after a caller
+        # mutated the SAME PointCloud object via add_chunk() between
+        # two estimate() calls on the same NormalManager instance.
+        #
+        # Known limitation: this counter only tracks mutation through
+        # PointCloud's OWN methods. Reaching into a chunk directly
+        # (e.g. ``cloud[0][PointAttribute.X][:] = new_values``,
+        # mutating a Chunk's underlying NumPy array in place without
+        # ever calling add_chunk/remove_chunk/clear) bypasses it
+        # entirely -- there is no general way to detect that from
+        # PointCloud itself without copying or hashing every array on
+        # every access, which would defeat the point of caching in
+        # the first place. This is a real, documented gap, not
+        # silently assumed away: callers who mutate chunk data
+        # in place must call `clear_cache()` on any manager caching
+        # results derived from this cloud themselves.
+        self._version: int = 0
 
     def __len__(self) -> int:
         """
@@ -124,6 +149,17 @@ class PointCloud:
             attributes.update(chunk.attributes)
         return frozenset(attributes)
 
+    @property
+    def version(self) -> int:
+        """
+        Mutation counter, incremented by add_chunk()/remove_chunk()/
+        clear() -- see this counter's own field-level docstring in
+        __init__ for the full rationale and its documented
+        limitation (direct in-place mutation of a Chunk's array
+        bypasses it).
+        """
+        return self._version
+
     def add_chunk(
         self,
         chunk: Chunk,
@@ -132,6 +168,7 @@ class PointCloud:
         Add a chunk to the point cloud.
         """
         self._chunks.append(chunk)
+        self._version += 1
 
     def update_bounds(self) -> None:
         """
@@ -178,7 +215,9 @@ class PointCloud:
         """
         Remove and return the chunk at the given index.
         """
-        return self._chunks.pop(index)
+        chunk = self._chunks.pop(index)
+        self._version += 1
+        return chunk
 
     def clear(self) -> None:
         """
@@ -186,6 +225,7 @@ class PointCloud:
         """
         self._chunks.clear()
         self._metadata = PointCloudMetadata()
+        self._version += 1
 
     def clone(self) -> PointCloud:
         """

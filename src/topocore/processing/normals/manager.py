@@ -15,7 +15,7 @@ The manager supports:
 
 Author
 ------
-Hernán Mina
+HernÃ¡n Mina
 
 License
 -------
@@ -64,6 +64,7 @@ from .weighted_pca import WeightedPCANormalEstimator
 #: different sigma values silently share a cache entry, the same
 #: category of bug as the viewpoint-identity mistake this replaces.
 CacheKey: TypeAlias = tuple[
+    int,
     int,
     str,
     int,
@@ -346,17 +347,18 @@ class NormalManager:
 
         Note: if ``manager`` (an explicitly-provided
         ``NeighborhoodManager``) is given, it is NOT itself part of
-        the cache key -- only ``id(cloud)`` and the resolved
-        estimation parameters are. Passing a different, differently
-        configured ``NeighborhoodManager`` for the same cloud and
-        parameters is an advanced, rare override this cache does not
-        specially detect; ``clear_cache()`` is available if that
-        matters for a specific workflow.
+        the cache key -- only ``id(cloud)``, ``cloud.version``, and
+        the resolved estimation parameters are. Passing a different,
+        differently configured ``NeighborhoodManager`` for the same
+        cloud, version, and parameters is an advanced, rare override
+        this cache does not specially detect; ``clear_cache()`` is
+        available if that matters for a specific workflow.
         """
         estimator, params = self._get_estimator(**kwargs)
 
         cache_key = self._cache_key(
             id(cloud),
+            cloud.version,
             self._method,
             params,
         )
@@ -436,11 +438,30 @@ class NormalManager:
     def _cache_key(
         self,
         cloud_id: int,
+        cloud_version: int,
         method: str,
         params: dict[str, Any],
     ) -> CacheKey:
         """
         Generate cache key from the actual resolved parameters.
+
+        PR21.3.1: includes ``cloud_version`` alongside ``cloud_id``
+        (formerly the sole key component). Found and fixed as a
+        real, demonstrated bug: ``id(cloud)`` alone cannot detect a
+        ``PointCloud`` mutated in place (via ``add_chunk()``/
+        ``remove_chunk()``/``clear()``) between two calls on the
+        same ``NormalManager`` instance, since Python object
+        identity never changes when an object is mutated rather than
+        replaced -- confirmed directly: mutating a flat-plane cloud
+        into a steeply-tilted one via ``add_chunk()`` and re-calling
+        ``estimate()`` on the SAME manager returned the stale,
+        pre-mutation normal instead of recomputing. ``PointCloud.
+        version`` (a counter incremented by exactly those three
+        mutating methods) closes this gap. See that property's own
+        docstring for its one documented limitation (it cannot detect
+        a caller reaching into a ``Chunk``'s array and mutating it
+        in place directly, bypassing ``PointCloud``'s own methods
+        entirely).
         """
         viewpoint = params["viewpoint"]
         viewpoint_key = (
@@ -451,6 +472,7 @@ class NormalManager:
 
         return (
             cloud_id,
+            cloud_version,
             method,
             int(params["k"]),
             bool(params["orient_upward"]),

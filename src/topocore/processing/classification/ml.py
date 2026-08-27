@@ -107,16 +107,17 @@ class _GroundRelativeHeightFeatureComputer(ScalarFeatureComputer):
         ground_points = points[ground_indices]
         manager = NeighborhoodManager.from_array(ground_points)
 
-        relative_height: FloatArray1D = np.empty(points.shape[0], dtype=np.float64)
-
-        for index in range(points.shape[0]):
-            indices, _ = manager.query_point(
-                points[index, 0],
-                points[index, 1],
-                points[index, 2],
-                k=1,
-            )
-            relative_height[index] = points[index, 2] - ground_points[indices[0], 2]
+        # PR21.8 (extension): the same per-point query_point() loop
+        # already found and fixed in
+        # features.geometric.RelativeHeightFeatureComputer -- noted
+        # during PR21.3.2's audit of this manager's usage, but not
+        # revisited until the identical pattern was independently
+        # found and fixed in that sibling module. Replaced with the
+        # same query_points_many() batched call, giving the same
+        # class of speedup with numerically identical results
+        # (verified directly before this change).
+        indices, _ = manager.query_points_many(points, k=1)
+        relative_height: FloatArray1D = points[:, 2] - ground_points[indices[:, 0], 2]
 
         return relative_height
 

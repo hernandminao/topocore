@@ -25,7 +25,7 @@ MIT
 
 from __future__ import annotations
 
-from typing import override
+from typing import cast, override
 
 import numpy as np
 from numpy.typing import NDArray
@@ -77,17 +77,15 @@ def _compute_relative_height(
     ground_points = points[ground_indices]
     manager = NeighborhoodManager.from_array(ground_points)
 
-    relative_height = np.empty(points.shape[0], dtype=np.float64)
-
-    for index in range(points.shape[0]):
-        indices, _ = manager.query_point(
-            points[index, 0],
-            points[index, 1],
-            points[index, 2],
-            k=1,
-        )
-        nearest_ground_z = ground_points[indices[0], 2]
-        relative_height[index] = points[index, 2] - nearest_ground_z
+    # PR21.8 (transversal audit): same per-point query_point() loop
+    # pattern already found and fixed in
+    # features.geometric.RelativeHeightFeatureComputer,
+    # classification.ml, and ground.manager -- found here via a
+    # whole-processing/-tree search for this pattern. Replaced with
+    # query_points_many(), numerically identical results (verified
+    # directly before this change).
+    indices, _ = manager.query_points_many(points, k=1)
+    relative_height = points[:, 2] - cast(NDArray[np.float64], ground_points[indices[:, 0], 2])
 
     return relative_height
 

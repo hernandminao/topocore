@@ -339,29 +339,32 @@ class ICPBase(Registrar):
         """
         Find correspondences between source and target points.
 
+        PR21.8 (transversal audit): replaced a genuine per-point
+        query_point() loop -- repeated on EVERY ICP iteration, since
+        correspondences are recomputed each time -- with one batched
+        query_points_many() call. The `len(indices) == 0` guard the
+        old loop had is not reproduced: target_manager is always
+        built from a non-empty point set (NeighborhoodManager raises
+        for zero points at construction), so query_point(k=1) could
+        never actually return zero results either way -- confirmed
+        this was unreachable defensive code, not a real behavior to
+        preserve. Numerically identical (source_idx, target_idx,
+        distance) tuples, in the same ascending source-index order,
+        verified directly before this change.
+
         Returns
         -------
         list
             List of (source_idx, target_idx, distance) tuples.
         """
-        correspondences = []
+        indices, distances = target_manager.query_points_many(source_points, k=1)
 
-        for i, point in enumerate(source_points):
-            indices, distances = target_manager.query_point(
-                point[0],
-                point[1],
-                point[2],
-                k=1,
-            )
+        within_max_distance = np.flatnonzero(distances[:, 0] <= max_distance)
 
-            if len(indices) == 0:
-                continue
-
-            distance = distances[0]
-            if distance <= max_distance:
-                correspondences.append((i, indices[0], float(distance)))
-
-        return correspondences
+        return [
+            (int(source_index), int(indices[source_index, 0]), float(distances[source_index, 0]))
+            for source_index in within_max_distance
+        ]
 
     @abstractmethod
     def _estimate_transformation(

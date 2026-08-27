@@ -504,6 +504,42 @@ class KDTreeNeighborSearch(NeighborSearch):
         )
 
     @override
+    def query_points_many(
+        self,
+        points: FloatArray2D,
+        k: int,
+    ) -> tuple[IntArray2D, NDArray[np.float64]]:
+
+        self._validate_k(k)
+
+        if points.ndim != 2 or points.shape[1] != 3:
+            raise NeighborError(f"points must have shape (M,3), got {points.shape}")
+
+        distances_raw, indices_raw = self._tree.query(
+            points,
+            k=k,
+            workers=self._workers,
+        )
+
+        distances = cast(
+            NDArray[np.float64],
+            np.atleast_2d(distances_raw) if k > 1 else np.atleast_2d(distances_raw).T,
+        )
+
+        indices = cast(
+            IntArray2D,
+            (np.atleast_2d(indices_raw) if k > 1 else np.atleast_2d(indices_raw).T).astype(
+                np.int64,
+                copy=False,
+            ),
+        )
+
+        return (
+            indices,
+            distances,
+        )
+
+    @override
     def query_point_radius(
         self,
         x: float,

@@ -330,6 +330,31 @@ class NeighborhoodManager:
         effective_k = k or self._config.knn_default
         return self._search.query_point(x, y, z, effective_k)
 
+    def query_points_many(
+        self,
+        points: FloatArray2D,
+        k: int | None = None,
+    ) -> tuple[IntArray2D, NDArray[np.float64]]:
+        """
+        Query k nearest neighbors to each of several arbitrary 3D
+        points, in one batched query.
+
+        Parameters
+        ----------
+        points
+            Query point coordinates, shape (M, 3).
+        k
+            Number of neighbors per query point. If None, uses the
+            configured default.
+
+        Returns
+        -------
+        tuple
+            (neighbor_indices, distances), each of shape (M, k).
+        """
+        effective_k = k or self._config.knn_default
+        return self._search.query_points_many(points, effective_k)
+
     def query_point_radius(
         self,
         x: float,

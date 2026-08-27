@@ -101,7 +101,10 @@ class WriterMemoryResult:
 
 
 def _rss_mb() -> float:
-    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0  # KB -> MB on Linux
+    """Return peak resident-set size in MB on Linux."""
+    usage = resource.getrusage(resource.RUSAGE_SELF)  # type: ignore[attr-defined]
+    max_rss = int(usage.ru_maxrss)
+    return float(max_rss) / 1024.0
 
 
 def _make_cloud_chunked(n_total: int, chunk_size: int = 1_000_000, seed: int = 0) -> PointCloud:

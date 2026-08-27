@@ -125,6 +125,192 @@ def _build_ground_cloud_from_mask(
     return result
 
 
+def _classify_chunked(
+    cloud: PointCloud,
+    cell_size: float,
+    height_threshold: float,
+) -> BoolArray1D:
+    """
+    Classify points as ground via a two-pass, chunk-wise
+    accumulator -- see `_compute_cell_minimums_chunked()`'s own
+    docstring for the full design rationale. Unlike that function
+    (which returns the per-point cell minimum), this performs the
+    final `(z - ground_z) <= height_threshold` comparison directly
+    within pass 2, so no X, Y, or Z array is ever concatenated across
+    chunks at any point -- not even Z alone for the final comparison.
+    """
+    if cloud.is_empty:
+        # PR21.7.8: reproduces the exact ValueError the pre-PR21.7.8
+        # _extract_xyz()'s np.concatenate([]) raised for an empty
+        # cloud, byte-for-byte (same exception type, same message) --
+        # confirmed directly this was the prior behavior before
+        # assuming it should be preserved. Not silently improved to a
+        # cleaner GroundError here, since that would be a separate,
+        # deliberate fix this PR doesn't make unilaterally.
+        np.concatenate([])
+
+    cell_minimums: dict[tuple[int, int], float] = {}
+
+    for chunk in cloud:
+        if chunk.size == 0:
+            continue
+
+        x = np.asarray(chunk[PointAttribute.X], dtype=np.float64)
+        y = np.asarray(chunk[PointAttribute.Y], dtype=np.float64)
+        z = np.asarray(chunk[PointAttribute.Z], dtype=np.float64)
+
+        cell_i = np.floor(x / cell_size).astype(np.int64)
+        cell_j = np.floor(y / cell_size).astype(np.int64)
+        coords = np.column_stack((cell_i, cell_j))
+        unique_coords, inverse = np.unique(coords, axis=0, return_inverse=True)
+
+        local_min_z = np.full(len(unique_coords), np.inf, dtype=np.float64)
+        np.minimum.at(local_min_z, inverse, z)
+
+        for local_index, key_array in enumerate(unique_coords):
+            key = (int(key_array[0]), int(key_array[1]))
+            value = float(local_min_z[local_index])
+            if key in cell_minimums:
+                cell_minimums[key] = min(cell_minimums[key], value)
+            else:
+                cell_minimums[key] = value
+
+    total_points = cloud.point_count
+    mask = np.empty(total_points, dtype=np.bool_)
+
+    global_offset = 0
+    for chunk in cloud:
+        if chunk.size == 0:
+            continue
+
+        x = np.asarray(chunk[PointAttribute.X], dtype=np.float64)
+        y = np.asarray(chunk[PointAttribute.Y], dtype=np.float64)
+        z = np.asarray(chunk[PointAttribute.Z], dtype=np.float64)
+
+        cell_i = np.floor(x / cell_size).astype(np.int64)
+        cell_j = np.floor(y / cell_size).astype(np.int64)
+
+        for local_index in range(len(x)):
+            key = (int(cell_i[local_index]), int(cell_j[local_index]))
+            mask[global_offset + local_index] = (z[local_index] - cell_minimums[key]) <= height_threshold
+
+        global_offset += chunk.size
+
+    return mask
+
+
+def _compute_cell_minimums_chunked(
+    cloud: PointCloud,
+    cell_size: float,
+) -> FloatArray1D:
+    """
+    Compute, for every point in the cloud, the minimum elevation of
+    the grid cell it belongs to -- via a two-pass, chunk-wise
+    accumulator, instead of first concatenating every chunk's X/Y/Z
+    into one global array (the prior `_extract_xyz()` +
+    `_compute_cell_minimums()` combination).
+
+    PR21.7.8: found during the PR21.7 final cross-cutting audit as a
+    real, if milder, memory concern than VoxelSampler/StratifiedSampler's
+    own O(N x G) complexity bug (PR21.7.5/7.6) -- confirmed via direct
+    benchmarking that this file's `np.minimum.at`-based per-cell
+    reduction was ALREADY O(N) (genuinely linear scaling measured
+    directly, no hidden quadratic behavior), so this fix targets only
+    the ~3.3x-3.5x memory overhead from the three float64
+    concatenations, not a complexity bug.
+
+    Correctness: minimum is commutative and associative
+    (min(a, b) == min(b, a) for any order), so merging per-chunk
+    local minimums into a global per-cell minimum via repeated
+    min() is exact regardless of chunk boundaries or processing
+    order -- unlike VoxelSampler's "closest" (PR21.7.5), there is no
+    tie-breaking rule to replicate here, since only the minimum
+    VALUE is tracked, never which specific point achieved it.
+
+    Pass 1 accumulates the minimum Z per cell key, vectorized within
+    each chunk via the same `np.minimum.at` the pre-PR21.7.8 code
+    already used (just applied per chunk instead of once globally),
+    merged into a global dict. Pass 2 revisits the same
+    already-in-memory chunks and looks up each point's cell's now-
+    fully-known minimum directly, producing the identical per-point,
+    input-order-aligned array `_compute_cell_minimums()` used to
+    return.
+
+    Parameters
+    ----------
+    cloud
+        Input point cloud.
+    cell_size
+        Grid cell size.
+
+    Returns
+    -------
+    FloatArray1D
+        Minimum elevation of the containing cell, one value per
+        input point, in the same order as the cloud's own point
+        order.
+    """
+    if cloud.is_empty:
+        # PR21.7.8: reproduces the exact ValueError the pre-PR21.7.8
+        # _extract_xyz()'s np.concatenate([]) raised for an empty
+        # cloud -- confirmed this function's old behavior matched
+        # _classify_chunked's own reference case exactly, since both
+        # called the same _extract_xyz(). Found and fixed here: this
+        # function was initially missing this check (unlike
+        # _classify_chunked, which already had it), silently
+        # returning an empty array instead of raising, before this
+        # fix.
+        np.concatenate([])
+
+    cell_minimums: dict[tuple[int, int], float] = {}
+
+    for chunk in cloud:
+        if chunk.size == 0:
+            continue
+
+        x = np.asarray(chunk[PointAttribute.X], dtype=np.float64)
+        y = np.asarray(chunk[PointAttribute.Y], dtype=np.float64)
+        z = np.asarray(chunk[PointAttribute.Z], dtype=np.float64)
+
+        cell_i = np.floor(x / cell_size).astype(np.int64)
+        cell_j = np.floor(y / cell_size).astype(np.int64)
+        coords = np.column_stack((cell_i, cell_j))
+        unique_coords, inverse = np.unique(coords, axis=0, return_inverse=True)
+
+        local_min_z = np.full(len(unique_coords), np.inf, dtype=np.float64)
+        np.minimum.at(local_min_z, inverse, z)
+
+        for local_index, key_array in enumerate(unique_coords):
+            key = (int(key_array[0]), int(key_array[1]))
+            value = float(local_min_z[local_index])
+            if key in cell_minimums:
+                cell_minimums[key] = min(cell_minimums[key], value)
+            else:
+                cell_minimums[key] = value
+
+    total_points = cloud.point_count
+    result = np.empty(total_points, dtype=np.float64)
+
+    global_offset = 0
+    for chunk in cloud:
+        if chunk.size == 0:
+            continue
+
+        x = np.asarray(chunk[PointAttribute.X], dtype=np.float64)
+        y = np.asarray(chunk[PointAttribute.Y], dtype=np.float64)
+
+        cell_i = np.floor(x / cell_size).astype(np.int64)
+        cell_j = np.floor(y / cell_size).astype(np.int64)
+
+        for local_index in range(len(x)):
+            key = (int(cell_i[local_index]), int(cell_j[local_index]))
+            result[global_offset + local_index] = cell_minimums[key]
+
+        global_offset += chunk.size
+
+    return result
+
+
 def _compute_cell_minimums(
     x: FloatArray1D,
     y: FloatArray1D,
@@ -133,6 +319,11 @@ def _compute_cell_minimums(
 ) -> FloatArray1D:
     """
     Compute the minimum elevation for every grid cell.
+
+    Kept for reference/comparison (this session's own regression
+    suite verifies `_compute_cell_minimums_chunked()` against it
+    directly) -- `classify()`/`estimate()` themselves now use the
+    chunked version above.
 
     Parameters
     ----------
@@ -229,16 +420,7 @@ class GridGroundClassifier(GroundClassifier):
         BoolArray1D
             Boolean mask indicating ground points.
         """
-        x, y, z = _extract_xyz(cloud)
-
-        ground_z = _compute_cell_minimums(
-            x,
-            y,
-            z,
-            self._cell_size,
-        )
-
-        return (z - ground_z) <= self._height_threshold
+        return _classify_chunked(cloud, self._cell_size, self._height_threshold)
 
     @override
     def name(self) -> str:
@@ -326,14 +508,7 @@ class GridGroundElevationEstimator(GroundElevationEstimator):
         FloatArray1D
             Estimated ground elevation.
         """
-        x, y, z = _extract_xyz(cloud)
-
-        return _compute_cell_minimums(
-            x,
-            y,
-            z,
-            self._cell_size,
-        )
+        return _compute_cell_minimums_chunked(cloud, self._cell_size)
 
     @override
     def name(self) -> str:
@@ -342,6 +517,6 @@ class GridGroundElevationEstimator(GroundElevationEstimator):
 
 __all__ = [
     "GridGroundClassifier",
-    "GridGroundExtractor",
     "GridGroundElevationEstimator",
+    "GridGroundExtractor",
 ]

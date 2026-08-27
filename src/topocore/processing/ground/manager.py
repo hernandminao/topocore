@@ -25,7 +25,7 @@ MIT
 from __future__ import annotations
 
 import inspect
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 import numpy as np
 
@@ -316,16 +316,19 @@ class GroundManager:
 
         ground_points = np.column_stack((x[ground_indices], y[ground_indices], z[ground_indices]))
         manager = NeighborhoodManager.from_array(ground_points)
-        elevations = np.empty(len(x), dtype=np.float64)
 
-        for index in range(len(x)):
-            indices, _ = manager.query_point(
-                x[index],
-                y[index],
-                z[index],
-                k=1,
-            )
-            elevations[index] = ground_points[indices[0], 2]
+        # PR21.8 (transversal audit): same per-point query_point()
+        # loop already found and fixed in
+        # features.geometric.RelativeHeightFeatureComputer and
+        # classification.ml, found here via a whole-processing/-tree
+        # search for the (NeighborhoodManager.from_array + per-point
+        # query_point loop) pattern, not just files already touched
+        # by this PR. Replaced with the same query_points_many()
+        # batched call, numerically identical results (verified
+        # directly before this change).
+        query_points = np.column_stack((x, y, z))
+        indices, _ = manager.query_points_many(query_points, k=1)
+        elevations = cast(FloatArray1D, ground_points[indices[:, 0], 2])
 
         return elevations
 

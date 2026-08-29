@@ -123,11 +123,23 @@ class SegmentationManager:
         p = params
 
         if self._method == "dbscan":
+            # PR21 remediation (SEG-MANAGER-001): cache_neighbors was
+            # a genuine DBSCANSegmenter constructor parameter that
+            # this dispatch branch never read from `p` at all --
+            # confirmed directly that
+            # SegmentationManager(method="dbscan",
+            # cache_neighbors=False) silently constructed a
+            # DBSCANSegmenter with cache_neighbors=True (its own
+            # class default) regardless of what the caller passed.
+            # Default preserved unchanged (True, matching
+            # DBSCANSegmenter's own default) for callers who don't
+            # specify it.
             return DBSCANSegmenter(
                 eps=p.get("eps", 0.5),
                 min_samples=p.get("min_samples", 5),
                 use_adaptive_eps=p.get("use_adaptive_eps", False),
                 include_noise=p.get("include_noise", True),
+                cache_neighbors=p.get("cache_neighbors", True),
             )
 
         if self._method == "region_growing":

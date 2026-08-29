@@ -15,7 +15,7 @@ The manager supports:
 
 Author
 ------
-HernÃ¡n Mina
+Hernán Mina
 
 License
 -------
@@ -25,8 +25,6 @@ MIT
 from __future__ import annotations
 
 from typing import Any, ClassVar, Protocol, TypeAlias
-
-import numpy as np
 
 from topocore.pointcloud.pointcloud import PointCloud
 from topocore.processing.cache import LRUCache
@@ -43,6 +41,8 @@ from .base import (
     CurvatureEstimator,
     NormalAndCurvatureEstimator,
     NormalEstimator,
+    select_at_indices,
+    validate_viewpoint,
 )
 from .pca import PCANormalEstimator
 from .weighted_pca import WeightedPCANormalEstimator
@@ -156,7 +156,13 @@ class NormalManager:
         self._method: str = method
         self._k: int = k
         self._orient_upward: bool = orient_upward
-        self._viewpoint: Vector3D | None = viewpoint
+        # PR21 remediation (NORMALS-MANAGER-001): __init__ previously
+        # assigned viewpoint directly, bypassing the setter (and thus
+        # any validation) entirely -- confirmed directly that
+        # `NormalManager(viewpoint=(1, 2, 3))` was accepted silently
+        # at construction, only to fail later with a confusing
+        # AttributeError once actually used in _orient_normals().
+        self._viewpoint: Vector3D | None = validate_viewpoint(viewpoint)
 
         self._cache: LRUCache[CacheKey, tuple[FloatArray2D, FloatArray1D]] = LRUCache(maxsize=cache_size)
 
@@ -226,11 +232,15 @@ class NormalManager:
         self,
         value: Vector3D | None,
     ) -> None:
-
-        if value is not None and value.shape != (3,):
-            raise NormalError(f"viewpoint must have shape (3,), got {value.shape}.")
-
-        self._viewpoint = value
+        # PR21 remediation (NORMALS-MANAGER-001): previously did
+        # `value.shape != (3,)` directly, assuming `value` already
+        # had a `.shape` attribute -- a plain tuple/list would raise
+        # a confusing AttributeError here instead of NormalError,
+        # the same root gap already found and fixed for
+        # PCANormalEstimator/WeightedPCANormalEstimator's own
+        # constructors (PCA-VIEWPOINT-001). Reuses the same shared
+        # validate_viewpoint() helper for a consistent contract.
+        self._viewpoint = validate_viewpoint(value)
         self._cache.clear()
 
     def estimate(
@@ -268,13 +278,7 @@ class NormalManager:
             **kwargs,
         )
 
-        if indices is not None:
-            return normals[indices].astype(
-                np.float64,
-                copy=False,
-            )
-
-        return normals
+        return select_at_indices(normals, indices)
 
     def estimate_curvature(
         self,

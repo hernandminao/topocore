@@ -137,6 +137,30 @@ class SamplingManager:
         sampler_factory: SamplerFactory = self._SUPPORTED_METHODS[self._method]
 
         if self._method == "random":
+            # PR21 remediation (SAMPLING-MANAGER-001): unlike the
+            # other 4 methods, "random" has no safe universal
+            # default for its required parameter -- uniform/voxel/
+            # stratified/density all default to a spatial unit
+            # (step, voxel_size, cell_size, target_density), which
+            # is meaningful independent of dataset size; "fraction"
+            # or "count" are not: neither a proportion nor an
+            # absolute count has a neutral, dataset-independent
+            # default. Confirmed directly, before this change, that
+            # omitting both silently produced RandomSampler's own
+            # "Specify exactly one of fraction or count, not both."
+            # -- a confusing message given the caller specified
+            # NEITHER, not both. This validation raises a clear,
+            # manager-level error instead, in the correct layer
+            # (SamplingManager, not RandomSampler, which keeps its
+            # own validation unchanged as a second line of defense).
+            # No default value is invented for either parameter.
+            if params.get("fraction") is None and params.get("count") is None:
+                raise SamplingError(
+                    "Method 'random' requires an explicit 'fraction' or 'count' parameter -- "
+                    "unlike the other sampling methods, there is no safe default proportion "
+                    "or count to assume."
+                )
+
             return sampler_factory(
                 fraction=params.get("fraction"),
                 count=params.get("count"),

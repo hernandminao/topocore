@@ -87,7 +87,10 @@ class XGBoostClassifier(MachineLearningClassifier):
     Raises
     ------
     ClassificationError
-        If the ``xgboost`` package is not installed.
+        If the ``xgboost`` package is not installed, or if any
+        constructor parameter is outside its valid range (PR21
+        remediation, ML-VALIDATION-001 -- see RandomForestClassifier's
+        own docstring for the full rationale).
     """
 
     __slots__ = (
@@ -122,19 +125,19 @@ class XGBoostClassifier(MachineLearningClassifier):
             raise ClassificationError(_NOT_INSTALLED_ERROR)
 
         if n_estimators <= 0:
-            raise ValueError("n_estimators must be greater than zero.")
+            raise ClassificationError("n_estimators must be greater than zero.")
 
         if max_depth <= 0:
-            raise ValueError("max_depth must be greater than zero.")
+            raise ClassificationError("max_depth must be greater than zero.")
 
         if learning_rate <= 0:
-            raise ValueError("learning_rate must be greater than zero.")
+            raise ClassificationError("learning_rate must be greater than zero.")
 
         if not 0.0 < subsample <= 1.0:
-            raise ValueError("subsample must be in the range (0, 1].")
+            raise ClassificationError("subsample must be in the range (0, 1].")
 
         if not 0.0 < colsample_bytree <= 1.0:
-            raise ValueError("colsample_bytree must be in the range (0, 1].")
+            raise ClassificationError("colsample_bytree must be in the range (0, 1].")
 
         self._n_estimators = n_estimators
         self._max_depth = max_depth

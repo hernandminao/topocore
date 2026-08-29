@@ -82,7 +82,10 @@ class GradientBoostClassifier(MachineLearningClassifier):
     Raises
     ------
     ClassificationError
-        If the ``scikit-learn`` package is not installed.
+        If the ``scikit-learn`` package is not installed, or if any
+        constructor parameter is outside its valid range (PR21
+        remediation, ML-VALIDATION-001 -- see RandomForestClassifier's
+        own docstring for the full rationale).
     """
 
     __slots__ = (
@@ -115,19 +118,19 @@ class GradientBoostClassifier(MachineLearningClassifier):
             raise ClassificationError(_NOT_INSTALLED_ERROR)
 
         if max_iter <= 0:
-            raise ValueError("max_iter must be greater than zero.")
+            raise ClassificationError("max_iter must be greater than zero.")
 
         if learning_rate <= 0:
-            raise ValueError("learning_rate must be greater than zero.")
+            raise ClassificationError("learning_rate must be greater than zero.")
 
         if l2_regularization < 0:
-            raise ValueError("l2_regularization must be non-negative.")
+            raise ClassificationError("l2_regularization must be non-negative.")
 
         if max_leaf_nodes is not None and max_leaf_nodes < 2:
-            raise ValueError("max_leaf_nodes must be at least 2 when specified.")
+            raise ClassificationError("max_leaf_nodes must be at least 2 when specified.")
 
         if max_depth is not None and max_depth <= 0:
-            raise ValueError("max_depth must be greater than zero.")
+            raise ClassificationError("max_depth must be greater than zero.")
 
         self._max_iter = max_iter
         self._max_depth = max_depth

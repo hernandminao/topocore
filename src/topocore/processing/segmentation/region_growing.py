@@ -340,13 +340,40 @@ class RegionGrowingSegmenter(BaseRegionGrowingSegmenter):
         return angle <= self._normal_angle_threshold
 
     def _filter_small_regions(self) -> None:
-        """Mark regions smaller than the minimum size as noise."""
+        """
+        Mark regions smaller than the minimum size as noise, then
+        renumber the surviving regions so their IDs remain contiguous
+        from 0 -- required by SegmentationResult's own contract.
+
+        PR21 remediation (SEG-RG-001): previously, filtering left
+        GAPS in the ID sequence whenever an early-discovered region
+        (a lower id, since ids are assigned in curvature-ascending
+        discovery order) was filtered out while a later one
+        survived -- e.g. filtering region 0 while region 1 survives
+        left labels in {-1, 1}, which SegmentationResult correctly
+        rejects as non-contiguous. Confirmed reproducible directly
+        before this fix, and confirmed this exact scenario propagates
+        into BuildingSegmenter/TreeSegmenter (which use this class
+        internally) as well.
+
+        The renumbering below processes surviving old ids in
+        ascending order, mapping each to its rank (0, 1, 2, ...)
+        among survivors. Because ranks are always <= their
+        corresponding old id, and old ids are processed in ascending
+        order, a newly assigned rank can never collide with an
+        old id not yet processed -- no temporary buffer is needed.
+        """
         labels = self._require_labels()
         region_sizes = self._compute_region_sizes()
 
         for region_id, size in enumerate(region_sizes):
             if size < self._min_region_size:
                 labels[labels == region_id] = -1
+
+        surviving_ids = sorted({int(label) for label in labels if label >= 0})
+        for new_id, old_id in enumerate(surviving_ids):
+            if new_id != old_id:
+                labels[labels == old_id] = new_id
 
     def _compute_region_sizes(self) -> IntArray:
         """Compute the size of each non-negative region label."""

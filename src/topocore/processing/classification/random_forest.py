@@ -82,7 +82,18 @@ class RandomForestClassifier(MachineLearningClassifier):
     Raises
     ------
     ClassificationError
-        If the ``scikit-learn`` package is not installed.
+        If the ``scikit-learn`` package is not installed, or if any
+        constructor parameter is outside its valid range.
+
+        PR21 remediation (ML-VALIDATION-001): previously, parameter
+        validation raised plain ValueError -- a type unrelated to
+        ClassificationError/ProcessingError/TopoCoreError, breaking
+        ClassificationManager's own established exception-
+        normalization contract (confirmed directly: a ValueError
+        here was not caught by `except ClassificationError` around
+        the manager). Now consistent with the "backend not
+        installed" check below, which already used
+        ClassificationError.
     """
 
     __slots__ = (
@@ -117,25 +128,25 @@ class RandomForestClassifier(MachineLearningClassifier):
             raise ClassificationError(_NOT_INSTALLED_ERROR)
 
         if n_estimators <= 0:
-            raise ValueError("n_estimators must be greater than zero.")
+            raise ClassificationError("n_estimators must be greater than zero.")
 
         if min_samples_split < 2:
-            raise ValueError("min_samples_split must be at least 2.")
+            raise ClassificationError("min_samples_split must be at least 2.")
 
         if min_samples_leaf < 1:
-            raise ValueError("min_samples_leaf must be at least 1.")
+            raise ClassificationError("min_samples_leaf must be at least 1.")
 
         if max_depth is not None and max_depth <= 0:
-            raise ValueError("max_depth must be greater than zero.")
+            raise ClassificationError("max_depth must be greater than zero.")
 
         if n_jobs < -1 or n_jobs == 0:
-            raise ValueError("n_jobs must be -1 or a positive integer.")
+            raise ClassificationError("n_jobs must be -1 or a positive integer.")
 
         if isinstance(max_features, int) and max_features <= 0:
-            raise ValueError("max_features must be greater than zero.")
+            raise ClassificationError("max_features must be greater than zero.")
 
         if isinstance(max_features, float) and not (0.0 < max_features <= 1.0):
-            raise ValueError("max_features must be in (0.0, 1.0].")
+            raise ClassificationError("max_features must be in (0.0, 1.0].")
 
         self._n_estimators = n_estimators
         self._max_depth = max_depth

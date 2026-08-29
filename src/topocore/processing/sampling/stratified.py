@@ -402,15 +402,44 @@ class StratifiedSampler(Sampler):
         # module -- pass an explicit seed for reproducibility.
         rng = np.random.default_rng(self._seed)
 
-        for cell_idx in range(len(unique_cells)):
-            mask = group_labels == cell_idx
+        # PR21 remediation (SAMPLING-STRATIFIED-001): previously, each
+        # cell's members were found via `mask = group_labels ==
+        # cell_idx` inside a `for cell_idx in range(len(unique_cells))`
+        # loop -- an O(N) boolean scan repeated once per cell, giving
+        # O(N x G) total. Grouping is now done ONCE via a single
+        # stable argsort of group_labels (O(N log N)), then each
+        # cell's members are obtained by slicing between
+        # np.bincount()-derived boundaries -- O(1) amortized per cell.
+        #
+        # This is a pure regrouping-mechanism change, not a change to
+        # WHAT gets selected or in WHAT order rng.choice() is called:
+        # confirmed directly, before this change, that
+        # rng.choice()'s own output depends on the ORDER of its input
+        # pool, not merely its contents -- a shuffled-order pool with
+        # the same seed gives a DIFFERENT selection. A stable sort
+        # (ties broken by original position) preserves each cell's
+        # member list in the exact same ascending original-index
+        # order `np.flatnonzero(mask)` already produced, confirmed
+        # identical for every cell against the original boolean-mask
+        # approach before writing this comment. cell_idx is still
+        # visited in the same 0..len(unique_cells)-1 order (the
+        # order np.unique's own sorted output already assigns), so
+        # rng.choice() is called the same number of times, on pools
+        # with identical contents AND identical order, in the same
+        # sequence -- giving bit-for-bit identical results to the
+        # pre-fix implementation for the same seed.
+        sort_order = np.argsort(group_labels, kind="stable")
+        cell_counts = np.bincount(group_labels, minlength=len(unique_cells))
+        cell_boundaries = np.concatenate(([0], np.cumsum(cell_counts)))
 
-            if not np.any(mask):
+        for cell_idx in range(len(unique_cells)):
+            n_cell_points = int(cell_counts[cell_idx])
+
+            if n_cell_points == 0:
                 continue
 
-            orig_indices = np.flatnonzero(mask)
+            orig_indices = sort_order[cell_boundaries[cell_idx] : cell_boundaries[cell_idx + 1]]
 
-            n_cell_points = len(orig_indices)
             n_sample = min(
                 self._samples_per_cell,
                 n_cell_points,

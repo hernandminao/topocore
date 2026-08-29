@@ -40,3 +40,9 @@ class UnsupportedDelimiterError(ASCIIError):
     """
     Raised when a delimiter cannot be detected.
     """
+
+
+class ColumnMappingError(ASCIIError):
+    """
+    Raised when column normalization produces an ambiguous result.
+    """

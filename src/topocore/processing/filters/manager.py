@@ -26,6 +26,8 @@ MIT
 
 from __future__ import annotations
 
+import functools
+import weakref
 from collections.abc import Iterator
 from typing import Any
 
@@ -51,6 +53,13 @@ from .statistical import StatisticalOutlierFilter
 
 type FilterStats = dict[str, Any]
 type CacheKey = tuple[int, int, str]
+
+
+def _cache_key_belongs_to(cloud_id: int, key: CacheKey) -> bool:
+    """Predicate for LRUCache.remove_where(): matches every cache entry whose stage-input cloud id is `cloud_id`."""
+    return key[0] == cloud_id
+
+
 type PolygonArray = NDArray[np.float64]
 
 
@@ -189,8 +198,15 @@ class FilterManager:
         stats: list[FilterStats] = []
 
         for index, filter in enumerate(self._filters):
+            # PR21 remediation (FILTER-MANAGER-001): `cache_key`'s
+            # first element identifies the INPUT cloud to this stage
+            # (`current`, before the reassignment below) -- captured
+            # here in `stage_input` so the finalizer registered after
+            # a cache miss attaches to the correct object, not to
+            # `current`'s later reassignment to this stage's output.
+            stage_input = current
             cache_key: CacheKey = (
-                id(current),
+                id(stage_input),
                 index,
                 filter.name(),
             )
@@ -233,6 +249,41 @@ class FilterManager:
                 self._cache.set(
                     cache_key,
                     current,
+                )
+
+                # PR21 remediation (FILTER-MANAGER-001): apply()'s
+                # own cache persists across separate apply() calls
+                # (see class docstring's own reuse pattern), and
+                # previously keyed cache entries solely by
+                # id(stage_input) -- a value CPython is well known to
+                # reuse for a LATER, unrelated object once
+                # `stage_input` is garbage collected. Confirmed
+                # deterministically (bypassing the non-deterministic
+                # nature of actual allocator reuse) by directly
+                # inserting a cache entry under the exact id()-based
+                # key a colliding object would produce, and
+                # confirming apply() blindly returned it -- a stale,
+                # wrong result from a completely different, already
+                # -freed PointCloud.
+                #
+                # Fix: a weakref finalizer is registered on
+                # `stage_input` itself (not merely its id) that
+                # proactively purges every cache entry tied to this
+                # exact id() the MOMENT this object is garbage
+                # collected -- synchronously, not lazily. This means
+                # a later object reusing the same freed address can
+                # never find a leftover stale entry: it was already
+                # removed before the reuse could ever happen.
+                #
+                # This preserves the cache's existing global LRUCache
+                # eviction bound (cache_size keeps meaning "N entries
+                # total", not "N entries per cloud") -- only cleanup
+                # timing changed, not the eviction policy, the key
+                # structure, or any public API.
+                weakref.finalize(
+                    stage_input,
+                    self._cache.remove_where,
+                    functools.partial(_cache_key_belongs_to, id(stage_input)),
                 )
 
             except Exception as exc:

@@ -79,7 +79,10 @@ class LightGBMClassifier(MachineLearningClassifier):
     Raises
     ------
     ClassificationError
-        If the ``lightgbm`` package is not installed.
+        If the ``lightgbm`` package is not installed, or if any
+        constructor parameter is outside its valid range (PR21
+        remediation, ML-VALIDATION-001 -- see RandomForestClassifier's
+        own docstring for the full rationale).
     """
 
     __slots__ = (
@@ -112,13 +115,13 @@ class LightGBMClassifier(MachineLearningClassifier):
             raise ClassificationError(_NOT_INSTALLED_ERROR)
 
         if n_estimators <= 0:
-            raise ValueError("n_estimators must be greater than zero.")
+            raise ClassificationError("n_estimators must be greater than zero.")
 
         if learning_rate <= 0:
-            raise ValueError("learning_rate must be greater than zero.")
+            raise ClassificationError("learning_rate must be greater than zero.")
 
         if num_leaves <= 1:
-            raise ValueError("num_leaves must be greater than 1.")
+            raise ClassificationError("num_leaves must be greater than 1.")
 
         self._n_estimators = n_estimators
         self._max_depth = max_depth

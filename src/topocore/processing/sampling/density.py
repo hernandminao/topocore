@@ -127,22 +127,29 @@ class DensitySampler(Sampler):
         fractions = self._compute_fractions(densities)
 
         # Sample points using the computed fractions
+        # PR21 remediation (SAMPLING-DENSITY-001): replaced a
+        # per-point Python loop drawing one RNG value at a time with
+        # a single batched draw. Confirmed directly that
+        # `rng.random()` called N times sequentially produces the
+        # IDENTICAL sequence as `rng.random(N)` called once from the
+        # same seed -- verified with a real fractions array before
+        # this change, giving the exact same selected indices. Seed,
+        # reproducibility, and the underlying acceptance/rejection
+        # distribution are therefore unchanged; only the mechanism
+        # used to draw the same N random values changed.
         rng = np.random.default_rng(self._seed)
 
         total_points = cloud.point_count
 
-        indices_to_keep: list[int] = []
-
-        for i in range(total_points):
-            if rng.random() < fractions[i]:
-                indices_to_keep.append(i)
+        accept = rng.random(total_points) < fractions
+        indices_to_keep = np.flatnonzero(accept)
 
         if len(indices_to_keep) == 0:
             raise SamplingError("No points selected. Try increasing target_density or min_fraction.")
 
         return _build_sampled_cloud(
             cloud,
-            np.asarray(indices_to_keep, dtype=np.intp),
+            indices_to_keep.astype(np.intp, copy=False),
         )
 
     def _compute_density(

@@ -37,6 +37,7 @@ from numpy.typing import NDArray
 
 from topocore.pointcloud.attributes import PointAttribute
 from topocore.pointcloud.pointcloud import PointCloud
+from topocore.processing._shared import extract_attribute
 from topocore.processing.classification.base import (
     ClassificationResult,
     Classifier,
@@ -90,11 +91,18 @@ class _GroundRelativeHeightFeatureComputer(ScalarFeatureComputer):
         self._ground_method = ground_method
 
     def compute(self, cloud: PointCloud) -> FloatArray1D:
+        # PR21 remediation (architectural bypass, Phase 4): this
+        # previously duplicated _shared.extract_attribute()'s own
+        # concatenation/validation logic inline for X, Y, and Z
+        # individually. Now consumes the shared abstraction directly.
+        # X/Y/Z are declared float64 in ATTRIBUTE_DTYPES, so the
+        # trailing astype(..., copy=False) below remains a no-op
+        # safety cast, not a behavior change.
         points = np.column_stack(
             [
-                np.concatenate([chunk[PointAttribute.X] for chunk in cloud]),
-                np.concatenate([chunk[PointAttribute.Y] for chunk in cloud]),
-                np.concatenate([chunk[PointAttribute.Z] for chunk in cloud]),
+                extract_attribute(cloud, PointAttribute.X),
+                extract_attribute(cloud, PointAttribute.Y),
+                extract_attribute(cloud, PointAttribute.Z),
             ]
         ).astype(np.float64, copy=False)
 
@@ -487,14 +495,21 @@ class MachineLearningClassifier(Classifier):
     ) -> NDArray[np.float64]:
         """
         Extract a point attribute as a contiguous float64 array.
+
+        PR21 remediation (architectural bypass, Phase 4): previously
+        reimplemented _shared.extract_attribute()'s own concatenation
+        and validation logic. Now delegates to it directly, applying
+        the float64 cast this class's own contract requires on the
+        result -- necessary and NOT redundant, since radiometric
+        attributes have non-float64 native dtypes (INTENSITY is
+        uint16; RETURN_NUMBER/NUMBER_OF_RETURNS are uint8, per
+        ATTRIBUTE_DTYPES), confirmed directly before this change.
+        _shared.extract_attribute()'s own "attribute not found" check
+        is unreachable here: the caller (_add_radiometric_features)
+        already validates attribute presence first, with its own
+        message, before this method is ever called.
         """
-
-        values = [chunk[attribute].astype(np.float64) for chunk in cloud]
-
-        if not values:
-            raise ProcessingError(f"Point cloud does not contain attribute '{attribute.name}'.")
-
-        return np.concatenate(values)
+        return extract_attribute(cloud, attribute).astype(np.float64, copy=False)
 
     def _validate_feature(
         self,

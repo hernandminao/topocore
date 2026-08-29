@@ -43,6 +43,8 @@ from topocore.processing.types import (
 from .base import (
     NormalAndCurvatureEstimator,
     NormalEstimator,
+    select_at_indices,
+    validate_viewpoint,
 )
 
 
@@ -90,7 +92,7 @@ class WeightedPCANormalEstimator(
         self._k = k
         self._sigma = sigma
         self._orient_upward = orient_upward
-        self._viewpoint = viewpoint
+        self._viewpoint = validate_viewpoint(viewpoint)
 
     @override
     def estimate(
@@ -122,13 +124,7 @@ class WeightedPCANormalEstimator(
             manager=manager,
         )
 
-        if indices is not None:
-            return normals[indices].astype(
-                np.float64,
-                copy=False,
-            )
-
-        return normals
+        return select_at_indices(normals, indices)
 
     @override
     def estimate_both(
@@ -138,6 +134,25 @@ class WeightedPCANormalEstimator(
         manager: NeighborhoodManager | None = None,
     ) -> tuple[FloatArray2D, FloatArray1D]:
         """Estimate both normals and curvature using weighted PCA."""
+
+        # PR21 remediation (NORMALS-SIBLING-001): PCANormalEstimator's
+        # own estimate_both() validates these two conditions before
+        # ever touching NeighborhoodManager/compute_pca(), giving a
+        # clear, domain-specific NormalError. This class previously
+        # had no equivalent checks, letting ProcessingError/
+        # NeighborError from those lower-level dependencies leak
+        # through unwrapped -- a real inconsistency between sibling
+        # estimator classes' public exception contracts for the
+        # exact same input conditions. Mirrored here, matching this
+        # file's own "weighted PCA" wording convention (see
+        # __init__'s k < 3 check just above).
+        if cloud.is_empty:
+            raise NormalError("Cannot estimate normals on an empty point cloud.")
+
+        if cloud.point_count < self._k:
+            raise NormalError(
+                f"Point cloud has {cloud.point_count} points, but weighted PCA requires at least {self._k}."
+            )
 
         if manager is None:
             manager = NeighborhoodManager.from_point_cloud(

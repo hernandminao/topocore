@@ -417,20 +417,27 @@ class ICPBase(Registrar):
         valid correspondence in the target.
         """
         source_points = self._extract_points(source)
+
+        if len(source_points) == 0:
+            return 0.0
+
         target_manager = NeighborhoodManager.from_point_cloud(target)
 
-        matched = 0
-        for point in source_points:
-            indices, distances = target_manager.query_point(
-                point[0],
-                point[1],
-                point[2],
-                k=1,
-            )
-            if len(indices) > 0 and distances[0] <= self._max_correspondence_distance:
-                matched += 1
+        # PR21 remediation (REG-ICP-001): replaced a per-point
+        # query_point() loop with a single batched
+        # query_points_many() call. The old `len(indices) > 0` guard
+        # is not reproduced -- confirmed directly that query_point()
+        # (and, identically, query_points_many()) with k=1 on a
+        # non-empty tree always returns exactly one result per query
+        # point; target_manager is always built from a non-empty
+        # target here, since register()'s own _validate_inputs()
+        # already rejects an empty target before _compute_fitness()
+        # is ever called. Confirmed numerically identical fitness
+        # values against the old per-point loop before this change.
+        _, distances = target_manager.query_points_many(source_points, k=1)
+        matched = int((distances[:, 0] <= self._max_correspondence_distance).sum())
 
-        return matched / len(source_points) if len(source_points) > 0 else 0.0
+        return matched / len(source_points)
 
     @override
     def name(self) -> str:

@@ -266,7 +266,16 @@ class TreeSegmenter(Segmenter):
                 continue
 
             k = min(10, segment.point_count - 1)
-            if k < 1:
+            # PR21 remediation (SEG-SPEC-001): this guard must match
+            # PCAFeatures' own actual minimum (k >= 3), not merely
+            # k >= 1 -- confirmed the old `k < 1` threshold let k=1
+            # or k=2 through, which PCAFeatures itself rejects with
+            # PointDescriptorError (an uncaught exception from a
+            # different hierarchy than SegmentationError). Segments
+            # too small to support PCA are legitimately skipped here,
+            # matching the same "not enough points for PCA" outcome
+            # as any other segment filtered by size.
+            if k < 3:
                 continue
 
             pca = PCAFeatures(k=k)
@@ -406,7 +415,9 @@ class BuildingSegmenter(Segmenter):
                 continue
 
             k = min(10, segment.point_count - 1)
-            if k < 1:
+            # PR21 remediation (SEG-SPEC-001): see the identical fix
+            # and rationale in _filter_tree_clusters().
+            if k < 3:
                 continue
 
             pca = PCAFeatures(k=k)

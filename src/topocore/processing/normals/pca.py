@@ -37,7 +37,12 @@ from topocore.processing.types import (
     Vector3D,
 )
 
-from .base import NormalAndCurvatureEstimator, NormalEstimator
+from .base import (
+    NormalAndCurvatureEstimator,
+    NormalEstimator,
+    select_at_indices,
+    validate_viewpoint,
+)
 
 
 class PCANormalEstimator(NormalEstimator, NormalAndCurvatureEstimator):
@@ -75,7 +80,7 @@ class PCANormalEstimator(NormalEstimator, NormalAndCurvatureEstimator):
 
         self._k = k
         self._orient_upward = orient_upward
-        self._viewpoint = viewpoint
+        self._viewpoint = validate_viewpoint(viewpoint)
 
     @override
     def estimate(
@@ -108,13 +113,7 @@ class PCANormalEstimator(NormalEstimator, NormalAndCurvatureEstimator):
             manager=manager,
         )
 
-        if indices is not None:
-            return normals[indices].astype(
-                np.float64,
-                copy=False,
-            )
-
-        return normals
+        return select_at_indices(normals, indices)
 
     @override
     def estimate_both(
@@ -261,13 +260,7 @@ class PCACurvatureEstimator:
             manager=manager,
         )
 
-        if indices is not None:
-            return curvature[indices].astype(
-                np.float64,
-                copy=False,
-            )
-
-        return curvature
+        return select_at_indices(curvature, indices)
 
     def name(self) -> str:
         return "pca_curvature"
@@ -277,6 +270,6 @@ class PCACurvatureEstimator:
 
 
 __all__ = [
-    "PCANormalEstimator",
     "PCACurvatureEstimator",
+    "PCANormalEstimator",
 ]

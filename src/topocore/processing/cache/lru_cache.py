@@ -22,6 +22,7 @@ MIT
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from threading import RLock
 from typing import Any, TypeVar
 
@@ -166,6 +167,39 @@ class LRUCache(Cache[K, V]):
                 self._cache.pop(key)
                 return True
             return False
+
+    def remove_where(
+        self,
+        predicate: Callable[[K], bool],
+    ) -> int:
+        """
+        Remove every entry whose key matches `predicate`.
+
+        Added for FILTER-MANAGER-001: FilterManager needs to purge
+        every cache entry tied to a specific PointCloud once that
+        cloud is garbage collected (via a weakref finalizer), without
+        knowing in advance which pipeline-stage keys it may have
+        cached for that cloud. This is a purely additive method --
+        it does not change the behavior of any existing method or
+        any other current caller of this class (e.g. NormalManager,
+        MachineLearningClassifier's own FeatureManager).
+
+        Parameters
+        ----------
+        predicate
+            Called with each key currently in the cache; entries for
+            which it returns True are removed.
+
+        Returns
+        -------
+        int
+            The number of entries removed.
+        """
+        with self._lock:
+            matching_keys = [key for key in self._cache if predicate(key)]
+            for key in matching_keys:
+                del self._cache[key]
+            return len(matching_keys)
 
     def clear(
         self,

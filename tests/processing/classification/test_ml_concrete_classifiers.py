@@ -79,9 +79,7 @@ from topocore.processing.exceptions import ClassificationError
 def _training_cloud(n: int = 50, seed: int = 0) -> PointCloud:
     rng = np.random.default_rng(seed)
     cloud = PointCloud()
-    chunk = Chunk(
-        size=n, attributes=[PointAttribute.X, PointAttribute.Y, PointAttribute.Z]
-    )
+    chunk = Chunk(size=n, attributes=[PointAttribute.X, PointAttribute.Y, PointAttribute.Z])
     chunk[PointAttribute.X][:] = rng.uniform(0, 10, n)
     chunk[PointAttribute.Y][:] = rng.uniform(0, 10, n)
     chunk[PointAttribute.Z][:] = rng.uniform(0, 5, n)
@@ -185,9 +183,7 @@ def test_random_forest_reproducible_with_same_random_state() -> None:
     clf_b = RandomForestClassifier(n_estimators=20, random_state=42)
     clf_b.fit(cloud, labels)
 
-    np.testing.assert_array_equal(
-        clf_a.classify(cloud).labels, clf_b.classify(cloud).labels
-    )
+    np.testing.assert_array_equal(clf_a.classify(cloud).labels, clf_b.classify(cloud).labels)
 
 
 # ----------------------------------------------------------------------
@@ -237,9 +233,7 @@ def test_gradient_boost_fit_and_classify() -> None:
 # ----------------------------------------------------------------------
 
 
-def test_ml_validation_001_classification_error_no_longer_escapes_as_value_error() -> (
-    None
-):
+def test_ml_validation_001_classification_error_no_longer_escapes_as_value_error() -> None:
     """
     The core regression: ClassificationManager(method="random_forest",
     model_params={"n_estimators": -1}) must now raise

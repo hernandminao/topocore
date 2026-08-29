@@ -47,12 +47,65 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from topocore.pointcloud.attributes import PointAttribute
 from topocore.pointcloud.chunk import Chunk
 from topocore.pointcloud.pointcloud import PointCloud
 from topocore.processing.exceptions import SamplingError
 from topocore.processing.sampling.voxel import VoxelSampler
+
+
+def _reference_compute_voxel_centroid(
+    points: np.ndarray,
+    group_labels: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    PR21 remediation (VOXEL-DEAD-CODE-001): this is the pre-PR21.7.5
+    O(N x G) reference implementation, moved HERE from
+    topocore.processing.sampling.voxel -- confirmed exhaustively
+    (direct instrumentation across all 4 public methods, plus a full
+    grep of both production code AND this test suite) that its ONLY
+    real consumer was this file's own cross-check tests below, never
+    any production code path. Kept here, test-scoped, specifically
+    to preserve this suite's own valuable "new algorithm matches the
+    old one" regression check without carrying dead weight in
+    production.
+    """
+    unique_groups, inverse = np.unique(group_labels, return_inverse=True)
+    n_groups = len(unique_groups)
+
+    centroids = np.zeros((n_groups, 3), dtype=np.float64)
+    counts = np.zeros(n_groups, dtype=np.int64)
+
+    for i in range(n_groups):
+        mask = inverse == i
+        if mask.any():
+            centroids[i] = points[mask].mean(axis=0)
+            counts[i] = mask.sum()
+
+    return centroids, counts
+
+
+def _reference_compute_voxel_closest(
+    points: np.ndarray,
+    group_labels: np.ndarray,
+    voxel_centers: np.ndarray,
+) -> np.ndarray:
+    """See `_reference_compute_voxel_centroid`'s own docstring for why this lives here now."""
+    n_groups = int(group_labels.max()) + 1
+    indices = np.zeros(n_groups, dtype=np.int64)
+
+    for i in range(n_groups):
+        mask = group_labels == i
+        if mask.any():
+            group_points = points[mask]
+            center = voxel_centers[i]
+
+            distances = np.linalg.norm(group_points - center, axis=1)
+            min_idx = np.argmin(distances)
+            orig_indices = np.flatnonzero(mask)
+            indices[i] = orig_indices[min_idx]
+
+    return indices
 
 
 def _chunk(xs: list[float], ys: list[float], zs: list[float]) -> Chunk:
@@ -107,11 +160,8 @@ def test_centroid_merges_three_voxels_arbitrarily_split_across_chunks() -> None:
 
 
 def test_centroid_matches_reference_algorithm_on_random_data() -> None:
-    """Cross-check against the pre-PR21.7.5 algorithm's own helper functions, at a size small enough to compare."""
-    from topocore.processing.sampling.voxel import (
-        _compute_voxel_centroid,
-        _voxel_indices,
-    )
+    """Cross-check against the pre-PR21.7.5 algorithm's own reference implementation, at a size small enough to compare."""
+    from topocore.processing.sampling.voxel import _voxel_indices
 
     rng = np.random.default_rng(0)
     n = 2000
@@ -129,7 +179,7 @@ def test_centroid_matches_reference_algorithm_on_random_data() -> None:
     voxel_i, voxel_j, voxel_k = _voxel_indices(points[:, 0], points[:, 1], points[:, 2], voxel_size)
     coords = np.column_stack((voxel_i, voxel_j, voxel_k))
     _unique_groups, labels = np.unique(coords, axis=0, return_inverse=True)
-    old_centroids, _counts = _compute_voxel_centroid(points, labels)
+    old_centroids, _counts = _reference_compute_voxel_centroid(points, labels)
 
     new_sorted = new_centroids[np.lexsort(new_centroids.T[::-1])]
     old_sorted = old_centroids[np.lexsort(old_centroids.T[::-1])]
@@ -168,10 +218,7 @@ def test_closest_tie_break_is_strict_and_global_order_independent_of_chunking() 
 
 
 def test_closest_matches_reference_algorithm_on_random_data() -> None:
-    from topocore.processing.sampling.voxel import (
-        _compute_voxel_closest,
-        _voxel_indices,
-    )
+    from topocore.processing.sampling.voxel import _voxel_indices
 
     rng = np.random.default_rng(1)
     n = 2000
@@ -190,7 +237,7 @@ def test_closest_matches_reference_algorithm_on_random_data() -> None:
     coords = np.column_stack((voxel_i, voxel_j, voxel_k))
     unique_groups, labels = np.unique(coords, axis=0, return_inverse=True)
     centers = (unique_groups.astype(np.float64) + 0.5) * voxel_size
-    old_indices = _compute_voxel_closest(points, labels, centers)
+    old_indices = _reference_compute_voxel_closest(points, labels, centers)
     old_points = points[old_indices]
 
     new_sorted = new_points[np.lexsort(new_points.T[::-1])]

@@ -82,50 +82,32 @@ def _voxel_indices(
     return voxel_i, voxel_j, voxel_k
 
 
-def _compute_voxel_centroid(
-    points: np.ndarray,
-    group_labels: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Compute centroid for each voxel."""
-    unique_groups, inverse = np.unique(group_labels, return_inverse=True)
-    n_groups = len(unique_groups)
-
-    centroids = np.zeros((n_groups, 3), dtype=np.float64)
-    counts = np.zeros(n_groups, dtype=np.int64)
-
-    # Accumulate sums
-    for i in range(n_groups):
-        mask = inverse == i
-        if mask.any():
-            centroids[i] = points[mask].mean(axis=0)
-            counts[i] = mask.sum()
-
-    return centroids, counts
-
-
-def _compute_voxel_closest(
-    points: np.ndarray,
-    group_labels: np.ndarray,
-    voxel_centers: np.ndarray,
-) -> np.ndarray:
-    """Find closest point per voxel."""
-    n_groups = int(group_labels.max()) + 1
-    indices = np.zeros(n_groups, dtype=np.int64)
-
-    for i in range(n_groups):
-        mask = group_labels == i
-        if mask.any():
-            group_points = points[mask]
-            center = voxel_centers[i]
-
-            # Find point closest to center
-            distances = np.linalg.norm(group_points - center, axis=1)
-            min_idx = np.argmin(distances)
-            # Get original index
-            orig_indices = np.flatnonzero(mask)
-            indices[i] = orig_indices[min_idx]
-
-    return indices
+# PR21 remediation (VOXEL-DEAD-CODE-001): _compute_voxel_centroid()
+# and _compute_voxel_closest() -- the pre-PR21.7.5 O(N x G) helpers
+# for "centroid"/"closest" -- were removed here. Confirmed via
+# instrumentation (monkeypatching every suspect method and calling
+# sample() for all 4 public methods) that neither was ever called
+# from any real usage path: PR21.7.5 replaced their functionality
+# with the chunk-wise _sample_centroid_chunked()/
+# _sample_closest_chunked() methods below, called directly from
+# sample() before _apply_sampling() is ever reached, but the old
+# implementations were left in place rather than removed at the
+# time. Confirmed exhaustively: zero references anywhere in
+# PRODUCTION code (direct calls, indirect calls, __all__, or
+# documentation) -- the *_chunked() replacements already cover their
+# exact responsibility (verified identical results across
+# constructor/happy-path/attribute-preservation/reproducibility/
+# chunk-invariance tests in this module's own regression suite).
+# One genuine indirect consumer WAS found during this removal, in
+# this package's own test suite (test_voxel_chunked_accumulator.py,
+# from PR21.7.5's original work): both functions were used there as
+# a known-correct REFERENCE implementation to cross-check the new
+# chunked accumulator against the pre-PR21.7.5 algorithm at scale.
+# That cross-check is valuable and was preserved -- the reference
+# implementation was moved into that test file itself (as
+# `_reference_compute_voxel_centroid`/`_reference_compute_voxel_closest`),
+# since its only real purpose was ever as a test-scoped baseline,
+# never a production capability.
 
 
 class VoxelSampler(Sampler):
@@ -254,8 +236,8 @@ class VoxelSampler(Sampler):
         # PR does not make unilaterally. "random" therefore still
         # goes through the pre-PR21.7.5 path below.
         points = self._extract_points(cloud)
-        voxel_data = self._create_voxels(points)
-        return self._apply_sampling(cloud, points, voxel_data)
+        groups, labels = self._create_voxels(points)
+        return self._apply_sampling(cloud, len(groups), labels)
 
     def _sample_centroid_chunked(
         self,
@@ -430,95 +412,33 @@ class VoxelSampler(Sampler):
     def _apply_sampling(
         self,
         cloud: PointCloud,
-        points: np.ndarray,
-        voxel_data: tuple[np.ndarray, np.ndarray],
+        n_groups: int,
+        labels: np.ndarray,
     ) -> PointCloud:
-        """Apply selected voxel strategy."""
+        """
+        Apply the "random" voxel strategy.
 
-        groups, labels = voxel_data
-
-        if self._method == "centroid":
-            return self._sample_centroid(
-                cloud,
-                points,
-                labels,
-            )
-
-        if self._method == "closest":
-            return self._sample_closest(
-                cloud,
-                points,
-                groups,
-                labels,
-            )
+        PR21 remediation (VOXEL-DEAD-CODE-001): previously also
+        dispatched "centroid"/"closest" to _sample_centroid()/
+        _sample_closest(), but sample() already returns via
+        _sample_centroid_chunked()/_sample_closest_chunked() for
+        those two methods before this method is ever reached -- this
+        is now, and was already in practice, called only for
+        "random" (confirmed via instrumentation before removing the
+        dead branches). The `points` parameter existed solely for
+        the removed centroid/closest branches and was dropped along
+        with them; only the group count and voxel labels are needed
+        to dispatch to _sample_random().
+        """
 
         if self._method == "random":
             return self._sample_random(
                 cloud,
                 labels,
-                len(groups),
+                n_groups,
             )
 
         return cloud
-
-    def _sample_centroid(
-        self,
-        cloud: PointCloud,
-        points: np.ndarray,
-        labels: np.ndarray,
-    ) -> PointCloud:
-        """
-        Sample voxels using centroid calculation.
-
-        Centroid sampling keeps only spatial coordinates.
-        Non-spatial attributes are discarded because interpolation
-        strategy is not defined.
-
-        Parameters
-        ----------
-        cloud
-            Original point cloud.
-        points
-            XYZ coordinate array.
-        labels
-            Voxel group labels.
-
-        Returns
-        -------
-        PointCloud
-            Point cloud containing voxel centroids.
-        """
-
-        centroids, _ = _compute_voxel_centroid(
-            points,
-            labels,
-        )
-
-        return self._build_from_points(
-            cloud,
-            centroids,
-        )
-
-    def _sample_closest(
-        self,
-        cloud: PointCloud,
-        points: np.ndarray,
-        groups: np.ndarray,
-        labels: np.ndarray,
-    ) -> PointCloud:
-
-        centers = (groups.astype(np.float64) + 0.5) * self._voxel_size
-
-        indices = _compute_voxel_closest(
-            points,
-            labels,
-            centers,
-        )
-
-        return _build_sampled_cloud(
-            cloud,
-            indices,
-        )
 
     def _sample_random(
         self,

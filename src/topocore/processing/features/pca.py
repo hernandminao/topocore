@@ -59,16 +59,16 @@ class PCAFeatures:
     geometric features from the eigenvalues.
 
     Features computed:
-    - eigenvalues: (λ1, λ2, λ3) with λ1 ≥ λ2 ≥ λ3
+    - eigenvalues: (?1, ?2, ?3) with ?1 ? ?2 ? ?3
     - eigenvectors: principal directions
-    - omnivariance: (λ1 * λ2 * λ3)^(1/3)
-    - anisotropy: (λ1 - λ3) / λ1
-    - linearity: (λ1 - λ2) / λ1
-    - planarity: (λ2 - λ3) / λ1
-    - sphericity: λ3 / λ1
+    - omnivariance: (?1 * ?2 * ?3)^(1/3)
+    - anisotropy: (?1 - ?3) / ?1
+    - linearity: (?1 - ?2) / ?1
+    - planarity: (?2 - ?3) / ?1
+    - sphericity: ?3 / ?1
     - verticality: 1 - |eigenvector_z|
-    - surface_variation: λ3 / (λ1 + λ2 + λ3)
-    - eigenentropy: -sum(p_i * log(p_i)), where p_i = λ_i / sum(λ)
+    - surface_variation: ?3 / (?1 + ?2 + ?3)
+    - eigenentropy: -sum(p_i * log(p_i)), where p_i = ?_i / sum(?)
 
     Notes
     -----
@@ -129,18 +129,36 @@ class PCAFeatures:
                 f"Point cloud has {cloud.point_count} points, but PCA requires at least {self._k}."
             )
 
-        if manager is None:
-            manager = NeighborhoodManager.from_point_cloud(
-                cloud,
-            )
-
+        # PR21 remediation (PCA-FEATURES-001): previously,
+        # `NeighborhoodManager.from_point_cloud(cloud)` sat OUTSIDE
+        # this try block -- only the later `compute_pca(...)` call
+        # was covered. Confirmed directly that this construction step
+        # raises a raw, undocumented `ValueError` (from scipy's own
+        # cKDTree rejecting non-finite coordinates) for exactly the
+        # "invalid coordinates" case this method's own docstring
+        # already promises `PointDescriptorError` for -- the
+        # ValueError has no relationship to TopoCore's own exception
+        # hierarchy (confirmed via its MRO) and was escaping
+        # uncaught. Widening the try to also cover manager
+        # construction, and catching that specific, already-
+        # identified ValueError alongside the existing
+        # ProcessingError, closes the gap without introducing a new,
+        # separate finite-coordinate validation (which would
+        # duplicate a check scipy's own KD-tree construction already
+        # performs) and without changing the manager-construction
+        # logic itself.
         try:
+            if manager is None:
+                manager = NeighborhoodManager.from_point_cloud(
+                    cloud,
+                )
+
             pca = compute_pca(
                 manager,
                 k=self._k,
             )
 
-        except ProcessingError as exc:
+        except (ProcessingError, ValueError) as exc:
             raise PointDescriptorError(
                 str(exc),
             ) from exc
@@ -163,7 +181,7 @@ class PCAFeatures:
         l1_safe = np.where(l1 > 0.0, l1, 1.0)
 
         # Eigenentropy is computed from normalized eigenvalues:
-        # p_i = λ_i / (λ1 + λ2 + λ3)
+        # p_i = ?_i / (?1 + ?2 + ?3)
         eps = np.finfo(np.float64).eps
         normalized = np.clip(eigvals / denom[:, None], eps, None)
         eigenentropy = -(normalized * np.log(normalized)).sum(axis=1)
@@ -186,12 +204,12 @@ class PCAFeatures:
         cloud: PointCloud,
     ) -> FloatArray2D:
         """
-        Compute eigenvalues (λ1, λ2, λ3) for each point.
+        Compute eigenvalues (?1, ?2, ?3) for each point.
 
         Returns
         -------
         FloatArray2D
-            Array of shape (N, 3) with λ1 ≥ λ2 ≥ λ3.
+            Array of shape (N, 3) with ?1 ? ?2 ? ?3.
         """
         return self.compute_all(cloud)["eigenvalues"]
 
@@ -207,7 +225,7 @@ class PCAFeatures:
         NDArray
             Array of shape (N, 3, 3) where each 3x3 matrix contains
             the eigenvectors in columns, ordered to match the sorted
-            eigenvalues (λ1, λ2, λ3).
+            eigenvalues (?1, ?2, ?3).
         """
         return self.compute_all(cloud)["eigenvectors"]
 
@@ -215,42 +233,42 @@ class PCAFeatures:
         self,
         cloud: PointCloud,
     ) -> FloatArray1D:
-        """Compute omnivariance: (λ1 * λ2 * λ3)^(1/3)."""
+        """Compute omnivariance: (?1 * ?2 * ?3)^(1/3)."""
         return self.compute_all(cloud)["omnivariance"]
 
     def anisotropy(
         self,
         cloud: PointCloud,
     ) -> FloatArray1D:
-        """Compute anisotropy: (λ1 - λ3) / λ1."""
+        """Compute anisotropy: (?1 - ?3) / ?1."""
         return self.compute_all(cloud)["anisotropy"]
 
     def linearity(
         self,
         cloud: PointCloud,
     ) -> FloatArray1D:
-        """Compute linearity: (λ1 - λ2) / λ1."""
+        """Compute linearity: (?1 - ?2) / ?1."""
         return self.compute_all(cloud)["linearity"]
 
     def planarity(
         self,
         cloud: PointCloud,
     ) -> FloatArray1D:
-        """Compute planarity: (λ2 - λ3) / λ1."""
+        """Compute planarity: (?2 - ?3) / ?1."""
         return self.compute_all(cloud)["planarity"]
 
     def sphericity(
         self,
         cloud: PointCloud,
     ) -> FloatArray1D:
-        """Compute sphericity: λ3 / λ1."""
+        """Compute sphericity: ?3 / ?1."""
         return self.compute_all(cloud)["sphericity"]
 
     def surface_variation(
         self,
         cloud: PointCloud,
     ) -> FloatArray1D:
-        """Compute surface variation: λ3 / (λ1 + λ2 + λ3)."""
+        """Compute surface variation: ?3 / (?1 + ?2 + ?3)."""
         return self.compute_all(cloud)["surface_variation"]
 
     def verticality(
@@ -266,7 +284,7 @@ class PCAFeatures:
     ) -> FloatArray1D:
         """
         Compute eigenentropy: -sum(p_i * log(p_i)),
-        where p_i = λ_i / (λ1 + λ2 + λ3).
+        where p_i = ?_i / (?1 + ?2 + ?3).
         """
         return self.compute_all(cloud)["eigenentropy"]
 

@@ -21,8 +21,17 @@ jobs:
           enable-cache: true
           python-version: "3.12"
 
+      - name: Install GDAL (system)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgdal-dev gdal-bin
+          echo "GDAL_VERSION=$(gdal-config --version)" >> $GITHUB_ENV
+
       - name: Install dependencies
         run: uv sync --extra terrain --extra ml --extra lightgbm --extra xgboost --extra dxf --extra yaml --extra quality-report
+
+      - name: Install GDAL Python bindings (matching system version)
+        run: uv pip install "GDAL==${{ env.GDAL_VERSION }}"
 
       - name: Ruff check
         run: uv run ruff check .

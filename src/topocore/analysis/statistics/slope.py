@@ -22,6 +22,7 @@ MIT
 
 from __future__ import annotations
 
+import math
 from typing import Final
 
 import numpy as np
@@ -32,6 +33,24 @@ from topocore.analysis.protocols import GriddedSurface
 from topocore.analysis.types import SlopeStats
 
 _MIN_GRID_SIZE: Final[int] = 3
+
+# Relative tolerance for treating a histogram's own min/max range as
+# numerically degenerate. Confirmed directly: a genuinely uniform
+# slope (e.g. a perfectly flat ramp) computed via
+# `_compute_slope_array()`'s own floating-point arithmetic
+# (np.gradient -> np.hypot -> np.arctan -> np.degrees) does NOT
+# produce bit-identical values across the grid -- it produces values
+# differing by ~1e-15, floating-point rounding noise from computing
+# the same mathematical result via slightly different operation
+# orders at different grid positions. `np.histogram()` only widens a
+# degenerate range automatically when min == max EXACTLY (confirmed
+# directly); a range this tiny but nonzero instead makes it fail with
+# "Cannot create N finite-sized bins" -- the real, reproducible defect
+# this constant exists to fix. 1e-9 is deliberately far above
+# realistic floating-point noise (~1e-15 relative to values in the
+# 1-100 range) and far below any slope difference that could be
+# considered a genuine, meaningful variation.
+_HISTOGRAM_RANGE_EPSILON: Final[float] = 1e-9
 
 
 class SlopeStatistics:
@@ -143,14 +162,37 @@ class SlopeStatistics:
         """
         Build slope statistics from valid values.
         """
+        minimum = float(np.min(values))
+        maximum = float(np.max(values))
+
+        # `np.histogram()`'s own default `range` (the data's own
+        # min/max) only self-widens when the two are EXACTLY equal --
+        # see `_HISTOGRAM_RANGE_EPSILON`'s own docstring for why a
+        # genuinely uniform slope's real min/max essentially never
+        # are, despite being numerically degenerate for histogram
+        # purposes. Widened explicitly here only for the histogram's
+        # own bin edges -- `minimum`/`maximum` below are reported
+        # exactly as computed, unwidened; only the histogram binning
+        # range is stabilized, never the statistics themselves.
+        histogram_minimum = minimum
+        histogram_maximum = maximum
+        span = maximum - minimum
+        scale = max(abs(minimum), abs(maximum), 1.0)
+
+        if math.isclose(span, 0.0, rel_tol=0.0, abs_tol=_HISTOGRAM_RANGE_EPSILON * scale):
+            delta = max(_HISTOGRAM_RANGE_EPSILON * scale, np.finfo(float).eps)
+            histogram_minimum -= delta
+            histogram_maximum += delta
+
         counts, bin_edges = np.histogram(
             values,
             bins=self._num_bins,
+            range=(histogram_minimum, histogram_maximum),
         )
 
         return SlopeStats(
-            minimum=float(np.min(values)),
-            maximum=float(np.max(values)),
+            minimum=minimum,
+            maximum=maximum,
             mean=float(np.mean(values)),
             std=float(np.std(values)),
             histogram_bins=[float(value) for value in bin_edges],

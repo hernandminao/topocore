@@ -74,11 +74,11 @@ class Viewshed:
     """
 
     __slots__ = (
+        "_earth_curvature",
+        "_max_distance",
+        "_num_samples",
         "_observer_height",
         "_resolution",
-        "_max_distance",
-        "_earth_curvature",
-        "_num_samples",
     )
 
     def __init__(
@@ -280,9 +280,9 @@ class Viewshed:
             bounds[3],
         )
 
-        cols = int(math.ceil((max_x - min_x) / self._resolution)) + 1
+        cols = math.ceil((max_x - min_x) / self._resolution) + 1
 
-        rows = int(math.ceil((max_y - min_y) / self._resolution)) + 1
+        rows = math.ceil((max_y - min_y) / self._resolution) + 1
 
         return (
             min_x,

@@ -88,7 +88,9 @@ class NearestInterpolator(BaseInterpolator):
 
         nearest_index = np.argmin(distances, axis=1)
 
-        return vz[nearest_index]
+        result: NDArray[np.float64] = vz[nearest_index]
+
+        return result
 
     def interpolate_point(
         self,

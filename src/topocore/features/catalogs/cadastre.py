@@ -114,6 +114,14 @@ CADASTRE_CODES: tuple[FeatureCodeDefinition, ...] = (
         layer="LINDEROS",
     ),
     FeatureCodeDefinition(
+        code="PARAMEN",
+        name="Paramento",
+        feature_type=FeatureType.PARAMEN,
+        category=FeatureCategory.CADASTRE,
+        geometry_type=FeatureGeometryType.LINE,
+        layer="PARAMENTOS",
+    ),
+    FeatureCodeDefinition(
         code="SERVIDUMBRE",
         name="Easement",
         feature_type=FeatureType.EASEMENT,

@@ -448,7 +448,25 @@ class Raster:
     ) -> float:
         """
         Return the nearest raster elevation.
+
+        Returns ``self.nodata`` for a coordinate outside the raster's
+        own bounds, matching the same nodata convention used
+        elsewhere in this class, rather than letting NumPy's negative-
+        index wraparound silently return an unrelated cell's value.
+        Found and fixed during this project's own terrain
+        documentation audit: a coordinate just outside the raster on
+        its negative edge (e.g. ``x`` one cell below ``min_x``) used
+        to compute a negative column and index straight into
+        ``self.values`` with no bounds check, silently returning the
+        value from the opposite edge of the raster instead of an
+        error or a nodata marker. Confirmed unreachable from any
+        caller that checks ``.contains()`` first (e.g.
+        ``RasterSampler.nearest()``, which already did), but reachable
+        directly through this method.
         """
+        if not self.contains(x, y):
+            return self.nodata
+
         row = self.grid.row(y)
         column = self.grid.column(x)
 

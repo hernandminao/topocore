@@ -68,6 +68,41 @@ class WorkflowStage(StrEnum):
     distinct stages for the same reason (`FeatureBuilder` vs.
     `FeatureExtractionManager`), even though both produce
     `FEATURE_COLLECTION`.
+
+    RESOLVE_SIDES both reads and re-produces `FEATURE_COLLECTION` --
+    it does not introduce a new artifact type, since it enriches the
+    existing collection's own Features (adding `side`/`side_method`
+    to `PAVEMENT_EDGE`-type ones) rather than deriving a different
+    kind of artifact from it. It is optional and must be explicitly
+    chained; nothing else in the pipeline requires it, and running
+    it produces no effect on collections that have no `CENTERLINE`/
+    `PAVEMENT_EDGE`-type Features at all.
+
+    TRANSFORM_CRS likewise reads and re-produces whichever of
+    `POINT_CLOUD`/`GROUND_CLOUD`/`SURVEY_POINT_SET`/
+    `FEATURE_COLLECTION` the caller names -- the only 4 types
+    `topocore.geodesy.transform` provides a transform function for.
+    `TIN`/`DTM`/`CONTOURS`/`CLASSIFICATION_RESULT` are not supported
+    (no such function exists for them) and are rejected explicitly,
+    not silently ignored. This stage never constructs a `CRS` or
+    `CoordinateTransformer` itself -- it applies an already-built one,
+    matching `topocore.geodesy.transform`'s own design. It is
+    optional: nothing in the pipeline requires georeferencing, and no
+    reader in `topocore.io` ever populates a CRS automatically (see
+    the project's own geodesy documentation) -- transforming CRS is
+    always something the caller opts into explicitly, for whichever
+    artifact they choose, at whatever point in the chain they choose.
+
+    TRANSFORM_VERTICAL is TRANSFORM_CRS's vertical-axis counterpart --
+    same read-and-re-produce pattern, same 4 supported artifact types,
+    but shifts `Z` via `topocore.geodesy.vertical.VerticalTransformer`
+    (ellipsoidal <-> orthometric height through a real geoid grid)
+    instead of reprojecting `X`/`Y`. It never silently leaves `Z`
+    uncorrected: if the required geoid grid is missing, or any point
+    falls outside the grid's own extent, the whole stage fails with
+    `MissingGeoidGridError` (wrapped in `WorkflowExecutionError` like
+    any other stage failure) rather than producing a result where
+    some heights were shifted and others quietly were not.
     """
 
     READ_SURVEY = "read_survey"
@@ -82,6 +117,10 @@ class WorkflowStage(StrEnum):
 
     BUILD_FEATURES_FROM_SURVEY = "build_features_from_survey"
     DETECT_FEATURES = "detect_features"
+    RESOLVE_SIDES = "resolve_sides"
+    TRANSFORM_CRS = "transform_crs"
+    TRANSFORM_VERTICAL = "transform_vertical"
+    GEOREFERENCE = "georeference"
 
     EXPORT_DXF = "export_dxf"
     EXPORT_GPKG = "export_gpkg"

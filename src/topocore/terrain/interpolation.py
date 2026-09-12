@@ -20,6 +20,7 @@ from __future__ import annotations
 from topocore.geometry.point3d import Point3D
 from topocore.terrain.barycentric import BarycentricInterpolator
 from topocore.terrain.enums import InterpolationMethod
+from topocore.terrain.exceptions import InterpolationError
 from topocore.terrain.idw import IDWInterpolator
 from topocore.terrain.linear import LinearInterpolator
 from topocore.terrain.nearest import NearestInterpolator
@@ -91,17 +92,45 @@ class TerrainInterpolator:
     ) -> float:
         """
         Interpolate elevation.
+
+        Raises
+        ------
+        InterpolationError
+            If ``self.method`` is not one of the 4 known
+            ``InterpolationMethod`` members.
+
+        Notes
+        -----
+        Found and fixed during this project's own terrain
+        documentation audit: this dispatch used to compare
+        ``self._method`` with ``is`` and silently fall through to
+        ``NEAREST`` for anything that didn't match ``LINEAR``,
+        ``BARYCENTRIC``, or ``IDW`` by identity -- including a plain
+        string equal to the right value (e.g. ``method="linear"``),
+        since ``InterpolationMethod`` is a ``StrEnum`` and
+        ``"linear" == InterpolationMethod.LINEAR`` is ``True`` while
+        ``"linear" is InterpolationMethod.LINEAR`` is ``False``. This
+        is the same failure mode as an earlier, separately-fixed bug
+        in this class (2 duplicate ``InterpolationMethod`` enums,
+        also compared with ``is``) -- that fix addressed only the
+        specific duplicate-enum symptom, not this dispatch's own
+        root cause. Now compares with ``==`` and raises explicitly
+        for anything else, rather than silently returning a
+        plausible-looking but wrong elevation.
         """
-        if self._method is InterpolationMethod.LINEAR:
+        if self._method == InterpolationMethod.LINEAR:
             return self._linear.interpolate(x, y)
 
-        if self._method is InterpolationMethod.BARYCENTRIC:
+        if self._method == InterpolationMethod.BARYCENTRIC:
             return self._barycentric.interpolate(x, y)
 
-        if self._method is InterpolationMethod.IDW:
+        if self._method == InterpolationMethod.IDW:
             return self._idw.interpolate(x, y)
 
-        return self._nearest.interpolate(x, y)
+        if self._method == InterpolationMethod.NEAREST:
+            return self._nearest.interpolate(x, y)
+
+        raise InterpolationError(f"Unrecognized interpolation method: {self._method!r}.")
 
     def interpolate_point(
         self,

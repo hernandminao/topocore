@@ -102,7 +102,7 @@ class ElevationStatistics:
         tin
             Object exposing an elevation array.
         """
-        return ElevationStatistics.compute(tin.elevation_array)
+        return ElevationStatistics.compute(tin.elevation_array())
 
     @staticmethod
     def from_dtm(

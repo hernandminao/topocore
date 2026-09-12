@@ -21,7 +21,7 @@ MIT
 
 from __future__ import annotations
 
-from typing import Any, TypeAlias
+from typing import Any
 
 from topocore.pointcloud.pointcloud import PointCloud
 from topocore.processing.cache import LRUCache
@@ -29,7 +29,7 @@ from topocore.processing.exceptions import PointDescriptorError
 
 from .base import FeatureComputer
 
-CacheKey: TypeAlias = tuple[int, str, frozenset[str]]
+type CacheKey = tuple[int, str, frozenset[str]]
 #: The int component is id(cloud), computed fresh on every call
 #: (never stored/frozen on the manager) -- this is the fix for a
 #: real bug found in PR19: an earlier version stored id(cloud) once,

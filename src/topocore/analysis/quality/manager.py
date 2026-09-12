@@ -19,7 +19,7 @@ MIT
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, TypeAlias
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -54,7 +54,7 @@ from .precision import PrecisionAnalysis
 from .registration import RegistrationQuality
 from .rmse import RMSEAnalysis
 
-QualityResult: TypeAlias = (
+type QualityResult = (
     RMSEResult
     | GPSControlResult
     | PrecisionResult
@@ -67,7 +67,7 @@ QualityResult: TypeAlias = (
     | ChamferResult
 )
 
-DispatchMethod: TypeAlias = Callable[..., QualityResult]
+type DispatchMethod = Callable[..., QualityResult]
 
 
 class QualityMethod:

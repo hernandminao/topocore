@@ -19,7 +19,7 @@ MIT
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, TypeAlias
+from typing import Any
 
 from topocore.analysis.config import (
     DEFAULT_ANALYSIS_CONFIG,
@@ -41,7 +41,7 @@ from .viewshed import Viewshed
 # Types
 # ============================================================================
 
-VisibilityResult: TypeAlias = LOSResult | ViewshedResult | IntervisibilityResult
+type VisibilityResult = LOSResult | ViewshedResult | IntervisibilityResult
 
 VisibilityMethodType = Callable[..., VisibilityResult]
 

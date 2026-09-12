@@ -21,6 +21,7 @@ from __future__ import annotations
 import math
 
 from topocore.geometry.point3d import Point3D
+from topocore.terrain.exceptions import TerrainValidationError
 
 _EPSILON: float = 1e-12
 
@@ -117,8 +118,19 @@ def barycentric_weights(
 
     Raises
     ------
-    ValueError
+    TerrainValidationError
         If the triangle is degenerate.
+
+        Found and fixed during this project's own terrain
+        documentation audit: this used to raise a plain
+        ``ValueError``, inconsistent with the rest of the module's
+        own domain-exception convention -- the same underlying
+        problem (a degenerate triangle) raises ``TriangulationError``
+        via ``TIN.from_points()`` and ``TerrainValidationError`` via
+        ``validate_triangle()`` elsewhere in this package. Now
+        matches ``validate_triangle()``'s own exception type, since
+        both are, at heart, the same "is this triangle degenerate"
+        check.
     """
     denominator = triangle_area2(
         p1,
@@ -127,7 +139,7 @@ def barycentric_weights(
     )
 
     if abs(denominator) < _EPSILON:
-        raise ValueError("Degenerate triangle.")
+        raise TerrainValidationError("Degenerate triangle.")
 
     w1 = ((p2.y - p3.y) * (x - p3.x) + (p3.x - p2.x) * (y - p3.y)) / denominator
 

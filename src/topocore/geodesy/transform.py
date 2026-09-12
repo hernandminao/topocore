@@ -65,7 +65,14 @@ def transform_survey(survey: SurveyPointSet, transformer: CoordinateTransformer)
     Transform every point in `survey` through `transformer`, always
     passing `z` explicitly (`SurveyPoint.z` is required, never
     optional) -- returns a new `SurveyPointSet`, `survey` itself is
-    untouched.
+    untouched. `SurveyPointSet.crs` on the result is set to
+    `transformer.target_crs` -- matching `transform_point_cloud()`'s
+    own precedent of updating the result's declared CRS after a
+    successful transform, though the two differ in exact shape:
+    `SurveyPointSet.crs` is typed `CRS | None` (a real `CRS` object),
+    unlike `PointCloud.crs`'s own `str | None`, since `SurveyPointSet`
+    is frozen (no post-construction setter to convert through, so
+    there's no reason to lose precision by stringifying it).
     """
     new_points = []
     for point in survey:
@@ -79,7 +86,7 @@ def transform_survey(survey: SurveyPointSet, transformer: CoordinateTransformer)
                 code=point.code,
             )
         )
-    return SurveyPointSet(points=tuple(new_points))
+    return SurveyPointSet(points=tuple(new_points), crs=transformer.target_crs)
 
 
 def transform_feature_collection(
@@ -95,6 +102,14 @@ def transform_feature_collection(
     triangle indices into `vertices`) pass through unchanged --
     indices, not coordinates.
 
+    `FeatureCollection.crs` on the result is set to
+    `transformer.target_crs`, via the same `f"EPSG:{code}"`-or-`.name`
+    string convention already established by
+    `transform_point_cloud()` (`FeatureCollection.crs` is typed
+    `str | None`, matching `PointCloud.crs`, not
+    `SurveyPointSet.crs`'s `CRS | None` -- see `FeatureCollection`'s
+    own docstring for why).
+
     `FeatureGeometry.__post_init__` re-validates the transformed
     vertices automatically (finite, correct shape, minimum vertex
     count) -- a transform that somehow produced non-finite output
@@ -109,7 +124,9 @@ def transform_feature_collection(
         new_geometry = replace(feature.geometry, vertices=new_vertices)
         new_features.append(replace(feature, geometry=new_geometry))
 
-    return FeatureCollection(features=new_features)
+    target_crs = transformer.target_crs
+    new_crs = f"EPSG:{target_crs.epsg}" if target_crs.epsg is not None else target_crs.name
+    return FeatureCollection(features=new_features, crs=new_crs)
 
 
 def transform_point_cloud(cloud: PointCloud, transformer: CoordinateTransformer) -> PointCloud:

@@ -94,9 +94,9 @@ class QualityError(AnalysisError):
 __all__ = [
     "AnalysisError",
     "DistanceError",
-    "VolumeError",
     "ProfileError",
-    "VisibilityError",
-    "StatisticsError",
     "QualityError",
+    "StatisticsError",
+    "VisibilityError",
+    "VolumeError",
 ]

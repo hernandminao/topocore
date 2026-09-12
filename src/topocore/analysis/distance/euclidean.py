@@ -128,9 +128,11 @@ class EuclideanDistance:
         delta = points_b - points_a
 
         if self._dimension == "2d":
-            return np.sqrt(np.sum(delta[:, :2] ** 2, axis=1))
+            result_2d: NDArray[np.float64] = np.sqrt(np.sum(delta[:, :2] ** 2, axis=1))
+            return result_2d
 
-        return np.sqrt(np.sum(delta[:, :3] ** 2, axis=1))
+        result_3d: NDArray[np.float64] = np.sqrt(np.sum(delta[:, :3] ** 2, axis=1))
+        return result_3d
 
     def distance_between_points(
         self,

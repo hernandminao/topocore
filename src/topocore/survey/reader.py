@@ -33,6 +33,7 @@ import io
 from pathlib import Path
 from typing import Final
 
+from topocore.io.crs.external import ExternalCRSDetector
 from topocore.survey.exceptions import SurveyFormatError, SurveyRecordError
 from topocore.survey.formats import ColumnLayout, SurveyFormat, column_layout
 from topocore.survey.models import SurveyPoint, SurveyPointSet
@@ -239,6 +240,21 @@ class SurveyTXTReader:
         """
         Read the file and return a ``SurveyPointSet``.
 
+        If a ``.prj`` sidecar exists next to this file and resolves
+        to a real CRS (see ``topocore.io.crs.ExternalCRSDetector``),
+        the resulting ``SurveyPointSet.crs`` is set accordingly.
+        Survey text files have no CRS mechanism of their own --
+        plain ``id, x, y, z, code`` text carries no CRS concept at
+        all -- so ``.prj`` is the only source this format can ever
+        get a CRS from. No sidecar, or one that doesn't resolve,
+        leaves ``crs=None``. Coordinates are never touched by this --
+        `.prj` only annotates what CRS the already-read ``x``/``y``/
+        ``z`` values are declared to be in; it never transforms them
+        (a survey using purely local/arbitrary station coordinates
+        may have no `.prj` at all, or one that would be conceptually
+        wrong to apply -- this method has no way to know which, and
+        does not guess).
+
         Raises
         ------
         SurveyFormatError
@@ -250,7 +266,7 @@ class SurveyTXTReader:
         numbered_lines = _read_data_lines(self._path, self._encoding)
 
         if not numbered_lines:
-            return SurveyPointSet(points=())
+            return SurveyPointSet(points=(), crs=ExternalCRSDetector().detect(self._path))
 
         delimiter = self._delimiter or _detect_delimiter(numbered_lines[0][1])
         numbered_rows: list[_NumberedRow] = [
@@ -264,7 +280,7 @@ class SurveyTXTReader:
             for index, (source_line, row) in enumerate(data_rows)
         )
 
-        return SurveyPointSet(points=points)
+        return SurveyPointSet(points=points, crs=ExternalCRSDetector().detect(self._path))
 
     def _resolve_layout(
         self,

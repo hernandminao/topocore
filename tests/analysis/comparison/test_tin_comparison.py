@@ -176,4 +176,4 @@ def test_rejects_empty_existing_tin() -> None:
             raise ValueError("no triangles")
 
     with pytest.raises(VolumeError, match="Existing TIN contains no triangles"):
-        TINComparison(resolution=1.0).compute(EmptyTIN(), proposed)  # type: ignore[arg-type]
+        TINComparison(resolution=1.0).compute(EmptyTIN(), proposed)

@@ -97,7 +97,8 @@ class HorizontalDistance:
 
         delta = points_b[:, :2] - points_a[:, :2]
 
-        return np.sqrt(np.sum(delta * delta, axis=1))
+        distance: NDArray[np.float64] = np.sqrt(np.sum(delta * delta, axis=1))
+        return distance
 
     @staticmethod
     def distance_between_points(

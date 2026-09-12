@@ -21,9 +21,12 @@ from pathlib import Path
 import laspy  # type: ignore[import-untyped]
 
 from topocore.io.constants import DEFAULT_CHUNK_SIZE
+from topocore.io.crs.external import apply_crs_with_native_priority
 from topocore.io.exceptions import PointCloudIOError
 from topocore.io.las.base_reader import BaseLASReader
+from topocore.io.las.crs_detection import detect_crs
 from topocore.pointcloud.chunk import Chunk
+from topocore.pointcloud.pointcloud import PointCloud
 
 
 class LAZReader(BaseLASReader):
@@ -84,6 +87,26 @@ class LAZReader(BaseLASReader):
 
         for points in self._reader.chunk_iterator(self._chunk_size):
             yield LASConverter.from_las_points(points)
+
+    def read(self) -> PointCloud:
+        """
+        Same base contract as `PointCloudReader.read()` -- no new
+        parameter, no signature change. The one addition: a native
+        CRS embedded in this LAZ file's own header (via
+        `topocore.io.las.crs_detection.detect_crs()` -- LAZ shares
+        the exact same VLR/GeoTIFF-key structure as LAS, confirmed
+        directly, so the same detector applies unchanged) always
+        takes priority; only when the file declares no native CRS is
+        a `.prj` sidecar consulted as a fallback (see
+        `topocore.io.crs.ExternalCRSDetector`). A `.prj` sidecar
+        NEVER overwrites a valid native CRS, even one declaring a
+        genuinely different value. Coordinates (`X`/`Y`/`Z`) are
+        never touched by this -- only `PointCloud.crs` is affected;
+        this is detection/annotation, never a transformation.
+        """
+        cloud = super().read()
+        native_crs = detect_crs(self.path)
+        return apply_crs_with_native_priority(cloud, self.path, native_crs)
 
 
 __all__ = [

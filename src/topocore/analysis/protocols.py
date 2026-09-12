@@ -160,12 +160,10 @@ class PointCloudData(Protocol):
     algorithms.
     """
 
-    @property
     def xy_array(self) -> NDArray[np.float64]:
         """Return XY coordinates."""
         ...
 
-    @property
     def elevation_array(self) -> NDArray[np.float64]:
         """Return elevation values."""
         ...

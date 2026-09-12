@@ -45,8 +45,8 @@ __all__ = [
     "ProfileAnalysis",
     "ProfileMethod",
     # Generators
-    "LongitudinalProfile",
-    "TransversalProfile",
     "CrossSectionProfile",
+    "LongitudinalProfile",
     "MultiProfile",
+    "TransversalProfile",
 ]

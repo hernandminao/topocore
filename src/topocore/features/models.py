@@ -147,6 +147,7 @@ class FeatureType(StrEnum):
     ZONE = "zone"
     RIGHT_OF_WAY = "right_of_way"
     BOUNDARY = "boundary"
+    PARAMEN = "paramen"
     EASEMENT = "easement"
     SETBACK = "setback"
     BOUNDARY_MONUMENT = "boundary_monument"
@@ -270,6 +271,7 @@ _EXPECTED_GEOMETRY: dict[FeatureType, frozenset[GeometryType]] = {
     FeatureType.ZONE: frozenset({GeometryType.POLYGON}),
     FeatureType.RIGHT_OF_WAY: frozenset({GeometryType.POLYGON}),
     FeatureType.BOUNDARY: frozenset({GeometryType.POLYLINE}),
+    FeatureType.PARAMEN: frozenset({GeometryType.POLYLINE}),
     FeatureType.EASEMENT: frozenset({GeometryType.POLYLINE}),
     FeatureType.SETBACK: frozenset({GeometryType.POLYLINE}),
     FeatureType.BOUNDARY_MONUMENT: frozenset({GeometryType.POINT}),
@@ -378,7 +380,34 @@ class Feature:
 
 @dataclass(slots=True)
 class FeatureCollection:
+    """
+    ``crs`` is plain, mutable data (this class is not frozen) --
+    settable directly. Typed `str | None` -- matching
+    ``PointCloud.crs``'s own convention (`f"EPSG:{code}"` or a bare
+    name), not ``SurveyPointSet.crs``'s (a real ``CRS`` object) --
+    deliberately, since ``FeatureCollection`` can be built from
+    either a ``PointCloud`` or a ``SurveyPointSet`` source, and
+    converting a `CRS` object to this string form is always safe
+    (the same convention already used throughout this codebase),
+    while converting an arbitrary string back into a full `CRS`
+    object is not (a bare name like `"unknown"` cannot be
+    reconstructed into anything meaningful). ``None`` means "no CRS
+    known", never "assume it matches whatever CRS a caller is about
+    to transform to". Set by ``Workflow.detect_features()`` (from the
+    source ``PointCloud``'s own ``.crs``, copied directly -- already
+    the same string type) and ``Workflow.build_features_from_survey()``
+    (from the source ``SurveyPointSet``'s own ``.crs``, converted via
+    the established `f"EPSG:{code}" or .name` convention); updated to
+    the target CRS by
+    ``topocore.geodesy.transform.transform_feature_collection()``;
+    left unchanged by
+    ``topocore.geodesy.vertical.transform.transform_feature_collection_vertical()``
+    and by ``topocore.features.side.SideResolver`` (neither changes
+    what CRS the feature geometry is expressed in).
+    """
+
     features: list[Feature] = field(default_factory=list)
+    crs: str | None = None
 
     def __len__(self) -> int:
         return len(self.features)

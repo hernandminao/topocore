@@ -370,15 +370,36 @@ def _levels(
 ) -> list[float]:
     """
     Compute the elevation levels to contour within a range.
+
+    Each level is computed directly as ``first + n * interval`` for
+    an integer step count ``n``, then rounded to 9 decimal places.
+
+    Found and fixed during this project's own terrain documentation
+    audit: this used to accumulate the running level via repeated
+    ``level += interval`` inside the loop. For an ``interval`` with
+    no exact binary representation (e.g. ``0.1``), this drifts with
+    every iteration -- over a realistic range (e.g. 1000 levels), the
+    level meant to be exactly ``100.0`` came out as
+    ``99.9999999999986``. The drift was always far smaller than
+    ``EPSILON``, so which triangle edges got contoured was never
+    affected, but the elevation value itself -- used verbatim as
+    each contour's own label in real output (legends, exported layer
+    names) -- displayed this floating-point noise instead of a clean
+    number.
     """
     first = base + math.ceil((min_z - base) / interval) * interval
 
     levels: list[float] = []
-    level = first
+    n = 0
 
-    while level <= max_z + EPSILON:
-        levels.append(level)
-        level += interval
+    while True:
+        level = first + n * interval
+
+        if level > max_z + EPSILON:
+            break
+
+        levels.append(round(level, 9))
+        n += 1
 
     return levels
 

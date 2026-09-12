@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import InitVar, dataclass, field
-from typing import TypeAlias
 
 # mypy: disable-error-code=import-untyped
 from scipy.special import fresnel
@@ -305,7 +304,7 @@ class SpiralElement:
             )
 
 
-HorizontalElement: TypeAlias = LineElement | ArcElement | SpiralElement
+type HorizontalElement = LineElement | ArcElement | SpiralElement
 
 
 __all__ = [

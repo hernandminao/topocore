@@ -26,6 +26,10 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from topocore.geodesy.crs import CRS
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,9 +68,24 @@ class SurveyPointSet:
     Order matters: it reflects survey/shot order, which
     ``topocore.features`` relies on to group consecutive same-code
     points into linework.
+
+    ``crs`` is set once, at construction -- ``SurveyPointSet`` is
+    frozen, so there is deliberately no setter, unlike
+    ``topocore.pointcloud.PointCloud.crs`` (which is mutable and does
+    have one). ``None`` means "no CRS known", never "coordinates are
+    invalid" -- confirmed throughout this project's own geodesy work,
+    an unknown CRS never blocks processing. Set by
+    ``topocore.survey.reader.SurveyTXTReader.read()`` when a `.prj`
+    sidecar resolves to a real CRS; updated to the target CRS by
+    ``topocore.geodesy.transform.transform_survey()`` (matching
+    ``PointCloud.crs``'s own post-transform update); left unchanged
+    by ``topocore.geodesy.vertical.transform.transform_survey_vertical()``,
+    since a vertical-only shift never changes what horizontal CRS the
+    `x`/`y` values are already expressed in.
     """
 
     points: tuple[SurveyPoint, ...]
+    crs: CRS | None = None
 
     def __len__(self) -> int:
         return len(self.points)

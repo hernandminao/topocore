@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import TypeAlias
-
 import numpy as np
 from numpy.typing import NDArray
 
@@ -9,34 +7,34 @@ from numpy.typing import NDArray
 # Scalar Types
 # ============================================================================
 
-Coordinate: TypeAlias = float
-Elevation: TypeAlias = float
-Distance: TypeAlias = float
-Angle: TypeAlias = float
+type Coordinate = float
+type Elevation = float
+type Distance = float
+type Angle = float
 
 # ============================================================================
 # NumPy Array Types
 # ============================================================================
 
-FloatArray1D: TypeAlias = NDArray[np.float64]
-FloatArray2D: TypeAlias = NDArray[np.float64]
-FloatArray3D: TypeAlias = NDArray[np.float64]
+type FloatArray1D = NDArray[np.float64]
+type FloatArray2D = NDArray[np.float64]
+type FloatArray3D = NDArray[np.float64]
 
-IntArray1D: TypeAlias = NDArray[np.int64]
-IntArray2D: TypeAlias = NDArray[np.int64]
+type IntArray1D = NDArray[np.int64]
+type IntArray2D = NDArray[np.int64]
 
-UInt8Array1D: TypeAlias = NDArray[np.uint8]
-UInt16Array1D: TypeAlias = NDArray[np.uint16]
-UInt32Array1D: TypeAlias = NDArray[np.uint32]
+type UInt8Array1D = NDArray[np.uint8]
+type UInt16Array1D = NDArray[np.uint16]
+type UInt32Array1D = NDArray[np.uint32]
 
-BoolArray1D: TypeAlias = NDArray[np.bool_]
+type BoolArray1D = NDArray[np.bool_]
 
-Matrix3x3: TypeAlias = NDArray[np.float64]
-Matrix4x4: TypeAlias = NDArray[np.float64]
+type Matrix3x3 = NDArray[np.float64]
+type Matrix4x4 = NDArray[np.float64]
 
-Vector3D: TypeAlias = NDArray[np.float64]
+type Vector3D = NDArray[np.float64]
 
-PointAttributeArray: TypeAlias = (
+type PointAttributeArray = (
     FloatArray1D
     | FloatArray2D
     | FloatArray3D

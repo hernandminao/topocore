@@ -21,7 +21,6 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from topocore.geometry.point3d import Point3D
 from topocore.terrain.cell import Cell
 from topocore.terrain.validation import validate_resolution
 
@@ -208,27 +207,6 @@ class Grid:
         return (
             self.x(column),
             self.y(row),
-        )
-
-    def point(
-        self,
-        row: int,
-        column: int,
-    ) -> Point3D:
-        """
-        Return the grid point.
-
-        Elevation is initialized as NaN.
-        """
-        x, y = self.coordinate(
-            row,
-            column,
-        )
-
-        return Point3D(
-            x=x,
-            y=y,
-            z=float("nan"),
         )
 
     def cell(

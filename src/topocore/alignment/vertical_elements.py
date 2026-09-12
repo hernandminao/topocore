@@ -50,7 +50,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import TypeAlias
 
 from topocore.alignment.exceptions import AlignmentGeometryError
 from topocore.math.validation import validate_finite
@@ -243,7 +242,7 @@ class VerticalCurve:
         return self.mid_grade + self.rate_out * x
 
 
-VerticalElement: TypeAlias = GradeSegment | VerticalCurve
+type VerticalElement = GradeSegment | VerticalCurve
 
 
 __all__ = [

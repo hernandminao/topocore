@@ -142,7 +142,7 @@ class DensityStatistics:
         The argument name is preserved for API compatibility.
         The implementation uses the exposed coordinate array.
         """
-        return self.compute(tin.xy_array)
+        return self.compute(tin.xy_array())
 
     def _grid_shape(
         self,
@@ -154,9 +154,9 @@ class DensityStatistics:
         """
         Compute density grid dimensions.
         """
-        columns = int(math.ceil((max_x - min_x) / self._resolution)) + 1
+        columns = math.ceil((max_x - min_x) / self._resolution) + 1
 
-        rows = int(math.ceil((max_y - min_y) / self._resolution)) + 1
+        rows = math.ceil((max_y - min_y) / self._resolution) + 1
 
         return max(rows, 1), max(columns, 1)
 

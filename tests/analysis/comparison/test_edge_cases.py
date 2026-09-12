@@ -98,7 +98,7 @@ def test_tin_comparison_reasonable_resolution_still_works() -> None:
 @pytest.mark.parametrize("max_grid_cells", [0, -1, True, 1.5])
 def test_tin_comparison_rejects_invalid_max_grid_cells(max_grid_cells: object) -> None:
     with pytest.raises(VolumeError, match="max_grid_cells"):
-        TINComparison(resolution=1.0, max_grid_cells=max_grid_cells)  # type: ignore[arg-type]
+        TINComparison(resolution=1.0, max_grid_cells=max_grid_cells)
 
 
 def test_tin_comparison_max_grid_cells_is_configurable() -> None:

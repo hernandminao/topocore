@@ -14,7 +14,7 @@ Negative values represent fill.
 
 Author
 ------
-HernÃ¡n Mina
+Hernán Mina
 
 License
 -------

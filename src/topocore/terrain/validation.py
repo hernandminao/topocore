@@ -20,6 +20,7 @@ from collections.abc import Sequence
 
 from topocore.geometry.point3d import Point3D
 
+from .constants import EPSILON
 from .exceptions import TerrainValidationError
 from .models import Breakline, GridDefinition, Triangle
 
@@ -80,9 +81,33 @@ def validate_triangle(
 ) -> None:
     """
     Validate a triangle.
+
+    Raises
+    ------
+    TerrainValidationError
+        If the triangle has duplicated vertices, or 3 distinct
+        vertices that are collinear (zero area).
+
+        Found and fixed during this project's own terrain
+        documentation audit: this used to check only for duplicated
+        vertices, silently accepting a triangle with 3 genuinely
+        distinct but collinear vertices -- a degenerate, zero-area
+        triangle just as invalid as one with duplicated vertices.
+        The one real caller of this function,
+        ``_geometry.oriented_normal()``, still correctly rejected
+        that case on its own (via a separate zero-normal check
+        further down), but with a *different* exception
+        (``TerrainError`` instead of ``TerrainValidationError``) --
+        so which exception a caller needed to catch for "this
+        triangle is degenerate" silently depended on *which kind* of
+        degeneracy it was. Now both kinds are caught here, with the
+        same exception type.
     """
     if triangle.p1 == triangle.p2 or triangle.p2 == triangle.p3 or triangle.p1 == triangle.p3:
         raise TerrainValidationError("Triangle contains duplicated vertices.")
+
+    if triangle.area < EPSILON:
+        raise TerrainValidationError("Triangle is degenerate (collinear vertices).")
 
 
 def validate_breakline(
@@ -123,7 +148,9 @@ def validate_tin(
         validate_triangle(triangle)
 
 
-__all__ = [
+__all__ = [  # noqa: RUF022 -- ordered by logical dependency
+    # (resolution/interval/points -> triangle -> breakline -> grid -> tin),
+    # not alphabetical; pre-existing, unrelated to this session's fixes.
     "validate_resolution",
     "validate_interval",
     "validate_points",

@@ -90,7 +90,7 @@ from topocore.analysis.types import (
 __version__ = "0.1.0"
 
 
-__all__ = [
+__all__ = [  # noqa: RUF022 -- intentionally grouped by public API category (Configuration, Exceptions, Protocols, ...); sorted within each group, not flattened.
     # ------------------------------------------------------------------
     # Configuration
     # ------------------------------------------------------------------
@@ -115,9 +115,9 @@ __all__ = [
     # ------------------------------------------------------------------
     # Protocols
     # ------------------------------------------------------------------
+    "CRSType",
     "Calculable",
     "CoordinateTransformer",
-    "CRSType",
     "Generable",
     "GriddedSurface",
     "Measurable",
@@ -149,9 +149,9 @@ __all__ = [
     # ------------------------------------------------------------------
     # Visibility types
     # ------------------------------------------------------------------
+    "IntervisibilityResult",
     "LOSResult",
     "ViewshedResult",
-    "IntervisibilityResult",
     "VisibilityType",
     # ------------------------------------------------------------------
     # Statistics types
@@ -172,6 +172,6 @@ __all__ = [
     "GPSControlResult",
     "HausdorffResult",
     "PrecisionResult",
-    "RegistrationQualityResult",
     "RMSEResult",
+    "RegistrationQualityResult",
 ]

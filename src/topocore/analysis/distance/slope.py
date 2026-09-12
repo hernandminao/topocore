@@ -101,7 +101,8 @@ class SlopeDistance:
 
         delta = points_b - points_a
 
-        return np.sqrt(np.sum(delta * delta, axis=1))
+        distance: NDArray[np.float64] = np.sqrt(np.sum(delta * delta, axis=1))
+        return distance
 
     @staticmethod
     def from_horizontal_and_vertical(

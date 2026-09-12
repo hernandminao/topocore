@@ -18,7 +18,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TypeAlias
 
 import numpy as np
 from numpy.typing import NDArray
@@ -28,16 +27,16 @@ from numpy.typing import NDArray
 # ============================================================================
 
 #: A one-dimensional NumPy array of 64-bit floats.
-FloatArray1D: TypeAlias = NDArray[np.float64]
+type FloatArray1D = NDArray[np.float64]
 
 #: A two-dimensional NumPy array of 64-bit floats.
-FloatArray2D: TypeAlias = NDArray[np.float64]
+type FloatArray2D = NDArray[np.float64]
 
 #: A one-dimensional NumPy array of boolean values.
-BoolArray1D: TypeAlias = NDArray[np.bool_]
+type BoolArray1D = NDArray[np.bool_]
 
 #: A one-dimensional NumPy array of integer indices.
-IntArray1D: TypeAlias = NDArray[np.int64]
+type IntArray1D = NDArray[np.int64]
 
 
 # ============================================================================
@@ -429,7 +428,7 @@ class DistributionStats:
     kurtosis: float = 0.0
 
 
-StatisticsResult: TypeAlias = ElevationStats | SlopeStats | AreaStats | DensityStats | DistributionStats
+type StatisticsResult = ElevationStats | SlopeStats | AreaStats | DensityStats | DistributionStats
 
 # ============================================================================
 # Quality result types
@@ -649,16 +648,16 @@ __all__ = [
     # ---------------------------------------------------------------------
     # Array aliases
     # ---------------------------------------------------------------------
+    "BoolArray1D",
     "FloatArray1D",
     "FloatArray2D",
-    "BoolArray1D",
     "IntArray1D",
     # ---------------------------------------------------------------------
     # Enumerations
     # ---------------------------------------------------------------------
-    "VolumeMethod",
     "ProfileType",
     "VisibilityType",
+    "VolumeMethod",
     # ---------------------------------------------------------------------
     # Distance
     # ---------------------------------------------------------------------
@@ -675,34 +674,34 @@ __all__ = [
     # ---------------------------------------------------------------------
     # Visibility
     # ---------------------------------------------------------------------
+    "IntervisibilityResult",
     "LOSResult",
     "ViewshedResult",
-    "IntervisibilityResult",
     # ---------------------------------------------------------------------
     # Statistics
     # ---------------------------------------------------------------------
-    "ElevationStats",
-    "SlopeStats",
     "AreaStats",
     "DensityStats",
     "DistributionStats",
+    "ElevationStats",
+    "SlopeStats",
     "StatisticsResult",
     # ---------------------------------------------------------------------
     # Quality
     # ---------------------------------------------------------------------
-    "RMSEResult",
-    "GPSControlResult",
-    "PrecisionResult",
-    "RegistrationQualityResult",
     "CompletenessResult",
     "CorrectnessResult",
+    "GPSControlResult",
+    "PrecisionResult",
+    "RMSEResult",
+    "RegistrationQualityResult",
     # ---------------------------------------------------------------------
     # Point cloud distances
     # ---------------------------------------------------------------------
+    "ChamferResult",
     "CloudToCloudResult",
     "CloudToMeshResult",
     "HausdorffResult",
-    "ChamferResult",
     # ---------------------------------------------------------------------
     # Generic quality summary
     #

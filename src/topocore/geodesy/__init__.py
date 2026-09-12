@@ -48,6 +48,7 @@ from .validation import (
     validate_epsg,
     validate_lat_lon,
 )
+from .vertical import GeoidError, GeoidGrid, MissingGeoidGridError, VerticalTransformer
 from .vertical_datum import VerticalDatum
 
 __all__ = [
@@ -60,10 +61,13 @@ __all__ = [
     "GeodesicCalculator",
     "GeodesicError",
     "GeodesyError",
+    "GeoidError",
+    "GeoidGrid",
     "GridShift",
     "GridShiftFormat",
     "HelmertParameters",
     "LocalCRS",
+    "MissingGeoidGridError",
     "OperationType",
     "ProjectionInfo",
     "TransformationAccuracy",
@@ -71,6 +75,7 @@ __all__ = [
     "UTMZone",
     "ValidationError",
     "VerticalDatum",
+    "VerticalTransformer",
     "distance2d",
     "distance3d",
     "transform_feature_collection",

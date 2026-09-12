@@ -24,7 +24,7 @@ MIT
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Protocol, TypeAlias
+from typing import Any, ClassVar, Protocol
 
 from topocore.pointcloud.pointcloud import PointCloud
 from topocore.processing.cache import LRUCache
@@ -63,7 +63,7 @@ from .weighted_pca import WeightedPCANormalEstimator
 #: weighted_pca) is included explicitly; omitting it would let two
 #: different sigma values silently share a cache entry, the same
 #: category of bug as the viewpoint-identity mistake this replaces.
-CacheKey: TypeAlias = tuple[
+type CacheKey = tuple[
     int,
     int,
     str,

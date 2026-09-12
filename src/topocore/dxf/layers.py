@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import math
+
+from topocore.dxf.exceptions import DXFExportError
 from topocore.dxf.models import LayerStyle
 from topocore.features.models import FeatureType
 
@@ -47,10 +50,46 @@ def is_index_contour(
     every: int,
     tolerance: float = 1e-6,
 ) -> bool:
+    """
+    Raises
+    ------
+    DXFExportError
+        If `elevation`, `base`, or `interval` is not a real number,
+        is NaN or infinite, or if `interval` is not strictly
+        positive.
+
+        Found and fixed during this project's own DXF documentation
+        audit: these 3 values come from a `Feature`'s own
+        `attributes`/`metadata.extra` -- untrusted data from the
+        caller's own point of view, since `Feature`/`FeatureMetadata`
+        (confirmed directly) place no constraint on them. Before this
+        fix, an invalid value here raised a raw `ValueError`/
+        `OverflowError`/`TypeError` (from the underlying arithmetic
+        and `round()` call), none of which `DXFExporter.export()`'s
+        own `except (DXFGeometryError, DXFExportError)` catches --
+        confirmed directly, with a real `FeatureCollection` containing
+        one valid feature alongside one `CONTOUR` feature with
+        `base=inf`: `strict=False` aborted the WHOLE export (no `.dxf`
+        file produced at all), silently violating that option's own
+        documented "skip this feature, keep going" contract -- the
+        same failure shape `layer_for()`'s own historical PR19 fix
+        (see this file's own `layer_for()`) already addressed for a
+        different unwrapped exception. `interval=inf` was confirmed
+        to be a distinct, non-crashing but still dangerous case: it
+        silently returned `True` (a real elevation would be
+        classified as an "index"/MAJOR contour), rather than raising
+        anything at all -- also corrected here.
+    """
+    for name, value in (("elevation", elevation), ("base", base), ("interval", interval)):
+        if not isinstance(value, int | float) or isinstance(value, bool):
+            raise DXFExportError(f"{name} must be a real number; got {type(value).__name__}.")
+        if not math.isfinite(value):
+            raise DXFExportError(f"{name} must be finite; got {value}.")
+
     if interval <= 0:
-        raise ValueError(f"interval must be positive; got {interval}.")
+        raise DXFExportError(f"interval must be positive; got {interval}.")
     if every < 1:
-        raise ValueError(f"every must be >= 1; got {every}.")
+        raise DXFExportError(f"every must be >= 1; got {every}.")
 
     step = interval * every
     relative = (elevation - base) / step
@@ -96,6 +135,9 @@ def layer_for(feature_type: FeatureType) -> str:
 
 
 __all__ = [
+    # RUF022 -- grouped by concept (tables, contour
+    # constants, functions), not alphabetical; pre-existing, unrelated
+    # to this session's fix.
     "LAYER_BY_FEATURE_TYPE",
     "LAYER_STYLES",
     "CONTOUR_LAYER",

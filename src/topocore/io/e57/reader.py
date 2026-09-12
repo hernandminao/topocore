@@ -21,11 +21,14 @@ from pathlib import Path
 import numpy as np
 import pye57  # type: ignore[import-untyped]
 
+from topocore.io.crs.external import apply_crs_with_native_priority
 from topocore.io.exceptions import PointCloudIOError
 from topocore.pointcloud.chunk import Chunk
+from topocore.pointcloud.pointcloud import PointCloud
 
 from .base_reader import BaseE57Reader
 from .converter import E57Converter
+from .crs_detection import detect_crs
 
 
 class E57Reader(BaseE57Reader):
@@ -107,6 +110,32 @@ class E57Reader(BaseE57Reader):
             arrays,
             source_id=source_id,
         )
+
+    def read(self) -> PointCloud:
+        """
+        Same base contract as `PointCloudReader.read()` -- no new
+        parameter, no signature change. The one addition: a CRS
+        recovered from this E57 file's own `coordinateMetadata` (see
+        `topocore.io.e57.crs_detection.detect_crs()`) always takes
+        priority; only when `coordinateMetadata` yields nothing
+        usable is a `.prj` sidecar consulted as a fallback (see
+        `topocore.io.crs.ExternalCRSDetector`). Confirmed directly:
+        `detect_crs()` cannot distinguish "no CRS declared" from "CRS
+        declared but unparseable" from "field structurally absent"
+        from "file itself is broken" -- all 4 collapse to `None`
+        deliberately, and all 4 are treated identically here (try
+        `.prj` as fallback), matching this format's own already-
+        documented reliability limitation rather than attempting to
+        invent a finer-grained distinction the format itself cannot
+        support. A `.prj` sidecar NEVER overwrites a valid
+        `coordinateMetadata`-derived CRS. Coordinates (`X`/`Y`/`Z`)
+        are never touched by this -- only `PointCloud.crs` is
+        affected; this is detection/annotation, never a
+        transformation.
+        """
+        cloud = super().read()
+        native_crs = detect_crs(self.path)
+        return apply_crs_with_native_priority(cloud, self.path, native_crs)
 
 
 __all__ = [

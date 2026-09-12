@@ -50,14 +50,26 @@ from .enums import BreaklineType
 from .exceptions import (
     BreaklineError,
     ContourError,
+    ConversionError,
     InterpolationError,
     TerrainError,
     TerrainValidationError,
     TriangulationError,
 )
-from .filters import LaplacianSmoother, SpikeDetector, detect_spikes, laplacian_smooth, remove_spikes
+from .filters import (
+    LaplacianSmoother,
+    SpikeDetector,
+    detect_spikes,
+    laplacian_smooth,
+    remove_spikes,
+)
 from .grid import Grid
-from .hillshade import DEFAULT_ALTITUDE, DEFAULT_AZIMUTH, HillshadeCalculator, triangle_hillshade
+from .hillshade import (
+    DEFAULT_ALTITUDE,
+    DEFAULT_AZIMUTH,
+    HillshadeCalculator,
+    triangle_hillshade,
+)
 from .interpolation import InterpolationMethod as InterpolationMethod
 from .interpolation import TerrainInterpolator as TerrainInterpolator
 from .models import (
@@ -87,7 +99,9 @@ from .validation import (
     validate_triangle,
 )
 
-__all__ = [
+__all__ = [  # noqa: RUF022 -- grouped by functional category (calculator + its
+    # function + its constants together), not alphabetical; see analysis/__init__.py
+    # for the same, established convention in this project.
     # Base
     "BaseTIN",
     "BaseDTM",
@@ -154,4 +168,5 @@ __all__ = [
     "InterpolationError",
     "ContourError",
     "BreaklineError",
+    "ConversionError",
 ]

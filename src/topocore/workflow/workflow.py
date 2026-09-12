@@ -30,6 +30,7 @@ MIT
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -40,7 +41,11 @@ if TYPE_CHECKING:
     from topocore.terrain.interpolation import InterpolationMethod
 
 from topocore.workflow.artifacts import ArtifactStore, ArtifactType
-from topocore.workflow.exceptions import WorkflowExecutionError
+from topocore.workflow.exceptions import (
+    StaleArtifactError,
+    WorkflowExecutionError,
+    WorkflowStateError,
+)
 from topocore.workflow.history import (
     ArtifactDependency,
     StageMetrics,
@@ -60,6 +65,18 @@ _V = WorkflowValidator
 #: every other point-cloud reader), confirmed directly. Matches the
 #: default already used by LASReader/LAZReader/PLYReader/ASCII readers.
 _DEFAULT_CHUNK_SIZE = 1_000_000
+
+#: The only 4 ArtifactType members topocore.geodesy.transform provides
+#: a transform function for -- transform_crs() rejects any other type
+#: explicitly rather than silently ignoring it. GROUND_CLOUD shares
+#: transform_point_cloud() with POINT_CLOUD, since both are the same
+#: PointCloud type (confirmed directly).
+_TRANSFORMABLE_ARTIFACT_TYPES = (
+    ArtifactType.POINT_CLOUD,
+    ArtifactType.GROUND_CLOUD,
+    ArtifactType.SURVEY_POINT_SET,
+    ArtifactType.FEATURE_COLLECTION,
+)
 
 
 class Workflow:
@@ -106,6 +123,101 @@ class Workflow:
             return None
         first_produced = self._history[0].produced
         return first_produced.artifact if first_produced is not None else None
+
+    def artifact(self, artifact_type: ArtifactType) -> Any:
+        """
+        Returns the current value of `artifact_type`, safe to modify
+        without ever silently corrupting this Workflow's own stored
+        version -- the only way to advance a stored artifact's own
+        version remains running the stage that produces it.
+
+        Raises
+        ------
+        WorkflowStateError
+            If `artifact_type` has never been produced by this
+            Workflow.
+        StaleArtifactError
+            If `artifact_type` is present but was built (directly or
+            transitively) from an input that has since been
+            superseded -- the exact same staleness check every stage
+            method already applies to its own inputs via
+            `WorkflowValidator.require_current()`. `artifact()` is
+            not itself a `WorkflowStage` (it executes nothing and
+            never appends to history), so this check is applied
+            directly rather than through that machinery's own
+            stage-shaped error message.
+
+        Copy strategy, decided per type from this project's own
+        confirmed-by-execution mutability audit -- never a uniform
+        "always copy" or "always return as-is":
+
+        - `SURVEY_POINT_SET`, `CONTOURS`, `TIN`: returned directly,
+          at no extra cost. Each is either genuinely immutable
+          (frozen dataclass over tuples of frozen elements) or
+          already self-protecting (`TIN.simplices`/`.neighbors` are
+          properties that already return a defensive copy on every
+          access, confirmed directly -- not by virtue of being
+          frozen, since `TIN` itself is not).
+        - `POINT_CLOUD`, `GROUND_CLOUD` (both `PointCloud`):
+          `.clone()` -- an existing, already-verified deep copy.
+        - `DTM`: reconstructed via `dataclasses.replace()` with only
+          `raster` copied (`Raster.copy()`, existing and verified) --
+          `.tin` needs no copy, since `TIN` is already safe.
+        - `CLASSIFICATION_RESULT`: reconstructed via
+          `dataclasses.replace()` with `labels`/`confidence` (numpy
+          arrays, confirmed mutable even though the dataclass itself
+          is frozen) and `cloud` (via its own `.clone()`) all copied.
+        - `FEATURE_COLLECTION`: a new `FeatureCollection` wrapping a
+          new list of the same `Feature` references -- safe because
+          `Feature` is itself already frozen; only the containing
+          list needed protecting, not each Feature.
+        """
+        if not self._store.has(artifact_type):
+            raise WorkflowStateError(f"Artifact {artifact_type.value} has never been produced by this Workflow.")
+
+        if WorkflowValidator._is_stale(self._store, self._history, artifact_type):
+            raise StaleArtifactError(
+                f"Artifact {artifact_type.value} was built from since-superseded input(s); "
+                "rebuild it (and anything downstream of it) before retrieving it."
+            )
+
+        current = self._store.get(artifact_type)
+
+        if artifact_type in (
+            ArtifactType.SURVEY_POINT_SET,
+            ArtifactType.CONTOURS,
+            ArtifactType.TIN,
+        ):
+            return current
+
+        if artifact_type in (ArtifactType.POINT_CLOUD, ArtifactType.GROUND_CLOUD):
+            return current.clone()
+
+        if artifact_type is ArtifactType.DTM:
+            return dataclasses.replace(current, raster=current.raster.copy())
+
+        if artifact_type is ArtifactType.CLASSIFICATION_RESULT:
+            return dataclasses.replace(
+                current,
+                labels=current.labels.copy(),
+                cloud=current.cloud.clone(),
+                confidence=current.confidence.copy() if current.confidence is not None else None,
+            )
+
+        if artifact_type is ArtifactType.FEATURE_COLLECTION:
+            from topocore.features.models import FeatureCollection
+
+            # Found and fixed while wiring FeatureCollection.crs
+            # (added after this defensive-copy branch was originally
+            # written): the reconstruction below previously dropped
+            # `.crs` back to its default (None) unconditionally --
+            # confirmed directly, a FeatureCollection stored with a
+            # real, detected CRS came back as crs=None through this
+            # accessor, even though the stored object itself was
+            # correct. `crs` is now carried through explicitly.
+            return FeatureCollection(features=list(current.features), crs=current.crs)
+
+        raise AssertionError(f"Unhandled ArtifactType in artifact(): {artifact_type.value}.")  # pragma: no cover
 
     # ------------------------------------------------------------------
     # Branching
@@ -402,14 +514,33 @@ class Workflow:
         counts are cheaper to derive from `.point_count`).
         """
         _V.require(WorkflowStage.CLASSIFY_GROUND, self._store, ArtifactType.POINT_CLOUD)
-        _V.require_current(WorkflowStage.CLASSIFY_GROUND, self._store, self._history, ArtifactType.POINT_CLOUD)
+        _V.require_current(
+            WorkflowStage.CLASSIFY_GROUND,
+            self._store,
+            self._history,
+            ArtifactType.POINT_CLOUD,
+        )
         cloud = self._store.get(ArtifactType.POINT_CLOUD)
         dep = self._dependency(ArtifactType.POINT_CLOUD, required=True)
 
         def work() -> Any:
             from topocore.processing.ground import GroundManager
 
-            return GroundManager(**manager_kwargs).extract(cloud)
+            ground_cloud = GroundManager(**manager_kwargs).extract(cloud)
+            # Confirmed a real gap found while adding transform_crs()'s
+            # own new safety check: GroundManager.extract() constructs
+            # a fresh PointCloud for the ground subset, and never
+            # propagated the source cloud's own metadata.crs -- always
+            # None, regardless of what the input actually had. Ground
+            # classification is a pure geometric subset (points
+            # removed, none moved or reprojected), so the CRS the
+            # remaining points are expressed in is unchanged; not
+            # propagating it here would have made
+            # `transform_crs(GROUND_CLOUD, ...)` unusable in any
+            # normal pipeline once that stage's own "CRS must be
+            # known" check was added.
+            ground_cloud.crs = cloud.crs
+            return ground_cloud
 
         def metrics_fn(ground_cloud: Any) -> StageMetrics:
             ground_points = ground_cloud.point_count
@@ -443,7 +574,12 @@ class Workflow:
         not the binary ground/non-ground split `GroundManager` performs.
         """
         _V.require(WorkflowStage.CLASSIFY_POINTS, self._store, ArtifactType.POINT_CLOUD)
-        _V.require_current(WorkflowStage.CLASSIFY_POINTS, self._store, self._history, ArtifactType.POINT_CLOUD)
+        _V.require_current(
+            WorkflowStage.CLASSIFY_POINTS,
+            self._store,
+            self._history,
+            ArtifactType.POINT_CLOUD,
+        )
         cloud = self._store.get(ArtifactType.POINT_CLOUD)
         dep = self._dependency(ArtifactType.POINT_CLOUD, required=True)
 
@@ -476,7 +612,12 @@ class Workflow:
         ArtifactType.TIN
         """
         _V.require(WorkflowStage.BUILD_TIN, self._store, ArtifactType.GROUND_CLOUD)
-        _V.require_current(WorkflowStage.BUILD_TIN, self._store, self._history, ArtifactType.GROUND_CLOUD)
+        _V.require_current(
+            WorkflowStage.BUILD_TIN,
+            self._store,
+            self._history,
+            ArtifactType.GROUND_CLOUD,
+        )
         ground_cloud = self._store.get(ArtifactType.GROUND_CLOUD)
         dep = self._dependency(ArtifactType.GROUND_CLOUD, required=True)
 
@@ -636,7 +777,17 @@ class Workflow:
 
             active_registry = registry if registry is not None else FeatureCodeRegistry.default()
             build_result = FeatureBuilder(active_registry).build(survey_points)
-            return build_result.features
+            features = build_result.features
+            # survey_points.crs is a real CRS object (SurveyPointSet's
+            # own convention); FeatureCollection.crs is a string
+            # (PointCloud's own convention -- see FeatureCollection's
+            # own docstring for why). Converted here via the same
+            # f"EPSG:{code}" or .name shape already established by
+            # transform_point_cloud().
+            if survey_points.crs is not None:
+                source_crs = survey_points.crs
+                features.crs = f"EPSG:{source_crs.epsg}" if source_crs.epsg is not None else source_crs.name
+            return features
 
         self._execute_stage(
             WorkflowStage.BUILD_FEATURES_FROM_SURVEY,
@@ -666,7 +817,12 @@ class Workflow:
         ArtifactType.FEATURE_COLLECTION
         """
         _V.require(WorkflowStage.DETECT_FEATURES, self._store, ArtifactType.POINT_CLOUD)
-        _V.require_current(WorkflowStage.DETECT_FEATURES, self._store, self._history, ArtifactType.POINT_CLOUD)
+        _V.require_current(
+            WorkflowStage.DETECT_FEATURES,
+            self._store,
+            self._history,
+            ArtifactType.POINT_CLOUD,
+        )
         cloud = self._store.get(ArtifactType.POINT_CLOUD)
 
         dependencies = [self._dependency(ArtifactType.POINT_CLOUD, required=True)]
@@ -692,7 +848,12 @@ class Workflow:
         )
         for artifact_type in optional_types:
             if self._store.has(artifact_type):
-                _V.require_current(WorkflowStage.DETECT_FEATURES, self._store, self._history, artifact_type)
+                _V.require_current(
+                    WorkflowStage.DETECT_FEATURES,
+                    self._store,
+                    self._history,
+                    artifact_type,
+                )
                 dependencies.append(self._dependency(artifact_type, required=False))
 
         tin = self._store.get_or_none(ArtifactType.TIN)
@@ -704,7 +865,14 @@ class Workflow:
             from topocore.features.protocols import DetectionContext
 
             context = DetectionContext(cloud=cloud, tin=tin, dtm=dtm, classification=classification)
-            return FeatureExtractionManager(strict=strict).detect_all(context)
+            result = FeatureExtractionManager(strict=strict).detect_all(context)
+            # cloud is the same POINT_CLOUD still accessible in this
+            # Workflow's own store (confirmed directly, regardless of
+            # whether TIN/DTM were also used) -- FeatureCollection has
+            # no CRS mechanism of its own, so this is the only source
+            # it can ever get one from.
+            result.crs = cloud.crs
+            return result
 
         self._execute_stage(
             WorkflowStage.DETECT_FEATURES,
@@ -712,6 +880,455 @@ class Workflow:
             dependencies=tuple(dependencies),
             produces=ArtifactType.FEATURE_COLLECTION,
             metrics_fn=lambda features: StageMetrics(input_count=cloud.point_count, output_count=len(features)),
+        )
+        return self
+
+    def resolve_sides(self, **resolver_kwargs: Any) -> Workflow:
+        """
+        Requires
+        --------
+        ArtifactType.FEATURE_COLLECTION
+
+        Produces
+        --------
+        ArtifactType.FEATURE_COLLECTION (re-produced, not a new
+        artifact type -- see WorkflowStage's own docstring for why)
+
+        Optional stage: resolves left/right laterality for linear
+        features (`FeatureType.PAVEMENT_EDGE` by default) relative to
+        a reference `FeatureType.CENTERLINE`, via
+        `topocore.features.side.SideResolver`. Must be explicitly
+        chained after `build_features_from_survey()` or
+        `detect_features()` -- never runs implicitly. A collection
+        with no CENTERLINE/PAVEMENT_EDGE-type Features passes through
+        with no Features modified; this is not an error.
+
+        `**resolver_kwargs` are forwarded to `SideResolver.__init__`
+        (`target_types`, `max_distance`, `ambiguity_margin`,
+        `cross_tolerance`) -- unrecognized kwargs raise the same
+        `TypeError` constructing `SideResolver` directly would.
+        """
+        _V.require(WorkflowStage.RESOLVE_SIDES, self._store, ArtifactType.FEATURE_COLLECTION)
+        _V.require_current(
+            WorkflowStage.RESOLVE_SIDES,
+            self._store,
+            self._history,
+            ArtifactType.FEATURE_COLLECTION,
+        )
+        features = self._store.get(ArtifactType.FEATURE_COLLECTION)
+        dep = self._dependency(ArtifactType.FEATURE_COLLECTION, required=True)
+
+        def work() -> Any:
+            from topocore.features.side import SideResolver
+
+            return SideResolver(**resolver_kwargs).resolve(features)
+
+        self._execute_stage(
+            WorkflowStage.RESOLVE_SIDES,
+            work,
+            dependencies=(dep,),
+            produces=ArtifactType.FEATURE_COLLECTION,
+            metrics_fn=lambda result: StageMetrics(input_count=len(features), output_count=len(result)),
+        )
+        return self
+
+    def transform_crs(self, artifact_type: ArtifactType, transformer: Any) -> Workflow:
+        """
+        Requires
+        --------
+        `artifact_type` -- must currently be present, and must be one
+        of `POINT_CLOUD`, `GROUND_CLOUD`, `SURVEY_POINT_SET`,
+        `FEATURE_COLLECTION`. These are the only 4 types
+        `topocore.geodesy.transform` provides a transform function
+        for; any other `artifact_type` (`TIN`, `DTM`, `CONTOURS`,
+        `CLASSIFICATION_RESULT`) is rejected explicitly with
+        `WorkflowStateError`, not silently ignored or passed through
+        unchanged.
+
+        Produces
+        --------
+        `artifact_type` (re-produced in place -- same pattern as
+        `RESOLVE_SIDES`; this does not introduce a new artifact type).
+
+        Applies `transformer` (an already-built
+        `topocore.geodesy.CoordinateTransformer`) to the current
+        value of `artifact_type`, via whichever of
+        `transform_point_cloud()`/`transform_survey()`/
+        `transform_feature_collection()` matches. `GROUND_CLOUD` uses
+        the same `transform_point_cloud()` as `POINT_CLOUD`, since
+        both are the exact same `PointCloud` type -- confirmed
+        directly, `transform_point_cloud()` has no special handling
+        that would distinguish a "full" cloud from a ground-only one.
+
+        This stage never constructs a `CRS` or `CoordinateTransformer`
+        itself -- you build one yourself first (see
+        `topocore.geodesy`), matching `topocore.geodesy.transform`'s
+        own design (which never decides source/target CRS on the
+        caller's behalf either). It is optional: no reader in
+        `topocore.io` ever populates a CRS automatically, so nothing
+        else in the pipeline requires this stage to have run.
+
+        Confirmed directly: an artifact transformed here that has
+        downstream consumers already produced from its pre-transform
+        version (e.g. `FEATURE_COLLECTION` built from a `POINT_CLOUD`
+        you then transform, or vice versa) does not automatically
+        re-run -- the existing `ArtifactStore` staleness mechanism
+        (`WorkflowValidator.require_current()`, `Workflow.artifact()`'s
+        own `StaleArtifactError`) is what surfaces this the next time
+        that downstream artifact is touched, exactly as it already
+        does for every other stage. This stage does not need, and
+        does not add, any new staleness logic of its own.
+
+        Two safety checks, for `POINT_CLOUD`/`GROUND_CLOUD`/
+        `SURVEY_POINT_SET`/`FEATURE_COLLECTION` (all 4 supported
+        artifact types -- `FeatureCollection` gained its own `.crs`
+        after these checks were first written; the earlier gap where
+        it had no `.crs` concept at all is now closed):
+
+        1. **The artifact's current CRS must be known.** `crs=None`
+           means "this origin CRS is genuinely unknown" -- never
+           "assume it's whatever CRS you're about to transform to".
+           Confirmed directly: without this check, a `SurveyPointSet`
+           of raw, local total-station coordinates (`crs=None`, no
+           `.prj`) transformed silently, producing `inf` coordinate
+           values while the result falsely declared the transformer's
+           own target CRS as a legitimate georeferencing.
+        2. **The artifact's current CRS must match
+           `transformer.source_crs`.** A mismatch (e.g. the artifact
+           is genuinely `EPSG:3116` but `transformer` was built for
+           `EPSG:4326 -> EPSG:32618`) would be mathematically valid
+           but semantically wrong -- rejected explicitly rather than
+           silently producing a plausible-looking, incorrect result.
+        """
+        if artifact_type not in _TRANSFORMABLE_ARTIFACT_TYPES:
+            supported = ", ".join(t.value for t in _TRANSFORMABLE_ARTIFACT_TYPES)
+            raise WorkflowStateError(
+                f"transform_crs() does not support {artifact_type.value}; supported types are: {supported}."
+            )
+
+        _V.require(WorkflowStage.TRANSFORM_CRS, self._store, artifact_type)
+        _V.require_current(WorkflowStage.TRANSFORM_CRS, self._store, self._history, artifact_type)
+        current = self._store.get(artifact_type)
+
+        # Confirmed directly during this stage's own safety review: a
+        # SurveyPointSet/PointCloud with crs=None (genuinely unknown
+        # origin CRS -- e.g. raw total-station coordinates with no
+        # .prj) previously transformed silently, producing infinite
+        # (`inf`) coordinate values while the RESULT falsely declared
+        # the transformer's own target CRS as if it were a legitimate
+        # georeferencing. FEATURE_COLLECTION now has its own `.crs`
+        # too (added after this check was first written -- see
+        # FeatureCollection's own docstring), so this protection now
+        # extends to it as well; the earlier documented gap ("no
+        # `.crs` concept at all to check") is closed.
+        if artifact_type in (
+            ArtifactType.POINT_CLOUD,
+            ArtifactType.GROUND_CLOUD,
+            ArtifactType.SURVEY_POINT_SET,
+            ArtifactType.FEATURE_COLLECTION,
+        ):
+            current_crs = current.crs
+
+            if current_crs is None:
+                raise WorkflowStateError(
+                    f"transform_crs() cannot transform {artifact_type.value}: its current CRS is "
+                    "unknown (crs=None). Transforming from an unknown origin CRS would silently "
+                    "produce meaningless coordinates. Assign a known CRS first -- detected "
+                    "automatically, declared explicitly, or established via control-point "
+                    "georeferencing -- before transforming."
+                )
+
+            source_crs = transformer.source_crs
+            if artifact_type is ArtifactType.SURVEY_POINT_SET:
+                matches = current_crs == source_crs
+            else:
+                # PointCloud.crs and FeatureCollection.crs are both
+                # str (the "EPSG:{code}" or .name convention
+                # established by transform_point_cloud() itself), not
+                # a CRS object -- converted here to the same string
+                # shape for a like-for-like comparison.
+                expected = f"EPSG:{source_crs.epsg}" if source_crs.epsg is not None else source_crs.name
+                matches = current_crs == expected
+
+            if not matches:
+                raise WorkflowStateError(
+                    f"transform_crs() refused: {artifact_type.value}'s current CRS ({current_crs!r}) "
+                    f"does not match the transformer's own source CRS ({source_crs!r}). This would be "
+                    "mathematically valid but semantically wrong -- build a CoordinateTransformer "
+                    "whose source_crs genuinely matches this artifact's current CRS."
+                )
+
+        dep = self._dependency(artifact_type, required=True)
+
+        def work() -> Any:
+            from topocore.geodesy.transform import (
+                transform_feature_collection,
+                transform_point_cloud,
+                transform_survey,
+            )
+
+            if artifact_type in (ArtifactType.POINT_CLOUD, ArtifactType.GROUND_CLOUD):
+                return transform_point_cloud(current, transformer)
+            if artifact_type is ArtifactType.SURVEY_POINT_SET:
+                return transform_survey(current, transformer)
+            return transform_feature_collection(current, transformer)
+
+        self._execute_stage(
+            WorkflowStage.TRANSFORM_CRS,
+            work,
+            dependencies=(dep,),
+            produces=artifact_type,
+            metrics_fn=lambda result: StageMetrics(input_count=len(current), output_count=len(result)),
+        )
+        return self
+
+    def transform_vertical(
+        self,
+        artifact_type: ArtifactType,
+        *,
+        source_datum: Any,
+        target_datum: Any,
+        geoid: Any,
+    ) -> Workflow:
+        """
+        Requires
+        --------
+        `artifact_type` -- same 4 supported types as `transform_crs()`
+        (`POINT_CLOUD`, `GROUND_CLOUD`, `SURVEY_POINT_SET`,
+        `FEATURE_COLLECTION`); any other type is rejected explicitly
+        with `WorkflowStateError`.
+
+        Produces
+        --------
+        `artifact_type` (re-produced in place -- same pattern as
+        `TRANSFORM_CRS`/`RESOLVE_SIDES`).
+
+        Shifts `Z` via `topocore.geodesy.vertical.VerticalTransformer`
+        (constructed internally from `source_datum`/`target_datum`/
+        `geoid`, matching this method's own agreed signature -- unlike
+        `transform_crs()`, which receives an already-built
+        `CoordinateTransformer` directly). Dispatches to whichever of
+        `transform_point_cloud_vertical()`/`transform_survey_vertical()`/
+        `transform_feature_collection_vertical()` matches, exactly
+        mirroring `transform_crs()`'s own dispatch.
+
+        `X`/`Y` (or longitude/latitude, for `SurveyPointSet`) must
+        already be geographic degrees in the same CRS `geoid` itself
+        is defined in -- this stage does not reproject and does not
+        validate this, matching
+        `topocore.geodesy.vertical.transform`'s own stated caller
+        responsibility. If your data is in a projected CRS, run
+        `transform_crs()` to a geographic CRS first.
+
+        Never leaves `Z` uncorrected. If any point/vertex in the
+        artifact falls outside `geoid`'s own extent (or on a nodata
+        cell), the entire stage fails with `WorkflowExecutionError`
+        wrapping `MissingGeoidGridError` -- not a partially-corrected
+        result, and never a silently-unchanged height. This directly
+        closes the exact danger confirmed during this feature's own
+        design review: plain `pyproj.Transformer` was confirmed to
+        silently return an unchanged height when its own required
+        vertical grid was missing, rather than raising.
+        """
+        if artifact_type not in _TRANSFORMABLE_ARTIFACT_TYPES:
+            supported = ", ".join(t.value for t in _TRANSFORMABLE_ARTIFACT_TYPES)
+            raise WorkflowStateError(
+                f"transform_vertical() does not support {artifact_type.value}; supported types are: {supported}."
+            )
+
+        _V.require(WorkflowStage.TRANSFORM_VERTICAL, self._store, artifact_type)
+        _V.require_current(WorkflowStage.TRANSFORM_VERTICAL, self._store, self._history, artifact_type)
+        current = self._store.get(artifact_type)
+        dep = self._dependency(artifact_type, required=True)
+
+        def work() -> Any:
+            from topocore.geodesy.vertical.transform import (
+                transform_feature_collection_vertical,
+                transform_point_cloud_vertical,
+                transform_survey_vertical,
+            )
+            from topocore.geodesy.vertical.transformer import VerticalTransformer
+
+            vertical_transformer = VerticalTransformer(
+                source_datum=source_datum, target_datum=target_datum, geoid=geoid
+            )
+
+            if artifact_type in (ArtifactType.POINT_CLOUD, ArtifactType.GROUND_CLOUD):
+                return transform_point_cloud_vertical(current, vertical_transformer)
+            if artifact_type is ArtifactType.SURVEY_POINT_SET:
+                return transform_survey_vertical(current, vertical_transformer)
+            return transform_feature_collection_vertical(current, vertical_transformer)
+
+        self._execute_stage(
+            WorkflowStage.TRANSFORM_VERTICAL,
+            work,
+            dependencies=(dep,),
+            produces=artifact_type,
+            metrics_fn=lambda result: StageMetrics(input_count=len(current), output_count=len(result)),
+        )
+        return self
+
+    def georeference(
+        self,
+        artifact_type: ArtifactType,
+        controls: Any,
+        target_crs: Any,
+        options: Any,
+    ) -> Workflow:
+        """
+        Requires
+        --------
+        `artifact_type` -- must currently be present, and must be one
+        of `POINT_CLOUD`, `GROUND_CLOUD`, `SURVEY_POINT_SET`,
+        `FEATURE_COLLECTION` -- the same 4 types
+        `transform_crs()`/`transform_vertical()` support, for the
+        same reason: `GROUND_CLOUD` reuses
+        `apply_georeferencing_to_point_cloud()`, since both are the
+        exact same `PointCloud` type (confirmed directly, that
+        function has no special handling that would distinguish a
+        "full" cloud from a ground-only one -- identical to
+        `transform_point_cloud()`'s own precedent).
+
+        Produces
+        --------
+        `artifact_type` (re-produced in place, same pattern as
+        `TRANSFORM_CRS`/`TRANSFORM_VERTICAL`).
+
+        `controls: Sequence[ControlPoint]`, `target_crs: CRS`,
+        `options: GeoreferencingOptions` -- see
+        `topocore.geodesy.georeferencing` for all 3. This stage never
+        constructs a `ControlPoint` or decides `target_crs`/`options`
+        itself, matching `transform_crs()`'s own "you build the
+        transformer yourself" design.
+
+        Unlike `transform_crs()`, this stage does NOT require
+        `artifact_type`'s own current CRS to be known or to match
+        anything -- control-point georeferencing exists specifically
+        for local/arbitrary coordinates with no CRS at all (`crs=None`
+        is the expected, common starting point here, never rejected).
+
+        It DOES require the opposite: `artifact_type`'s current CRS
+        must genuinely be `None`. Confirmed directly a real, serious
+        gap without this check: calling `georeference()` a second
+        time on an already-georeferenced (or otherwise already-CRS-
+        assigned) artifact would silently re-apply a new set of
+        control points -- computed for the ORIGINAL local
+        coordinates -- on top of the already-transformed result,
+        producing a meaningless, double-transformed artifact with no
+        error at all. Rejected explicitly instead, mirroring
+        `transform_crs()`'s own "never silently re-transform an
+        already-referenced artifact" principle (there enforced via a
+        source-CRS match; here via requiring genuine `crs=None`).
+
+        `fit_georeferencing(controls, options)` is called BEFORE
+        `_execute_stage()`, exactly mirroring `transform_crs()`'s own
+        pre-validation pattern (its 2-check CRS safety review also
+        runs before `_execute_stage()`) -- so
+        `InsufficientControlPointsError`/`DegenerateGeometryError`/
+        `LinearizationInvalidError`/`UnderconstrainedGeoreferencingError`/
+        `ControlPointsTooCloseError` all propagate directly, never
+        wrapped as a recorded, failed stage.
+
+        `apply_scale_to_z` is decided from `result.strategy` alone --
+        `True` only for `HELMERT_3D`, `False` for both `HELMERT_2D`
+        and `TRANSLATION_ONLY` -- never inferred from
+        `result.parameters` itself (e.g. checking `rx == 0 and ry ==
+        0` would be exactly the kind of dangerous inference this
+        whole capability's own design has consistently rejected:
+        `HelmertParameters` cannot and does not encode which strategy
+        produced it -- only `GeoreferencingResult.strategy` does).
+
+        The full `GeoreferencingResult` (strategy, parameters,
+        residuals, rms, control_count, warning) is recorded in this
+        stage's own `StageMetrics.extra["georeferencing_result"]` --
+        not flattened into separate `extra` keys, so no information
+        is lost and every field remains available to a caller
+        (e.g. a future DXF/GPKG metadata export) without needing a
+        second computation.
+        """
+        if artifact_type not in _TRANSFORMABLE_ARTIFACT_TYPES:
+            supported = ", ".join(t.value for t in _TRANSFORMABLE_ARTIFACT_TYPES)
+            raise WorkflowStateError(
+                f"georeference() does not support {artifact_type.value}; supported types are: {supported}."
+            )
+
+        _V.require(WorkflowStage.GEOREFERENCE, self._store, artifact_type)
+        _V.require_current(WorkflowStage.GEOREFERENCE, self._store, self._history, artifact_type)
+        current = self._store.get(artifact_type)
+
+        # Confirmed directly, a real and serious gap: without this
+        # check, calling georeference() a second time on an artifact
+        # that a PRIOR georeference() (or transform_crs(), or a real
+        # detected/declared CRS) already gave a real CRS to silently
+        # re-applies a NEW set of control points -- computed for the
+        # ORIGINAL local coordinates -- on top of the ALREADY-
+        # transformed result, producing a meaningless,
+        # double-transformed artifact with no error at all. This
+        # mirrors exactly the same "never silently re-transform an
+        # already-referenced artifact" danger `transform_crs()`'s own
+        # safety review already established (there, guarded by
+        # requiring crs to MATCH transformer.source_crs; here,
+        # guarded by requiring crs to genuinely be None, since
+        # control-point georeferencing exists specifically for
+        # coordinates with no CRS at all).
+        if current.crs is not None:
+            raise WorkflowStateError(
+                f"georeference() refused: {artifact_type.value}'s current CRS is already known "
+                f"({current.crs!r}), not None. Control-point georeferencing is for genuinely "
+                "local/unreferenced coordinates -- running it again on an artifact that already "
+                "has a real CRS would silently re-apply a new transformation on top of an "
+                "already-transformed result. If you need a further CRS-to-CRS transformation, use "
+                "transform_crs() instead."
+            )
+
+        dep = self._dependency(artifact_type, required=True)
+
+        from topocore.geodesy.georeferencing import (
+            GeoreferencingStrategy,
+            fit_georeferencing,
+        )
+
+        result = fit_georeferencing(controls, options)
+        apply_scale_to_z = result.strategy is GeoreferencingStrategy.HELMERT_3D
+
+        def work() -> Any:
+            from topocore.geodesy.georeferencing.apply import (
+                apply_georeferencing_to_feature_collection,
+                apply_georeferencing_to_point_cloud,
+                apply_georeferencing_to_survey,
+            )
+
+            if artifact_type in (ArtifactType.POINT_CLOUD, ArtifactType.GROUND_CLOUD):
+                return apply_georeferencing_to_point_cloud(
+                    current,
+                    result.parameters,
+                    target_crs,
+                    apply_scale_to_z=apply_scale_to_z,
+                )
+            if artifact_type is ArtifactType.SURVEY_POINT_SET:
+                return apply_georeferencing_to_survey(
+                    current,
+                    result.parameters,
+                    target_crs,
+                    apply_scale_to_z=apply_scale_to_z,
+                )
+            return apply_georeferencing_to_feature_collection(
+                current,
+                result.parameters,
+                target_crs,
+                apply_scale_to_z=apply_scale_to_z,
+            )
+
+        self._execute_stage(
+            WorkflowStage.GEOREFERENCE,
+            work,
+            dependencies=(dep,),
+            produces=artifact_type,
+            metrics_fn=lambda new_artifact: StageMetrics(
+                input_count=len(current),
+                output_count=len(new_artifact),
+                extra={"georeferencing_result": result},
+            ),
         )
         return self
 
@@ -730,7 +1347,12 @@ class Workflow:
         same FeatureCollection.
         """
         _V.require(WorkflowStage.EXPORT_DXF, self._store, ArtifactType.FEATURE_COLLECTION)
-        _V.require_current(WorkflowStage.EXPORT_DXF, self._store, self._history, ArtifactType.FEATURE_COLLECTION)
+        _V.require_current(
+            WorkflowStage.EXPORT_DXF,
+            self._store,
+            self._history,
+            ArtifactType.FEATURE_COLLECTION,
+        )
         features = self._store.get(ArtifactType.FEATURE_COLLECTION)
         dep = self._dependency(ArtifactType.FEATURE_COLLECTION, required=True)
 
@@ -754,13 +1376,19 @@ class Workflow:
             # exporter_kwargs, wrap it in ExportContext, then pass
             # that.
             options = DXFExportOptions(**exporter_kwargs)
-            context = ExportContext(options=options)
+            # features.crs is already the exact string type
+            # ExportContext.crs expects (both "EPSG:{code}" or a bare
+            # .name) -- confirmed directly, no conversion needed.
+            # None is passed through unchanged too: FeatureCollection
+            # with no known CRS means the exported DXF simply carries
+            # no "TopoCore CRS" header variable, never an invented one.
+            context = ExportContext(crs=features.crs, options=options)
             return DXFExporter(context).export(features, path)
 
         self._execute_stage(WorkflowStage.EXPORT_DXF, work, dependencies=(dep,), produces=None)
         return self
 
-    def export_gpkg(self, path: str | Path, *, epsg: int, **exporter_kwargs: Any) -> Workflow:
+    def export_gpkg(self, path: str | Path, *, epsg: int | None = None, **exporter_kwargs: Any) -> Workflow:
         """
         Requires
         --------
@@ -769,16 +1397,60 @@ class Workflow:
         Never writes to the ArtifactStore -- may be called any
         number of times, including alongside `export_dxf()` on the
         same FeatureCollection.
+
+        `epsg` is now optional (previously required in every call).
+        Resolution policy, confirmed by direct testing for each case:
+
+        1. `FeatureCollection.crs` gives a real EPSG code (starts
+           with `"EPSG:"`) and `epsg` is not given -- that code is
+           used automatically. TopoCore already knows it; the caller
+           is not asked to repeat it.
+        2. `FeatureCollection.crs` is `None`, or is a bare name with
+           no EPSG code (e.g. a custom, unregistered CRS) -- `epsg`
+           becomes required; `WorkflowStateError` if not given. Never
+           invents one.
+        3. Both are given and agree -- proceeds normally.
+        4. Both are given and disagree -- `WorkflowStateError`,
+           refusing to silently pick one over the other. This mirrors
+           `transform_crs()`'s own "never silently resolve a CRS
+           discrepancy" principle.
         """
         _V.require(WorkflowStage.EXPORT_GPKG, self._store, ArtifactType.FEATURE_COLLECTION)
-        _V.require_current(WorkflowStage.EXPORT_GPKG, self._store, self._history, ArtifactType.FEATURE_COLLECTION)
+        _V.require_current(
+            WorkflowStage.EXPORT_GPKG,
+            self._store,
+            self._history,
+            ArtifactType.FEATURE_COLLECTION,
+        )
         features = self._store.get(ArtifactType.FEATURE_COLLECTION)
         dep = self._dependency(ArtifactType.FEATURE_COLLECTION, required=True)
+
+        detected_epsg: int | None = None
+        if features.crs is not None and features.crs.startswith("EPSG:"):
+            suffix = features.crs.removeprefix("EPSG:")
+            if suffix.isdigit():
+                detected_epsg = int(suffix)
+
+        if epsg is not None and detected_epsg is not None and epsg != detected_epsg:
+            raise WorkflowStateError(
+                f"export_gpkg() refused: FeatureCollection's own CRS is 'EPSG:{detected_epsg}', "
+                f"but epsg={epsg} was explicitly provided and disagrees. TopoCore never silently "
+                "picks one over the other -- pass the correct epsg, or transform_crs() the "
+                "FeatureCollection to the CRS you actually want first."
+            )
+
+        resolved_epsg = epsg if epsg is not None else detected_epsg
+
+        if resolved_epsg is None:
+            raise WorkflowStateError(
+                "export_gpkg() requires an explicit epsg: FeatureCollection has no known CRS "
+                "(or its CRS has no EPSG code) to derive one from automatically."
+            )
 
         def work() -> Any:
             from topocore.gpkg import GeoPackageExporter, GPKGExportOptions
 
-            options = GPKGExportOptions(epsg=epsg, **exporter_kwargs)
+            options = GPKGExportOptions(epsg=resolved_epsg, **exporter_kwargs)
             return GeoPackageExporter(options).export(features, path)
 
         self._execute_stage(WorkflowStage.EXPORT_GPKG, work, dependencies=(dep,), produces=None)

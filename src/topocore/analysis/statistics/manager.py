@@ -19,7 +19,7 @@ MIT
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, TypeAlias
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -48,10 +48,10 @@ from .distribution import DistributionStatistics
 from .elevation import ElevationStatistics
 from .slope import SlopeStatistics
 
-StatisticsResult: TypeAlias = AreaStats | DensityStats | DistributionStats | ElevationStats | SlopeStats
+# PEP 695: Nueva sintaxis para alias de tipos
+type StatisticsResult = AreaStats | DensityStats | DistributionStats | ElevationStats | SlopeStats
 
-
-DispatchMethod: TypeAlias = Callable[..., StatisticsResult]
+type DispatchMethod = Callable[..., StatisticsResult]
 
 
 _VALID_METHODS = frozenset(
@@ -89,9 +89,9 @@ class StatisticsAnalysis:
 
     __slots__ = (
         "_config",
+        "_dispatch",
         "_method",
         "_num_bins",
-        "_dispatch",
     )
 
     def __init__(
@@ -155,7 +155,7 @@ class StatisticsAnalysis:
             )
 
         if hasattr(values, "elevation_array"):
-            return ElevationStatistics.compute(values.elevation_array)
+            return ElevationStatistics.compute(values.elevation_array())
 
         if hasattr(values, "elevations"):
             return ElevationStatistics.compute(values.elevations)
@@ -164,18 +164,53 @@ class StatisticsAnalysis:
 
     def slope(
         self,
-        dtm: GriddedSurface,
+        source: NDArray[np.float64] | GriddedSurface,
+        resolution: float | None = None,
         num_bins: int | None = None,
     ) -> SlopeStats:
         """
-        Compute slope statistics from a DTM.
+        Compute slope statistics.
+
+        Accepts:
+
+        - NumPy elevation grid array (requires `resolution`, since a
+          raw array carries no cell-size information of its own --
+          matching `SlopeStatistics.compute_from_array()`'s own
+          contract).
+        - Gridded surface (its own resolution is used automatically,
+          matching `SlopeStatistics.compute_from_dtm()`'s own
+          contract).
+
+        Found and fixed during this project's own PR22 documentation
+        audit: this previously accepted `GriddedSurface` only,
+        despite `SlopeStatistics` (the class this method wraps)
+        publicly supporting both a raw array and a gridded surface --
+        a narrower facade than the class it represents, unlike this
+        same manager's own `elevation()` method, which already
+        branches on input type. Corrected to match that established,
+        already-working convention exactly, rather than inventing a
+        new one.
         """
 
         bins = num_bins if num_bins is not None else self._num_bins
 
+        if isinstance(source, np.ndarray):
+            if resolution is None:
+                raise StatisticsError("resolution is required when computing slope from a raw elevation array.")
+
+            return SlopeStatistics(
+                num_bins=bins,
+            ).compute_from_array(
+                source.astype(
+                    np.float64,
+                    copy=False,
+                ),
+                resolution,
+            )
+
         return SlopeStatistics(
             num_bins=bins,
-        ).compute_from_dtm(dtm)
+        ).compute_from_dtm(source)
 
     def area(
         self,

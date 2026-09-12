@@ -200,6 +200,28 @@ class WorkflowValidator:
             return False
 
         for dependency in producing_stage.dependencies:
+            # A stage that both reads and re-produces the SAME
+            # ArtifactType (e.g. RESOLVE_SIDES, TRANSFORM_CRS --
+            # enrichment/transform stages that read the current value
+            # of a type and write a new version of that exact same
+            # type) records a dependency on that type's own
+            # pre-call version. By the time this function runs, the
+            # store's current version for that type is already the
+            # NEW one this very producing_stage just wrote -- so a
+            # naive comparison here would always find "current
+            # version != dependency version" and incorrectly call
+            # the artifact stale immediately after its own successful
+            # production. Confirmed there is no legitimate scenario
+            # where this specific self-referential comparison should
+            # ever report staleness: once a newer version supersedes
+            # this one, `_is_stale` is called for THAT newer version
+            # instead (via `current_version = store.version_of(artifact)`
+            # above), never re-examining this now-superseded
+            # dependency record again. Skipping self-referential
+            # dependencies here is therefore always safe, not a
+            # loosening of the real check.
+            if dependency.artifact == artifact:
+                continue
             if store.version_of(dependency.artifact) != dependency.version:
                 return True
             if WorkflowValidator._is_stale(store, history, dependency.artifact):

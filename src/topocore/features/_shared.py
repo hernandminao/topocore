@@ -27,10 +27,11 @@ from typing import ClassVar, Literal
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.spatial import ConvexHull, cKDTree
+from scipy.spatial import ConvexHull, QhullError, cKDTree
 
 from topocore.core.types import IntArray1D
 from topocore.features.base import BaseFeatureDetector
+from topocore.features.exceptions import DetectionError
 from topocore.features.models import (
     ContextField,
     Feature,
@@ -50,8 +51,28 @@ def extract_xyz(cloud: PointCloud) -> NDArray[np.float64]:
 
     Mirrors the chunked-attribute-access pattern already used in
     ``processing.classification.ml.MachineLearningClassifier``.
+
+    Returns
+    -------
+    NDArray[np.float64]
+        Shape ``(0, 3)`` for an empty `cloud` -- a genuinely empty
+        point cloud is a valid input (e.g. after an earlier pipeline
+        stage filtered everything out of a given tile), not an error
+        condition, and every real caller already treats an empty
+        candidate set as "no features found" rather than a failure.
+
+        Found and fixed during this project's own feature-extraction
+        documentation audit: this used to call `np.concatenate()` on
+        an empty list of chunk arrays unconditionally, raising a raw
+        `ValueError` ("need at least one array to concatenate") --
+        confirmed reachable directly from every one of the 15 (of
+        22) detectors that call this function, for a real, valid
+        `PointCloud` with zero chunks.
     """
     from topocore.pointcloud.attributes import PointAttribute
+
+    if cloud.is_empty:
+        return np.empty((0, 3), dtype=np.float64)
 
     xs = np.concatenate([chunk[PointAttribute.X] for chunk in cloud]).astype(np.float64)
 
@@ -87,7 +108,36 @@ def cluster_points_2d(
     -------
     list[NDArray[np.int64]]
         Each array holds indices into `xy` for one cluster.
+
+    Raises
+    ------
+    DetectionError
+        If `xy` contains non-finite (NaN or Inf) coordinates.
+
+        Found and fixed during this project's own feature-extraction
+        documentation audit: neither `PointCloud`/`Chunk` (the raw
+        data container) nor `Workflow.detect_features()` (the real
+        production entry point) guarantees finite coordinates --
+        confirmed directly, by search, that neither validates this
+        anywhere. Without this check, a non-finite coordinate reached
+        `scipy.spatial.cKDTree` directly and raised a plain
+        `ValueError`, not a `features`-domain exception -- affecting
+        every one of the 15 (of 22) detectors that reach this
+        function or `convex_hull_polygon()`, either directly or via
+        `ClusterDetectorBase`. `DetectionError` is the same exception
+        `topocore.features.drainage.DrainageDetector` already raises
+        for the identical "must contain only finite coordinates"
+        condition on its own TIN input -- confirmed real, existing
+        precedent within this same package, not a new convention
+        invented for this fix. Matches this project's own
+        established pattern elsewhere (`processing.classification.rules`,
+        among others): validate explicitly before the numerically
+        sensitive call, rather than letting a dependency's own
+        generic exception escape unwrapped.
     """
+    if not np.all(np.isfinite(xy)):
+        raise DetectionError("Point coordinates must contain only finite coordinates.")
+
     n = xy.shape[0]
 
     if n == 0:
@@ -124,6 +174,59 @@ def cluster_points_2d(
     return [np.asarray(indices, dtype=np.int64) for indices in groups.values() if len(indices) >= min_points]
 
 
+def _is_collinear(unique_xy: NDArray[np.float64], tolerance: float = 1e-9) -> bool:
+    """
+    Return whether 3 or more distinct 2D points are all collinear.
+
+    Same criterion already used elsewhere in this project
+    (`terrain.algorithms.delaunay.DelaunayTriangulator
+    ._validate_collinear_points()`): the rank of the mean-centered
+    coordinates. Centering first makes this scale-independent --
+    confirmed correct at both small and real UTM-scale coordinates
+    during that module's own audit.
+    """
+    centered = unique_xy - unique_xy.mean(axis=0)
+    singular_values = np.linalg.svd(centered, compute_uv=False)
+    return bool(singular_values[1] < tolerance * max(singular_values[0], 1.0))
+
+
+def _collinear_sliver(unique_xy: NDArray[np.float64]) -> NDArray[np.float64]:
+    """
+    Build a thin rectangular footprint spanning a collinear cluster's
+    own real length and orientation.
+
+    Unlike the `< 3` distinct points fallback (a handful of
+    near-coincident points, with no meaningful real extent to
+    preserve), a collinear cluster can span a real, meaningful
+    distance -- a straight fence or narrow wall segment, for
+    instance. Collapsing it to a fixed tiny triangle would discard
+    that real extent from the resulting `Feature`'s own `bounds`.
+    This instead returns a thin, non-degenerate rectangle: the
+    cluster's own 2 extreme points along its principal direction,
+    each offset by a small perpendicular width.
+    """
+    centered = unique_xy - unique_xy.mean(axis=0)
+    _, _, vt = np.linalg.svd(centered, full_matrices=False)
+    direction = vt[0]
+
+    projections = centered @ direction
+    p_min = unique_xy[np.argmin(projections)]
+    p_max = unique_xy[np.argmax(projections)]
+
+    perpendicular = np.asarray([-direction[1], direction[0]], dtype=np.float64)
+    half_width = 1e-3
+
+    return np.asarray(
+        [
+            p_min + perpendicular * half_width,
+            p_max + perpendicular * half_width,
+            p_max - perpendicular * half_width,
+            p_min - perpendicular * half_width,
+        ],
+        dtype=np.float64,
+    )
+
+
 def convex_hull_polygon(
     points_xyz: NDArray[np.float64],
 ) -> NDArray[np.float64]:
@@ -134,9 +237,51 @@ def convex_hull_polygon(
     representative elevation for the footprint polygon.
 
     For clusters with fewer than three distinct XY positions, a
-    minimal fallback triangle is generated.
+    minimal fallback triangle is generated. For clusters with three
+    or more distinct positions that are all collinear (a real,
+    reachable case for a naturally linear feature -- e.g. a fence or
+    a narrow wall segment -- not just a synthetic corner case), a
+    thin rectangular "sliver" footprint is generated instead,
+    spanning the cluster's own real length and orientation.
+
+    Raises
+    ------
+    DetectionError
+        If the XY coordinates contain non-finite (NaN or Inf) values.
+        See `cluster_points_2d()`'s own docstring for the full
+        account of this fix -- the same finding and the same
+        exception apply here, since this function calls
+        `scipy.spatial.ConvexHull` directly on `xy`.
+
+        Also raised if `scipy.spatial.ConvexHull` itself fails for
+        any other, unanticipated geometric reason (wrapping the
+        underlying `QhullError`).
+
+        Found and fixed during this project's own feature-extraction
+        documentation audit: 3 or more distinct but exactly (or
+        near-exactly) collinear points -- confirmed directly
+        reachable from a real, registered detector (`BuildingDetector`,
+        given a straight line of classified points) -- used to reach
+        `scipy.spatial.ConvexHull` directly and raise a raw
+        `QhullError`, not a `features`-domain exception. The
+        existing `< 3` distinct points fallback did not cover this
+        case: a genuinely long collinear cluster (e.g. a 9-meter
+        fence line) is a different situation from a handful of
+        near-coincident points, and collapsing it to the same tiny
+        fixed-size fallback triangle used for the latter would have
+        discarded its real spatial extent -- `FeatureGeometry` has no
+        `area`/`length` property, but its own `bounds` is real,
+        consumer-visible information this fix preserves. Collinearity
+        is detected the same way `terrain.algorithms.delaunay
+        .DelaunayTriangulator._validate_collinear_points()` already
+        does elsewhere in this project (rank of the mean-centered
+        coordinates), for consistency with that existing convention.
     """
     xy = points_xyz[:, :2]
+
+    if not np.all(np.isfinite(xy)):
+        raise DetectionError("Point coordinates must contain only finite coordinates.")
+
     z = float(np.median(points_xyz[:, 2]))
 
     unique_xy = np.unique(xy, axis=0)
@@ -158,8 +303,15 @@ def convex_hull_polygon(
 
         hull_xy = base + offsets
 
+    elif _is_collinear(unique_xy):
+        hull_xy = _collinear_sliver(unique_xy)
+
     else:
-        hull = ConvexHull(unique_xy)
+        try:
+            hull = ConvexHull(unique_xy)
+        except QhullError as exc:
+            raise DetectionError(f"Unable to build a convex-hull footprint: {exc}") from exc
+
         hull_xy = unique_xy[hull.vertices]
 
     return np.column_stack(
@@ -523,7 +675,9 @@ class ClusterDetectorBase(BaseFeatureDetector):
         }
 
 
-__all__ = [
+__all__ = [  # noqa: RUF022 -- ordered by pipeline sequence (extract ->
+    # cluster -> hull -> measurements -> config -> base class), not
+    # alphabetical; pre-existing, unrelated to this session's fix.
     "extract_xyz",
     "cluster_points_2d",
     "convex_hull_polygon",

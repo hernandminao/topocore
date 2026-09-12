@@ -191,7 +191,7 @@ def test_result_is_frozen_dataclass() -> None:
     """
     result = SurfaceComparison().compute(np.array([[100.0]]), np.array([[100.0]]))
     with pytest.raises(FrozenInstanceError):
-        result.valid_cells = 999  # type: ignore[misc]
+        result.valid_cells = 999
 
 
 def test_result_type_is_the_documented_dataclass() -> None:

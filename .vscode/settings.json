@@ -1,0 +1,14 @@
+{
+    "python-envs.defaultEnvManager": "ms-python.python:system",
+    // "python.analysis.typeCheckingMode": "strict",
+    // "python.analysis.autoImportCompletions": true,
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+        "source.fixAll.ruff": "always",
+        "source.organizeImports.ruff": "always"
+    },
+    // "ruff.nativeServer": "on",
+    // "mypy-type-checker.reportingScope": "workspace",
+    // "python.testing.pytestEnabled": true,
+    // "python.testing.unittestEnabled": false
+}

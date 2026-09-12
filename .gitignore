@@ -22,4 +22,6 @@ site/
 
 .idea/
 
-.vscode/settings.jsondata/geoids/*.tif 
+.vscode/settings.json
+
+data/geoids/*.tif 

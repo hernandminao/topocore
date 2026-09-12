@@ -111,7 +111,7 @@ class GeoidGrid:
             raise MissingGeoidGridError(f"Geoid grid file not found: '{resolved_path}'.")
 
         try:
-            from osgeo import gdal  # type: ignore[import-untyped]
+            from osgeo import gdal
         except ImportError as exc:
             raise GeoidError(
                 "Reading a geoid grid requires GDAL, which is not installed. "

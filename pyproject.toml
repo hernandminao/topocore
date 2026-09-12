@@ -166,6 +166,8 @@ module = [
     "pye57.*",
     "reportlab",
     "reportlab.*",
+    "osgeo",
+    "osgeo.*",
 ]
 ignore_missing_imports = true
 follow_imports = "skip"

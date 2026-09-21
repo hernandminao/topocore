@@ -38,10 +38,15 @@ class DXFExportOptions:
     tolerance: DXFTolerance = field(default_factory=DXFTolerance)
     strict: bool = True
     index_contour_every: int = DEFAULT_INDEX_CONTOUR_EVERY
+    contour_labels: bool = True
+    point_labels: bool = False
+    label_text_height: float = 2.0
 
     def __post_init__(self) -> None:
         if self.index_contour_every < 1:
             raise ValueError(f"index_contour_every must be >= 1; got {self.index_contour_every}.")
+        if self.label_text_height <= 0:
+            raise ValueError(f"label_text_height must be positive; got {self.label_text_height}.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,4 +55,5 @@ class ExportContext:
     options: DXFExportOptions = field(default_factory=DXFExportOptions)
 
 
-__all__ = ["DrawingUnits", "NonPlanarPolygonMode", "LayerStyle", "DXFExportOptions", "ExportContext"]
+__all__ = ["DXFExportOptions", "DrawingUnits", "ExportContext", "LayerStyle", "NonPlanarPolygonMode"]
+

@@ -1,0 +1,14 @@
+{
+  "codes": [
+    {
+      "code": "BORDEI",
+      "name": "Pavement Edge (Left)",
+      "geometry_type": "line",
+      "feature_type": "pavement_edge",
+      "category": "infrastructure",
+      "layer": "VIAS",
+      "closed": false,
+      "aliases": []
+    }
+  ]
+}

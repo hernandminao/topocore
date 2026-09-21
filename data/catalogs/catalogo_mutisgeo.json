@@ -1,0 +1,44 @@
+{
+  "codes": [
+    {
+      "code": "PRTO",
+      "name": "Paramento",
+      "geometry_type": "line",
+      "feature_type": "paramen",
+      "category": "cadastre",
+      "layer": "PARAMENTOS",
+      "closed": false,
+      "aliases": []
+    },
+    {
+      "code": "AD",
+      "name": "Anden",
+      "geometry_type": "line",
+      "feature_type": "sidewalk",
+      "category": "infrastructure",
+      "layer": "ANDENES",
+      "closed": false,
+      "aliases": []
+    },
+    {
+      "code": "EST",
+      "name": "Estructura",
+      "geometry_type": "polygon",
+      "feature_type": "building",
+      "category": "building",
+      "layer": "EDIFICACIONES",
+      "closed": true,
+      "aliases": []
+    },
+    {
+      "code": "CJA",
+      "name": "Camara de Servicios",
+      "geometry_type": "symbol",
+      "feature_type": "utility_chamber",
+      "category": "utility",
+      "layer": "SERVICIOS",
+      "closed": false,
+      "aliases": []
+    }
+  ]
+}

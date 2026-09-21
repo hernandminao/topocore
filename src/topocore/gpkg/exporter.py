@@ -72,7 +72,7 @@ from topocore.gpkg.schema import (
 from topocore.gpkg.spatial_ref import ResolvedSRS, resolve_srs
 from topocore.gpkg.validation import GPKGValidationSeverity, GPKGValidator
 
-_PROMOTED_ATTRIBUTE_KEYS = ("survey_code", "survey_name", "cad_layer")
+_PROMOTED_ATTRIBUTE_KEYS = ("survey_code", "survey_name", "cad_layer", "elevation", "survey_id")
 
 _INSERT_SRS_SQL = (
     "INSERT OR IGNORE INTO gpkg_spatial_ref_sys "
@@ -90,6 +90,8 @@ _FeatureRow = tuple[
     str | None,  # survey_code
     str | None,  # survey_name
     str | None,  # cad_layer
+    float | None,  # elevation
+    str | None,  # survey_id
     float,  # confidence
     str | None,  # producer
     str | None,  # producer_version
@@ -283,7 +285,7 @@ class GeoPackageExporter:
             gpb = build_gpb(feature.geometry, srs_id)
             min_x, min_y, max_x, max_y = geometry_bounds_2d(feature.geometry)
 
-            survey_code, survey_name, cad_layer, attributes_json = self._split_attributes(feature)
+            survey_code, survey_name, cad_layer, elevation, survey_id, attributes_json = self._split_attributes(feature)
             producer = feature.metadata.detector if feature.metadata else None
             producer_version = feature.metadata.version if feature.metadata else None
 
@@ -297,6 +299,8 @@ class GeoPackageExporter:
                     survey_code,
                     survey_name,
                     cad_layer,
+                    elevation,
+                    survey_id,
                     feature.confidence,
                     producer,
                     producer_version,
@@ -315,8 +319,8 @@ class GeoPackageExporter:
         conn.executemany(
             f'INSERT INTO "{table_name}" '
             "(fid, geom, feature_id, feature_type, category, survey_code, survey_name, cad_layer, "
-            "confidence, producer, producer_version, attributes_json) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "elevation, survey_id, confidence, producer, producer_version, attributes_json) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             feature_rows,
         )
         conn.executemany(
@@ -341,24 +345,34 @@ class GeoPackageExporter:
     @staticmethod
     def _split_attributes(
         feature: Feature,
-    ) -> tuple[str | None, str | None, str | None, str | None]:
+    ) -> tuple[str | None, str | None, str | None, float | None, str | None, str | None]:
         """Split promoted attributes from the JSON attribute payload.
 
         Raises
         ------
         GPKGExportError
-            If an attribute cannot be serialized as JSON.
+            If an attribute cannot be serialized as JSON, or if
+            ``elevation`` is present but not numeric.
         """
         attrs = feature.attributes
 
         survey_code = attrs.get("survey_code")
         survey_name = attrs.get("survey_name")
         cad_layer = attrs.get("cad_layer")
+        survey_id = attrs.get("survey_id")
+
+        elevation_raw = attrs.get("elevation")
+        if elevation_raw is not None and (isinstance(elevation_raw, bool) or not isinstance(elevation_raw, (int, float))):
+            raise GPKGExportError(
+                f"Feature {feature.feature_id} has a non-numeric 'elevation' attribute "
+                f"({elevation_raw!r}) -- the native elevation column requires a real number."
+            )
+        elevation = float(elevation_raw) if elevation_raw is not None else None
 
         rest = {key: value for key, value in attrs.items() if key not in _PROMOTED_ATTRIBUTE_KEYS}
 
         if not rest:
-            return survey_code, survey_name, cad_layer, None
+            return survey_code, survey_name, cad_layer, elevation, survey_id, None
 
         try:
             attributes_json = json.dumps(
@@ -371,7 +385,8 @@ class GeoPackageExporter:
                 f"Feature {feature.feature_id} contains attributes that cannot be serialized as JSON."
             ) from exc
 
-        return survey_code, survey_name, cad_layer, attributes_json
+        return survey_code, survey_name, cad_layer, elevation, survey_id, attributes_json
 
 
 __all__ = ["GeoPackageExporter"]
+

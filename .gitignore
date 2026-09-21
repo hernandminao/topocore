@@ -24,4 +24,30 @@ site/
 
 .vscode/settings.json
 
-data/geoids/*.tif 
+data/geoids/*.tif
+
+# === Datasets reales -- nunca al repositorio (tamano, y posible
+# confidencialidad de levantamientos de clientes reales) ===
+data/real/
+data/isprs/
+*.las
+*.laz
+*.e57
+*.xyz
+*.pts
+
+# === Salidas generadas -- nunca al repositorio ===
+outputs/
+*.dxf
+*.gpkg
+*.tif
+*.tiff
+
+# === Excepciones explicitas -- datos sinteticos pequenos usados
+# como fixtures de test, si alguno vive con extension real fuera
+# de la carpeta de datasets ===
+!tests/**/*.las
+!tests/**/*.laz
+!tests/**/*.e57
+!tests/**/*.dxf
+!tests/**/*.gpkg

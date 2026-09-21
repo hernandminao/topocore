@@ -151,7 +151,7 @@ class GroundManager:
 
     def __init__(
         self,
-        method: str = "grid",
+        method: str = "pmf",
         cell_size: float = 1.0,
         height_threshold: float = 0.2,
         max_distance: float = 0.5,

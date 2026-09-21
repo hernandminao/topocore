@@ -96,6 +96,8 @@ def create_feature_table_sql(table_name: str, geometry_type_name: str) -> str:
         survey_code TEXT,
         survey_name TEXT,
         cad_layer TEXT,
+        elevation REAL,
+        survey_id TEXT,
         confidence REAL,
         producer TEXT,
         producer_version TEXT,
@@ -113,3 +115,4 @@ __all__ = [
     "create_feature_table_sql",
     "create_rtree_table_sql",
 ]
+

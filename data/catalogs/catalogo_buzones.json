@@ -1,0 +1,24 @@
+{
+  "codes": [
+    {
+      "code": "BZ",
+      "name": "Buzon",
+      "geometry_type": "symbol",
+      "feature_type": "manhole",
+      "category": "utility",
+      "layer": "ALCANTARILLADO",
+      "closed": false,
+      "aliases": []
+    },
+    {
+      "code": "PT",
+      "name": "Punto de terreno",
+      "geometry_type": "ground",
+      "feature_type": null,
+      "category": "terrain",
+      "layer": "TERRENO",
+      "closed": false,
+      "aliases": []
+    }
+  ]
+}

@@ -9,6 +9,17 @@ covered terrain extent rather than on the number of input points. PointCloud
 chunks are scanned incrementally, so X/Y/Z arrays for the complete cloud are
 never materialized at the same time.
 
+Reference
+---------
+Zhang, K., Chen, S.-C., Whitman, D., Shyu, M.-L., Yan, J., & Zhang, C. (2003).
+A progressive morphological filter for removing nonground measurements from
+airborne LIDAR data. IEEE Transactions on Geoscience and Remote Sensing,
+41(4), 872-882. https://doi.org/10.1109/TGRS.2003.810682
+
+The progressive threshold and exponential window-growth formulas below
+follow this paper's method directly (confirmed by direct comparison against
+the published formulas -- not independently derived).
+
 Author
 ------
 Hernán Mina
@@ -33,7 +44,6 @@ from topocore.processing.exceptions import GroundError
 from topocore.processing.types import BoolArray1D
 
 from .base import GroundClassifier, GroundExtractor
-
 
 _EMPTY_CLOUD_ERROR = "Cannot classify an empty point cloud."
 _NO_GROUND_POINTS_ERROR = "No ground points found. Try adjusting PMF parameters."
@@ -253,6 +263,11 @@ def _build_ground_cloud_from_mask_streaming(
 class PMFGroundClassifier(GroundClassifier):
     """
     Progressive Morphological Filter ground classifier.
+
+    Implements the method of Zhang et al. (2003), "A Progressive
+    Morphological Filter for Removing Nonground Measurements from
+    Airborne LIDAR Data" (IEEE TGRS, 41(4), 872-882). See the module
+    docstring for the full citation.
 
     Parameters
     ----------

@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 
 from topocore.dxf._ezdxf_compat import is_available, require_ezdxf
+from topocore.dxf.annotation import add_contour_label, add_point_label, should_label
 from topocore.dxf.constants import APPID
 from topocore.dxf.entities import write_entity
 from topocore.dxf.exceptions import DXFExportError, DXFGeometryError, DXFValidationError
@@ -102,6 +103,18 @@ class DXFExporter:
                 layer = self._resolve_layer(feature, options.index_contour_every)
                 xdata = build_feature_xdata(feature)
                 entities = write_entity(msp, feature.geometry, decision, layer, xdata)
+
+                is_point = decision.representation == DXFRepresentation.POINT
+                if should_label(
+                    feature,
+                    contour_labels=options.contour_labels,
+                    point_labels=options.point_labels,
+                    is_point=is_point,
+                ):
+                    if feature.feature_type == FeatureType.CONTOUR:
+                        add_contour_label(msp, feature, layer, options.label_text_height)
+                    elif is_point:
+                        add_point_label(msp, feature, layer, options.label_text_height)
 
             except (DXFGeometryError, DXFExportError) as exc:
                 # Only TopoCore's own, well-defined DXF failure modes
@@ -235,3 +248,4 @@ class DXFExporter:
 
 
 __all__ = ["DXFExporter"]
+

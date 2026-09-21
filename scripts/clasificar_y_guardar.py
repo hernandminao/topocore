@@ -15,6 +15,7 @@ CLASSIFICATION directamente.
 Uso:
     python clasificar_y_guardar.py archivo.laz [--cell-size N] [--output archivo_clasificado.laz]
 """
+
 import argparse
 from pathlib import Path
 
@@ -77,9 +78,11 @@ if __name__ == "__main__":
     parser.add_argument("archivo", help="Ruta al archivo .las/.laz de entrada")
     parser.add_argument("--cell-size", type=float, default=0.5)
     parser.add_argument(
-        "--max-grid-cells", type=int, default=8_000_000,
+        "--max-grid-cells",
+        type=int,
+        default=8_000_000,
         help="Limite de seguridad de PMF -- sube este valor si prefieres mantener un cell_size "
-             "fino en vez de aumentarlo (el area cubierta define cuantas celdas se necesitan).",
+        "fino en vez de aumentarlo (el area cubierta define cuantas celdas se necesitan).",
     )
     parser.add_argument("--output", type=Path, default=None, help="Ruta de salida (default: <nombre>_pmf.laz)")
     args = parser.parse_args()

@@ -25,10 +25,12 @@ def test_preserves_the_original_point_id() -> None:
 
 
 def test_leaves_unrelated_codes_untouched() -> None:
-    survey = SurveyPointSet(points=(
-        _point("1", 0.0, 0.0, 10.0, "ARBOL"),
-        _point("2", 1.0, 0.0, 10.0, "PT"),
-    ))
+    survey = SurveyPointSet(
+        points=(
+            _point("1", 0.0, 0.0, 10.0, "ARBOL"),
+            _point("2", 1.0, 0.0, 10.0, "PT"),
+        )
+    )
     result = normalize_numbered_codes(survey, frozenset({"BZ"}))
     assert [p.code for p in result.points] == ["ARBOL", "PT"]
 
@@ -49,11 +51,13 @@ def test_a_code_with_a_letter_suffix_after_the_number_is_not_matched() -> None:
 
 
 def test_multiple_prefixes_are_normalized_independently() -> None:
-    survey = SurveyPointSet(points=(
-        _point("1", 0.0, 0.0, 10.0, "BZ5"),
-        _point("2", 1.0, 0.0, 10.0, "E10"),
-        _point("3", 2.0, 0.0, 10.0, "N3"),
-    ))
+    survey = SurveyPointSet(
+        points=(
+            _point("1", 0.0, 0.0, 10.0, "BZ5"),
+            _point("2", 1.0, 0.0, 10.0, "E10"),
+            _point("3", 2.0, 0.0, 10.0, "N3"),
+        )
+    )
     result = normalize_numbered_codes(survey, frozenset({"BZ", "E", "N"}))
     assert [p.code for p in result.points] == ["BZ", "E", "N"]
 

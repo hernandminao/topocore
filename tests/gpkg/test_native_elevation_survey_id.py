@@ -5,6 +5,7 @@ survey_code/survey_name/cad_layer), per the hybrid model decided for
 TopoCore: common, filterable, GIS-relevant attributes are native
 columns; everything else stays in attributes_json.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -39,11 +40,15 @@ def _contour_feature(feature_id: int, elevation: object) -> Feature:
 def test_elevation_and_survey_id_become_native_columns(tmp_path) -> None:
     collection = FeatureCollection()
     collection.crs = "EPSG:9377"
-    collection.add(Feature(
-        feature_id=1, category=FeatureCategory.VEGETATION, feature_type=FeatureType.TREE,
-        geometry=FeatureGeometry(geometry_type=GeometryType.POINT, vertices=np.array([[0.0, 0.0, 10.0]])),
-        attributes={"survey_id": "ARBOL_42"},
-    ))
+    collection.add(
+        Feature(
+            feature_id=1,
+            category=FeatureCategory.VEGETATION,
+            feature_type=FeatureType.TREE,
+            geometry=FeatureGeometry(geometry_type=GeometryType.POINT, vertices=np.array([[0.0, 0.0, 10.0]])),
+            attributes={"survey_id": "ARBOL_42"},
+        )
+    )
     collection.add(_contour_feature(2, 205.0))
 
     output = tmp_path / "test.gpkg"
@@ -124,14 +129,18 @@ def test_a_boolean_elevation_is_rejected() -> None:
 def test_other_attributes_still_go_to_attributes_json_alongside_native_ones(tmp_path) -> None:
     collection = FeatureCollection()
     collection.crs = "EPSG:9377"
-    collection.add(Feature(
-        feature_id=1, category=FeatureCategory.TERRAIN, feature_type=FeatureType.CONTOUR,
-        geometry=FeatureGeometry(
-            geometry_type=GeometryType.POLYLINE,
-            vertices=np.array([[0.0, 0.0, 205.0], [10.0, 10.0, 205.0]]),
-        ),
-        attributes={"elevation": 205.0, "interval": 0.5, "method": "TIN"},
-    ))
+    collection.add(
+        Feature(
+            feature_id=1,
+            category=FeatureCategory.TERRAIN,
+            feature_type=FeatureType.CONTOUR,
+            geometry=FeatureGeometry(
+                geometry_type=GeometryType.POLYLINE,
+                vertices=np.array([[0.0, 0.0, 205.0], [10.0, 10.0, 205.0]]),
+            ),
+            attributes={"elevation": 205.0, "interval": 0.5, "method": "TIN"},
+        )
+    )
 
     output = tmp_path / "test.gpkg"
     GeoPackageExporter(GPKGExportOptions(epsg=9377)).export(collection, str(output))

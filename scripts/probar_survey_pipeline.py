@@ -9,6 +9,7 @@ estaca mas de la misma cerca, no un codigo distinto.
 Ubicacion esperada:
     data/real/survey/Survey.csv
 """
+
 import dataclasses
 from pathlib import Path
 
@@ -32,10 +33,7 @@ RUTA_TEMPORAL = "outputs/survey/_unificado.csv"
 
 # 1. Unificar "CERCA stake 2" -> "CERCA" antes de correr el pipeline
 sp = SurveyTXTReader(RUTA_SURVEY, format=FORMATO).read()
-puntos_unificados = tuple(
-    dataclasses.replace(p, code="CERCA") if p.code == "CERCA stake 2" else p
-    for p in sp.points
-)
+puntos_unificados = tuple(dataclasses.replace(p, code="CERCA") if p.code == "CERCA stake 2" else p for p in sp.points)
 sp = dataclasses.replace(sp, points=puntos_unificados)
 
 Path(CARPETA_SALIDA).mkdir(parents=True, exist_ok=True)

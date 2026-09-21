@@ -27,6 +27,7 @@ benchmark):
 Uso:
     python isprs_filter_test.py nube.txt referencia.txt [--cloth-resolution N]
 """
+
 import argparse
 from pathlib import Path
 
@@ -154,7 +155,7 @@ def correr_isprs(
     print(f"Type I error  (terreno real perdido):    {type_i:.2f}%  ({terreno_mal_clasificado}/{terreno_real_total})")
     print(f"Type II error (falso terreno):              {type_ii:.2f}%  ({objeto_mal_clasificado}/{objeto_real_total})")
     print(f"Total error:                                    {total_error:.2f}%")
-    print(f"Kappa (Cohen, comparable con literatura):          {kappa*100:.2f}")
+    print(f"Kappa (Cohen, comparable con literatura):          {kappa * 100:.2f}")
 
 
 if __name__ == "__main__":

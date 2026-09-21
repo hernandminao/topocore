@@ -37,6 +37,7 @@ TopoCore, no una suposicion:
   MANUAL o de un proveedor externo (como autzen_classified.laz, con
   5 clases reales).
 """
+
 import argparse
 from pathlib import Path
 
@@ -154,8 +155,7 @@ def entrenar(ruta_archivo: str, test_size: float, n_estimators: int) -> None:
         except ValueError:
             nombre = "(codigo no estandar)"
         print(
-            f"  {int(clase):3} ({nombre}): {acierto_clase * 100:.2f}%  "
-            f"({int(mascara_clase.sum()):,} puntos de prueba)"
+            f"  {int(clase):3} ({nombre}): {acierto_clase * 100:.2f}%  ({int(mascara_clase.sum()):,} puntos de prueba)"
         )
 
 

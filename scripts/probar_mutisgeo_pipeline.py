@@ -13,6 +13,7 @@ Ubicacion esperada:
     data/real/mutisgeo/mutisgeo1.csv
     data/catalogs/catalogo_mutisgeo.json
 """
+
 from pathlib import Path
 
 from topocore.survey.reader import SurveyTXTReader
@@ -28,8 +29,8 @@ RUTA_SURVEY = "data/real/mutisgeo/mutisgeo1.csv"
 RUTA_CATALOGO_EXTRA = "data/catalogs/catalogo_mutisgeo.json"
 FORMATO = SurveyFormat.PNEZD
 EPSG = 9377
-EPS_EST = 1.0   # columnas -- ajusta si tu revision visual en QGIS lo pide
-EPS_AD = 3.0    # tramos de anden
+EPS_EST = 1.0  # columnas -- ajusta si tu revision visual en QGIS lo pide
+EPS_AD = 3.0  # tramos de anden
 INTERVALO_CURVAS = 0.5
 CARPETA_SALIDA = "outputs/mutisgeo"
 NOMBRE_SALIDA = "salida_mutisgeo"

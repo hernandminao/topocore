@@ -13,6 +13,7 @@ Metricas reales calculadas:
 Uso:
     python validar_clasificacion.py archivo.laz [--cloth-resolution N]
 """
+
 import argparse
 from pathlib import Path
 

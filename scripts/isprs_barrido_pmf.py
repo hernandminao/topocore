@@ -6,6 +6,7 @@ a PMF.
 Uso:
     python isprs_barrido_pmf.py nube.txt referencia.txt
 """
+
 import argparse
 import itertools
 from pathlib import Path
@@ -136,9 +137,7 @@ def barrer(ruta_nube: str, ruta_referencia: str, cell_size: float) -> None:
     mejor = resultados[0]
 
     print("\n=== Mejor combinacion encontrada ===")
-    print(
-        f"initial_distance={mejor[1]}  max_distance={mejor[2]}  slope={mejor[3]}  max_window_size={mejor[4]}"
-    )
+    print(f"initial_distance={mejor[1]}  max_distance={mejor[2]}  slope={mejor[3]}  max_window_size={mejor[4]}")
     print(f"Kappa={mejor[0]:.2f}  (Type I={mejor[5]:.2f}%, Type II={mejor[6]:.2f}%)")
 
 

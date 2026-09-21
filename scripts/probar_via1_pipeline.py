@@ -5,6 +5,7 @@ Ubicacion esperada:
     data/real/via1/levantamiento_via1.csv
     data/catalogs/catalogo_hernan.json   (BORDEI -> pavement_edge)
 """
+
 from pathlib import Path
 
 from topocore.pipeline.pipeline import SurveyPipeline

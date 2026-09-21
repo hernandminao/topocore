@@ -5,6 +5,7 @@ Ubicacion esperada de archivos (ajusta si tu estructura es distinta):
     data/real/mutisgeo/mutisgeo1.csv
     data/catalogs/catalogo_mutisgeo.json
 """
+
 import dataclasses
 from collections import Counter
 from pathlib import Path
@@ -31,12 +32,18 @@ print("Puntos leidos:", len(survey_points.points))
 #    ajusta 'eps' si tu revision visual en QGIS muestra que hace
 #    falta separar mas o menos figuras
 config_est = ClusterSplitConfig(
-    linear_codes=frozenset({"EST"}), eps=1.0, min_samples=1, ordering="angular",
+    linear_codes=frozenset({"EST"}),
+    eps=1.0,
+    min_samples=1,
+    ordering="angular",
 )
 survey_points = split_by_clustering(survey_points, config_est)
 
 config_ad = ClusterSplitConfig(
-    linear_codes=frozenset({"AD"}), eps=3.0, min_samples=1, ordering="axis",
+    linear_codes=frozenset({"AD"}),
+    eps=3.0,
+    min_samples=1,
+    ordering="axis",
 )
 survey_points = split_by_clustering(survey_points, config_ad)
 

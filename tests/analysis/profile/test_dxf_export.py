@@ -3,6 +3,7 @@ Regression tests for topocore.analysis.profile.dxf_export -- V1
 scope confirmed explicitly: real terrain only, no design surface,
 no cut/fill area, no road template (curbs, ditches, berms).
 """
+
 from __future__ import annotations
 
 import ezdxf
@@ -15,10 +16,7 @@ from topocore.analysis.types import ProfilePoint, ProfileResult, ProfileType
 
 
 def _section(station: float, offsets_and_z: list[tuple[float, float]]) -> ProfileResult:
-    points = [
-        ProfilePoint(station=station, x=offset, y=0.0, z=z, offset=offset)
-        for offset, z in offsets_and_z
-    ]
+    points = [ProfilePoint(station=station, x=offset, y=0.0, z=z, offset=offset) for offset, z in offsets_and_z]
     return ProfileResult(points=points, profile_type=ProfileType.TRANSVERSAL)
 
 
@@ -136,7 +134,8 @@ def test_all_three_elevation_labels_can_be_disabled(tmp_path) -> None:
 
     output = tmp_path / "sections.dxf"
     export_cross_sections_dxf(
-        [section], output,
+        [section],
+        output,
         show_endpoint_elevations=False,
         show_lowest_point_elevation=False,
         show_elevation_axis=False,

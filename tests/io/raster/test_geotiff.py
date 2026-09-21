@@ -10,6 +10,7 @@ were run for real, at least once, in an environment where GDAL is
 genuinely installed (confirmed working there), which is what
 actually matters for merging this.
 """
+
 from __future__ import annotations
 
 import pytest

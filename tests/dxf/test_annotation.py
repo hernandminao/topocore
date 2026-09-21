@@ -3,6 +3,7 @@ Regression tests for DXF V2 annotation (TEXT labels), per the
 decided design: contour elevation labels on by default, point
 labels opt-in, XDATA and layers always preserved unchanged.
 """
+
 from __future__ import annotations
 
 import ezdxf
@@ -22,7 +23,9 @@ from topocore.features.models import (
 
 def _tree_feature() -> Feature:
     return Feature(
-        feature_id=1, category=FeatureCategory.VEGETATION, feature_type=FeatureType.TREE,
+        feature_id=1,
+        category=FeatureCategory.VEGETATION,
+        feature_type=FeatureType.TREE,
         geometry=FeatureGeometry(geometry_type=GeometryType.POINT, vertices=np.array([[0.0, 0.0, 10.0]])),
         attributes={"survey_point_ids": ("ARBOL_42",)},
     )
@@ -30,7 +33,9 @@ def _tree_feature() -> Feature:
 
 def _contour_feature() -> Feature:
     return Feature(
-        feature_id=2, category=FeatureCategory.TERRAIN, feature_type=FeatureType.CONTOUR,
+        feature_id=2,
+        category=FeatureCategory.TERRAIN,
+        feature_type=FeatureType.CONTOUR,
         geometry=FeatureGeometry(
             geometry_type=GeometryType.POLYLINE,
             vertices=np.array([[0.0, 0.0, 205.0], [5.0, 5.0, 205.0], [10.0, 10.0, 205.0]]),
@@ -74,11 +79,15 @@ def test_point_labels_true_adds_survey_id_text(tmp_path) -> None:
 def test_point_label_falls_back_to_feature_id_without_survey_id(tmp_path) -> None:
     collection = FeatureCollection()
     collection.crs = "EPSG:9377"
-    collection.add(Feature(
-        feature_id=99, category=FeatureCategory.VEGETATION, feature_type=FeatureType.TREE,
-        geometry=FeatureGeometry(geometry_type=GeometryType.POINT, vertices=np.array([[0.0, 0.0, 10.0]])),
-        attributes={},
-    ))
+    collection.add(
+        Feature(
+            feature_id=99,
+            category=FeatureCategory.VEGETATION,
+            feature_type=FeatureType.TREE,
+            geometry=FeatureGeometry(geometry_type=GeometryType.POINT, vertices=np.array([[0.0, 0.0, 10.0]])),
+            attributes={},
+        )
+    )
 
     output = tmp_path / "test.dxf"
     DXFExporter(ExportContext(options=DXFExportOptions(point_labels=True))).export(collection, str(output))
@@ -136,9 +145,9 @@ def test_labels_false_everywhere_produces_no_text_at_all(tmp_path) -> None:
     collection.add(_contour_feature())
 
     output = tmp_path / "test.dxf"
-    DXFExporter(
-        ExportContext(options=DXFExportOptions(contour_labels=False, point_labels=False))
-    ).export(collection, str(output))
+    DXFExporter(ExportContext(options=DXFExportOptions(contour_labels=False, point_labels=False))).export(
+        collection, str(output)
+    )
 
     assert _text_entities(str(output)) == []
 
@@ -181,14 +190,18 @@ def test_xdata_and_geometry_are_unaffected_by_labels(tmp_path) -> None:
 def test_a_contour_without_a_numeric_elevation_attribute_gets_no_label(tmp_path) -> None:
     collection = FeatureCollection()
     collection.crs = "EPSG:9377"
-    collection.add(Feature(
-        feature_id=1, category=FeatureCategory.TERRAIN, feature_type=FeatureType.CONTOUR,
-        geometry=FeatureGeometry(
-            geometry_type=GeometryType.POLYLINE,
-            vertices=np.array([[0.0, 0.0, 205.0], [10.0, 10.0, 205.0]]),
-        ),
-        attributes={},  # sin elevation
-    ))
+    collection.add(
+        Feature(
+            feature_id=1,
+            category=FeatureCategory.TERRAIN,
+            feature_type=FeatureType.CONTOUR,
+            geometry=FeatureGeometry(
+                geometry_type=GeometryType.POLYLINE,
+                vertices=np.array([[0.0, 0.0, 205.0], [10.0, 10.0, 205.0]]),
+            ),
+            attributes={},  # sin elevation
+        )
+    )
 
     output = tmp_path / "test.dxf"
     DXFExporter(ExportContext(options=DXFExportOptions())).export(collection, str(output))
@@ -202,9 +215,7 @@ def test_custom_label_text_height_is_applied(tmp_path) -> None:
     collection.add(_contour_feature())
 
     output = tmp_path / "test.dxf"
-    DXFExporter(
-        ExportContext(options=DXFExportOptions(label_text_height=5.0))
-    ).export(collection, str(output))
+    DXFExporter(ExportContext(options=DXFExportOptions(label_text_height=5.0))).export(collection, str(output))
 
     texts = _text_entities(str(output))
     assert texts[0].dxf.height == pytest.approx(5.0)

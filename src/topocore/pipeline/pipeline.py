@@ -23,6 +23,7 @@ License
 -------
 MIT
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -368,7 +369,8 @@ class SurveyPipeline:
             ground_xy = np.array([[p.x, p.y] for p in result.ground], dtype=np.float64)
             density = (
                 analyzer.analyze_density(
-                    ground_xy, resolution=config.dtm_resolution,
+                    ground_xy,
+                    resolution=config.dtm_resolution,
                     crs=f"EPSG:{config.crs_epsg}" if config.crs_epsg is not None else None,
                 )
                 if ground_xy.size > 0

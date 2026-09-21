@@ -115,4 +115,3 @@ __all__ = [
     "create_feature_table_sql",
     "create_rtree_table_sql",
 ]
-

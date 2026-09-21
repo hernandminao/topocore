@@ -12,6 +12,7 @@ verificados en isprs_filter_test.py.
 Uso:
     python isprs_barrido.py nube.txt referencia.txt
 """
+
 import argparse
 import itertools
 from pathlib import Path

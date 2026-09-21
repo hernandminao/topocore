@@ -28,6 +28,7 @@ License
 -------
 MIT
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -157,10 +158,13 @@ def export_cross_sections_dxf(
             cota_actual = math.ceil(elevacion_min / elevation_axis_interval) * elevation_axis_interval
             while cota_actual <= elevacion_max:
                 msp.add_line(
-                    (eje_x - text_height * 0.3, cota_actual), (eje_x + text_height * 0.3, cota_actual),
+                    (eje_x - text_height * 0.3, cota_actual),
+                    (eje_x + text_height * 0.3, cota_actual),
                     dxfattribs={"layer": layer},
                 )
-                texto_cota = msp.add_text(f"{cota_actual:.2f}", dxfattribs={"layer": layer, "height": text_height * 0.6})
+                texto_cota = msp.add_text(
+                    f"{cota_actual:.2f}", dxfattribs={"layer": layer, "height": text_height * 0.6}
+                )
                 texto_cota.set_placement((eje_x - text_height * 3.5, cota_actual - text_height * 0.3))
                 cota_actual += elevation_axis_interval
 

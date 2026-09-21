@@ -3,6 +3,7 @@ Regression tests for topocore.analysis.profile.writer -- a CSV
 export helper for the already-existing ProfileResult/ProfilePoint
 types, with no new domain model introduced.
 """
+
 from __future__ import annotations
 
 import csv
@@ -17,10 +18,12 @@ def _profile(points: list[ProfilePoint]) -> ProfileResult:
 
 
 def test_writes_the_exact_agreed_column_contract(tmp_path) -> None:
-    profile = _profile([
-        ProfilePoint(station=0.0, x=0.0, y=2.0, z=10.1, offset=-8.0),
-        ProfilePoint(station=0.0, x=0.0, y=10.0, z=10.5, offset=0.0),
-    ])
+    profile = _profile(
+        [
+            ProfilePoint(station=0.0, x=0.0, y=2.0, z=10.1, offset=-8.0),
+            ProfilePoint(station=0.0, x=0.0, y=10.0, z=10.5, offset=0.0),
+        ]
+    )
 
     output = tmp_path / "sections.csv"
     write_profile_csv([profile], output)

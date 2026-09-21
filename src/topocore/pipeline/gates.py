@@ -17,6 +17,7 @@ License
 -------
 MIT
 """
+
 from __future__ import annotations
 
 from topocore.pipeline.boundary import has_self_intersections, shoelace_area

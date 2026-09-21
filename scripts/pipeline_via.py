@@ -12,6 +12,7 @@ Ejemplo:
     python scripts/pipeline_via.py data/real/via2/levantamiento_via2.csv \
         PENZD 9377 outputs/via2 salida_via2 0.5
 """
+
 import dataclasses
 import sys
 from pathlib import Path
@@ -191,12 +192,16 @@ def ejecutar_pipeline(
         eje_xy = [(float(v[0]), float(v[1])) for v in eje_features[0].geometry.vertices]
         secciones = _generar_secciones_resilientes(eje_xy, tin, width=5.0)
         total_estaciones = len(eje_xy)
-        print(f"\nSecciones transversales: {len(secciones)} de {total_estaciones} estaciones "
-              f"generadas correctamente (ancho 5 m)")
+        print(
+            f"\nSecciones transversales: {len(secciones)} de {total_estaciones} estaciones "
+            f"generadas correctamente (ancho 5 m)"
+        )
         if len(secciones) < total_estaciones:
-            print(f"  {total_estaciones - len(secciones)} estacion(es) omitida(s) -- "
-                  "se salen del TIN real (extremos del levantamiento, o densidad de "
-                  "puntos de terreno insuficiente en esa zona)")
+            print(
+                f"  {total_estaciones - len(secciones)} estacion(es) omitida(s) -- "
+                "se salen del TIN real (extremos del levantamiento, o densidad de "
+                "puntos de terreno insuficiente en esa zona)"
+            )
 
         if secciones:
             ruta_secciones_csv = f"{carpeta_salida}/{nombre_base}_secciones.csv"
@@ -238,7 +243,9 @@ def ejecutar_pipeline(
 
 if __name__ == "__main__":
     if len(sys.argv) not in (6, 7):
-        print("Uso: python pipeline_via.py <entrada.csv> <FORMATO> <epsg> <carpeta_salida> <nombre_base> [intervalo_curvas]")
+        print(
+            "Uso: python pipeline_via.py <entrada.csv> <FORMATO> <epsg> <carpeta_salida> <nombre_base> [intervalo_curvas]"
+        )
         sys.exit(1)
 
     intervalo = float(sys.argv[6]) if len(sys.argv) == 7 else 0.5

@@ -21,6 +21,7 @@ un archivo denso pero de area pequena (ej. un corredor de via
 angosto). Si el proceso se cuelga o tarda demasiado en "Configuring
 cloth...", sube este valor (2.0, 5.0) para archivos de area grande.
 """
+
 import argparse
 from pathlib import Path
 
@@ -39,7 +40,7 @@ def ram_actual_mb() -> float:
 
 def diagnosticar(ruta: str, cloth_resolution: float) -> None:
     ruta = Path(ruta)
-    print(f"\n=== {ruta.name} ({ruta.stat().st_size / (1024*1024):.1f} MB en disco) ===")
+    print(f"\n=== {ruta.name} ({ruta.stat().st_size / (1024 * 1024):.1f} MB en disco) ===")
 
     ram_antes_lectura = ram_actual_mb()
 
@@ -50,7 +51,9 @@ def diagnosticar(ruta: str, cloth_resolution: float) -> None:
 
     print(f"Puntos reales: {nube.point_count:,}")
     print(f"RAM tras leer: {ram_despues_lectura - ram_antes_lectura:.1f} MB")
-    print(f"  (bytes por punto, solo lectura: {(ram_despues_lectura - ram_antes_lectura) * 1024 * 1024 / nube.point_count:.1f})")
+    print(
+        f"  (bytes por punto, solo lectura: {(ram_despues_lectura - ram_antes_lectura) * 1024 * 1024 / nube.point_count:.1f})"
+    )
 
     ram_antes_csf = ram_actual_mb()
     try:
@@ -59,7 +62,9 @@ def diagnosticar(ruta: str, cloth_resolution: float) -> None:
         clasificador = CSFGroundClassifier(cloth_resolution=cloth_resolution)
         clasificador.classify(nube)
         ram_despues_csf = ram_actual_mb()
-        print(f"RAM adicional para clasificar (CSF, cloth_resolution={cloth_resolution}): {ram_despues_csf - ram_antes_csf:.1f} MB")
+        print(
+            f"RAM adicional para clasificar (CSF, cloth_resolution={cloth_resolution}): {ram_despues_csf - ram_antes_csf:.1f} MB"
+        )
         print(f"RAM TOTAL del proceso en el pico: {ram_despues_csf:.1f} MB")
     except GroundError as e:
         print(f"Clasificacion CSF fallo (error real de TopoCore): {e}")
@@ -71,7 +76,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("archivos", nargs="+", help="Rutas a archivos .las/.laz")
     parser.add_argument(
-        "--cloth-resolution", type=float, default=0.5,
+        "--cloth-resolution",
+        type=float,
+        default=0.5,
         help="Tamano de celda de la malla CSF, en metros (default 0.5). Sube este valor para archivos de area grande.",
     )
     args = parser.parse_args()

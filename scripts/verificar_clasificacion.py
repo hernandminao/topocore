@@ -6,6 +6,7 @@ hay de cada clase real.
 Uso:
     python verificar_clasificacion.py archivo.laz
 """
+
 import sys
 from collections import Counter
 from pathlib import Path

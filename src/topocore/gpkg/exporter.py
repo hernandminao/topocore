@@ -362,7 +362,9 @@ class GeoPackageExporter:
         survey_id = attrs.get("survey_id")
 
         elevation_raw = attrs.get("elevation")
-        if elevation_raw is not None and (isinstance(elevation_raw, bool) or not isinstance(elevation_raw, (int, float))):
+        if elevation_raw is not None and (
+            isinstance(elevation_raw, bool) or not isinstance(elevation_raw, (int, float))
+        ):
             raise GPKGExportError(
                 f"Feature {feature.feature_id} has a non-numeric 'elevation' attribute "
                 f"({elevation_raw!r}) -- the native elevation column requires a real number."
@@ -389,4 +391,3 @@ class GeoPackageExporter:
 
 
 __all__ = ["GeoPackageExporter"]
-

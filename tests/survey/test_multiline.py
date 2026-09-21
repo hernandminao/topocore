@@ -7,6 +7,7 @@ field-data validation: a real survey where CERCA and BORDE each
 represented 2 physically separate lines (both sides of an unpaved
 road) sharing a single field code, with no left/right distinction.
 """
+
 from __future__ import annotations
 
 import math
@@ -74,10 +75,12 @@ def test_empty_survey_raises() -> None:
 
 
 def test_codes_outside_linear_codes_are_untouched() -> None:
-    survey = SurveyPointSet(points=(
-        _point("1", 0.0, 0.0, 10.0, "ARBOL"),
-        _point("2", 5.0, 5.0, 10.0, "ARBOL"),
-    ))
+    survey = SurveyPointSet(
+        points=(
+            _point("1", 0.0, 0.0, 10.0, "ARBOL"),
+            _point("2", 5.0, 5.0, 10.0, "ARBOL"),
+        )
+    )
     result = split_multiline_codes(survey, DEFAULT_CONFIG)
     assert result.points == survey.points
 
@@ -181,10 +184,12 @@ def test_reorders_points_surveyed_out_of_spatial_order() -> None:
 
 
 def test_does_not_mutate_the_input_survey() -> None:
-    survey = SurveyPointSet(points=(
-        _point("1", 0.0, 0.0, 10.0, "CERCA"),
-        _point("2", 5.0, 0.0, 10.0, "CERCA"),
-    ))
+    survey = SurveyPointSet(
+        points=(
+            _point("1", 0.0, 0.0, 10.0, "CERCA"),
+            _point("2", 5.0, 0.0, 10.0, "CERCA"),
+        )
+    )
     original_codes = tuple(p.code for p in survey.points)
 
     split_multiline_codes(survey, DEFAULT_CONFIG)
@@ -212,8 +217,7 @@ def test_a_single_line_with_realistic_gnss_jitter_is_never_split() -> None:
     for seed in range(100):
         random.seed(seed)
         points = tuple(
-            _point(f"BI{i}", -5.0 + random.uniform(-0.05, 0.05), float(i * 8), 10.0, "BORDEI")
-            for i in range(18)
+            _point(f"BI{i}", -5.0 + random.uniform(-0.05, 0.05), float(i * 8), 10.0, "BORDEI") for i in range(18)
         )
         survey = SurveyPointSet(points=points)
 
@@ -299,10 +303,8 @@ def test_geometric_method_never_crosses_a_curved_reference_line() -> None:
     This EJE curves: it goes right then turns to go up-and-left,
     something a single dominant-axis sort cannot represent correctly.
     """
-    eje = [
-        _point(f"E{i}", float(i * 5), 0.0, 10.0, "EJE") for i in range(4)
-    ] + [
-        _point(f"E{i+4}", 15.0 + float(i * 3), float(i * 5), 10.0, "EJE") for i in range(4)
+    eje = [_point(f"E{i}", float(i * 5), 0.0, 10.0, "EJE") for i in range(4)] + [
+        _point(f"E{i + 4}", 15.0 + float(i * 3), float(i * 5), 10.0, "EJE") for i in range(4)
     ]
     # Cerca del lado "positivo" (por encima/izquierda de la curva) y
     # del lado "negativo", intercaladas en el archivo.
@@ -338,6 +340,7 @@ def test_geometric_method_never_crosses_a_curved_reference_line() -> None:
 # ---------------------------------------------------------------------
 # split_by_clustering / ClusterSplitConfig
 # ---------------------------------------------------------------------
+
 
 def _figuras_de(points, prefijo: str) -> dict[str, int]:
     """Cuenta puntos por numero de figura, separando por '.' correctamente
@@ -459,20 +462,24 @@ def test_axis_ordering_sorts_by_the_figures_own_dominant_axis() -> None:
 
 
 def test_cluster_split_codes_outside_linear_codes_are_untouched() -> None:
-    survey = SurveyPointSet(points=(
-        _point("1", 0.0, 0.0, 10.0, "GPS"),
-        _point("2", 5.0, 5.0, 10.0, "GPS"),
-    ))
+    survey = SurveyPointSet(
+        points=(
+            _point("1", 0.0, 0.0, 10.0, "GPS"),
+            _point("2", 5.0, 5.0, 10.0, "GPS"),
+        )
+    )
     config = ClusterSplitConfig(linear_codes=frozenset({"EST"}), eps=1.0)
     result = split_by_clustering(survey, config)
     assert result.points == survey.points
 
 
 def test_cluster_split_does_not_mutate_the_input_survey() -> None:
-    survey = SurveyPointSet(points=(
-        _point("1", 0.0, 0.0, 10.0, "EST"),
-        _point("2", 5.0, 5.0, 10.0, "EST"),
-    ))
+    survey = SurveyPointSet(
+        points=(
+            _point("1", 0.0, 0.0, 10.0, "EST"),
+            _point("2", 5.0, 5.0, 10.0, "EST"),
+        )
+    )
     original_codes = tuple(p.code for p in survey.points)
     split_by_clustering(survey, ClusterSplitConfig(linear_codes=frozenset({"EST"}), eps=1.0))
     assert tuple(p.code for p in survey.points) == original_codes
@@ -486,23 +493,40 @@ def test_real_field_data_est_produces_the_confirmed_sixteen_groups() -> None:
     da 16 figuras con estos tamanos exactos.
     """
     coords_reales = [
-        (5039971.405, 1840677.499), (5039971.396, 1840675.252),
-        (5039973.281, 1840678.093), (5039973.259, 1840678.132),
-        (5039973.275, 1840678.372), (5039973.267, 1840678.455),
-        (5039973.794, 1840678.053), (5039978.840, 1840678.187),
-        (5039979.286, 1840678.123), (5039981.030, 1840677.607),
-        (5039980.999, 1840675.339), (5039983.142, 1840675.367),
-        (5039983.171, 1840677.647), (5039984.362, 1840678.566),
-        (5039984.363, 1840678.496), (5039984.344, 1840678.290),
-        (5039984.810, 1840678.151), (5039984.815, 1840677.693),
-        (5039990.324, 1840678.214), (5039990.314, 1840677.743),
-        (5039995.826, 1840678.246), (5039995.812, 1840677.798),
-        (5039997.752, 1840677.764), (5039997.781, 1840675.598),
-        (5040001.331, 1840677.844), (5040001.341, 1840678.302),
-        (5040000.787, 1840677.853), (5040001.261, 1840678.735),
-        (5040001.237, 1840678.651), (5040001.245, 1840678.449),
-        (5040004.226, 1840658.036), (5039968.031, 1840652.992),
-        (5039968.555, 1840653.024), (5039968.574, 1840652.433),
+        (5039971.405, 1840677.499),
+        (5039971.396, 1840675.252),
+        (5039973.281, 1840678.093),
+        (5039973.259, 1840678.132),
+        (5039973.275, 1840678.372),
+        (5039973.267, 1840678.455),
+        (5039973.794, 1840678.053),
+        (5039978.840, 1840678.187),
+        (5039979.286, 1840678.123),
+        (5039981.030, 1840677.607),
+        (5039980.999, 1840675.339),
+        (5039983.142, 1840675.367),
+        (5039983.171, 1840677.647),
+        (5039984.362, 1840678.566),
+        (5039984.363, 1840678.496),
+        (5039984.344, 1840678.290),
+        (5039984.810, 1840678.151),
+        (5039984.815, 1840677.693),
+        (5039990.324, 1840678.214),
+        (5039990.314, 1840677.743),
+        (5039995.826, 1840678.246),
+        (5039995.812, 1840677.798),
+        (5039997.752, 1840677.764),
+        (5039997.781, 1840675.598),
+        (5040001.331, 1840677.844),
+        (5040001.341, 1840678.302),
+        (5040000.787, 1840677.853),
+        (5040001.261, 1840678.735),
+        (5040001.237, 1840678.651),
+        (5040001.245, 1840678.449),
+        (5040004.226, 1840658.036),
+        (5039968.031, 1840652.992),
+        (5039968.555, 1840653.024),
+        (5039968.574, 1840652.433),
     ]
     puntos = tuple(_point(str(i), x, y, 10.0, "EST") for i, (x, y) in enumerate(coords_reales))
     survey = SurveyPointSet(points=puntos)
@@ -519,6 +543,7 @@ def test_real_field_data_est_produces_the_confirmed_sixteen_groups() -> None:
 # ---------------------------------------------------------------------
 # ordering="hull"
 # ---------------------------------------------------------------------
+
 
 def _perimetro_cerrado(points: list) -> float:
     total = 0.0
@@ -540,17 +565,30 @@ def test_hull_ordering_never_produces_a_wildly_longer_perimeter_than_nearest() -
     # Se le da al algoritmo el orden ORIGINAL de archivo (no el ya
     # trazado) -- confirmado que asi llegan los datos reales.
     orden_archivo = [
-        (4957.348, 5069.117), (4952.07, 5016.957), (4969.488, 5068.267), (4927.584, 5019.659),
-        (4926.139, 5007.068), (4992.184, 5065.722), (4941.276, 5004.216), (4941.051, 4999.349),
-        (5000.567, 5064.833), (5015.846, 5062.585), (5001.01, 4926.68), (4965.886, 4922.906),
-        (4889.215, 4918.151), (4887.01, 4949.177),
+        (4957.348, 5069.117),
+        (4952.07, 5016.957),
+        (4969.488, 5068.267),
+        (4927.584, 5019.659),
+        (4926.139, 5007.068),
+        (4992.184, 5065.722),
+        (4941.276, 5004.216),
+        (4941.051, 4999.349),
+        (5000.567, 5064.833),
+        (5015.846, 5062.585),
+        (5001.01, 4926.68),
+        (4965.886, 4922.906),
+        (4889.215, 4918.151),
+        (4887.01, 4949.177),
     ]
     puntos = tuple(_point(str(i), x, y, 10.0, "CERCA") for i, (x, y) in enumerate(orden_archivo))
     survey = SurveyPointSet(points=puntos)
 
     config_hull = ClusterSplitConfig(linear_codes=frozenset({"CERCA"}), eps=1000.0, min_samples=1, ordering="hull")
     config_nearest = ClusterSplitConfig(
-        linear_codes=frozenset({"CERCA"}), eps=1000.0, min_samples=1, ordering="nearest",
+        linear_codes=frozenset({"CERCA"}),
+        eps=1000.0,
+        min_samples=1,
+        ordering="nearest",
     )
 
     resultado_hull = split_by_clustering(survey, config_hull)

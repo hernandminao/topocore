@@ -18,6 +18,7 @@ Opciones: iguales a flujo_nube_completo.py (--cloth-resolution,
                      desde una nube de puntos cruda -- se deja el
                      flag por consistencia con SurveyPipeline).
 """
+
 import argparse
 from pathlib import Path
 
@@ -191,9 +192,11 @@ if __name__ == "__main__":
     parser.add_argument("--contour-interval", type=float, default=1.0)
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/nube"))
     parser.add_argument(
-        "--epsg", type=int, default=None,
+        "--epsg",
+        type=int,
+        default=None,
         help="Fuerza el EPSG del GeoTIFF cuando la nube trae un CRS que no se detecta "
-             "automaticamente como 'EPSG:XXXX' (ej. un CRS compuesto horizontal+vertical).",
+        "automaticamente como 'EPSG:XXXX' (ej. un CRS compuesto horizontal+vertical).",
     )
     args = parser.parse_args()
 

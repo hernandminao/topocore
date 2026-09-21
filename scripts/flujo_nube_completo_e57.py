@@ -13,6 +13,7 @@ Uso:
 Opciones: iguales a flujo_nube_completo_dxf_rico.py (--cloth-resolution,
 --voxel-size, --contour-interval, --output-dir, --epsg).
 """
+
 import argparse
 from pathlib import Path
 

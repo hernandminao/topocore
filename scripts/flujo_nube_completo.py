@@ -26,6 +26,7 @@ Opciones:
     --contour-interval N   (default 1.0) intervalo de curvas de nivel.
     --output-dir DIR        (default outputs/nube) carpeta de salida.
 """
+
 import argparse
 from pathlib import Path
 

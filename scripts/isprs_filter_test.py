@@ -27,6 +27,7 @@ benchmark):
 Uso:
     python isprs_filter_test.py nube.txt referencia.txt [--cloth-resolution N]
 """
+
 import argparse
 from pathlib import Path
 
@@ -156,12 +157,14 @@ def correr_isprs(
     p_e = (terreno_real_total * predicho_terreno + objeto_real_total * predicho_objeto) / (total**2)
     kappa = (p_o - p_e) / (1 - p_e) if p_e != 1 else float("nan")
 
-    print(f"\n=== Resultado (cloth_resolution={cloth_resolution}, rigidness={rigidness}, "
-          f"class_threshold={class_threshold}, iterations={iterations}, slope_smooth={slope_smooth}) ===")
+    print(
+        f"\n=== Resultado (cloth_resolution={cloth_resolution}, rigidness={rigidness}, "
+        f"class_threshold={class_threshold}, iterations={iterations}, slope_smooth={slope_smooth}) ==="
+    )
     print(f"Type I error  (terreno real perdido):    {type_i:.2f}%  ({terreno_mal_clasificado}/{terreno_real_total})")
     print(f"Type II error (falso terreno):              {type_ii:.2f}%  ({objeto_mal_clasificado}/{objeto_real_total})")
     print(f"Total error:                                    {total_error:.2f}%")
-    print(f"Kappa (Cohen, comparable con literatura):          {kappa*100:.2f}")
+    print(f"Kappa (Cohen, comparable con literatura):          {kappa * 100:.2f}")
 
 
 if __name__ == "__main__":
@@ -173,12 +176,18 @@ if __name__ == "__main__":
     parser.add_argument("--class-threshold", type=float, default=0.5)
     parser.add_argument("--iterations", type=int, default=500)
     parser.add_argument(
-        "--slope-smooth", action="store_true",
+        "--slope-smooth",
+        action="store_true",
         help="Post-procesamiento para pendientes pronunciadas (documentado para este caso especifico).",
     )
     args = parser.parse_args()
 
     correr_isprs(
-        args.nube, args.referencia, args.cloth_resolution,
-        args.rigidness, args.class_threshold, args.iterations, args.slope_smooth,
+        args.nube,
+        args.referencia,
+        args.cloth_resolution,
+        args.rigidness,
+        args.class_threshold,
+        args.iterations,
+        args.slope_smooth,
     )

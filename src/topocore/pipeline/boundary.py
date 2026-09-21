@@ -17,6 +17,7 @@ License
 -------
 MIT
 """
+
 from __future__ import annotations
 
 
@@ -43,8 +44,10 @@ def shoelace_area(vertices: list[tuple[float, float]]) -> float:
 
 
 def _segments_intersect(
-    p1: tuple[float, float], p2: tuple[float, float],
-    p3: tuple[float, float], p4: tuple[float, float],
+    p1: tuple[float, float],
+    p2: tuple[float, float],
+    p3: tuple[float, float],
+    p4: tuple[float, float],
 ) -> bool:
     """
     True si el segmento (p1,p2) cruza realmente el segmento (p3,p4)
@@ -54,6 +57,7 @@ def _segments_intersect(
     un poligono) NO cuentan como cruce -- ver has_self_intersections()
     para como se excluyen esos pares antes de llamar aqui.
     """
+
     def orientacion(a: tuple[float, float], b: tuple[float, float], c: tuple[float, float]) -> float:
         return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
 

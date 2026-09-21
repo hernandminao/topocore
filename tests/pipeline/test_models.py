@@ -24,7 +24,9 @@ def test_road_with_empty_string_reference_code_is_rejected() -> None:
 
 def test_road_with_reference_code_is_valid() -> None:
     config = SurveyPipelineConfig(
-        survey_type=SurveyType.ROAD, survey_format=SurveyFormat.PNEZD, reference_code="EJE",
+        survey_type=SurveyType.ROAD,
+        survey_format=SurveyFormat.PNEZD,
+        reference_code="EJE",
     )
     assert config.reference_code == "EJE"
 

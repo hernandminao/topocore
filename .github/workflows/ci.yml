@@ -31,7 +31,7 @@ jobs:
         run: uv sync --extra terrain --extra ml --extra lightgbm --extra xgboost --extra dxf --extra yaml --extra quality-report
 
       - name: Install GDAL Python bindings (matching system version)
-        run: uv pip install --reinstall --no-cache --no-build-isolation "GDAL[numpy]==${{ env.GDAL_VERSION }}"
+        run: uv pip install --reinstall --no-cache "GDAL[numpy]==${{ env.GDAL_VERSION }}"
 
       - name: Ruff check
         run: uv run --no-sync ruff check .

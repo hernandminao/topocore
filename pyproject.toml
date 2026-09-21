@@ -106,6 +106,9 @@ explicit = true
 [tool.uv.sources]
 gdal = { index = "local-wheels" }
 
+[tool.uv.extra-build-dependencies]
+gdal = ["setuptools", "numpy"]
+
 [tool.ruff]
 line-length = 120
 
